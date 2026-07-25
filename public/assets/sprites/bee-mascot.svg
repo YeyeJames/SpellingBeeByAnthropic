@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240">
+  <defs>
+    <radialGradient id="beeBody" cx="35%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#FFE873"/>
+      <stop offset="100%" stop-color="#FFC93C"/>
+    </radialGradient>
+    <linearGradient id="wingGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#EAF6FF" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#BFE3FF" stop-opacity="0.6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 陰影 -->
+  <ellipse cx="120" cy="222" rx="55" ry="10" fill="#142850" opacity="0.12"/>
+
+  <!-- 翅膀 -->
+  <ellipse cx="80" cy="95" rx="34" ry="22" fill="url(#wingGrad)" stroke="#8FCBFF" stroke-width="2" transform="rotate(-18 80 95)"/>
+  <ellipse cx="160" cy="95" rx="34" ry="22" fill="url(#wingGrad)" stroke="#8FCBFF" stroke-width="2" transform="rotate(18 160 95)"/>
+
+  <!-- 身體 -->
+  <ellipse cx="120" cy="140" rx="58" ry="66" fill="url(#beeBody)" stroke="#3A2B00" stroke-width="4"/>
+
+  <!-- 條紋 -->
+  <path d="M63 118 q57 20 114 0" stroke="#2B2100" stroke-width="12" fill="none" stroke-linecap="round"/>
+  <path d="M63 150 q57 20 114 0" stroke="#2B2100" stroke-width="12" fill="none" stroke-linecap="round"/>
+
+  <!-- 運動頭帶 -->
+  <path d="M64 100 q56 -26 112 0 l-6 20 q-50 -20 -100 0 z" fill="#FF6B35" stroke="#D94E1F" stroke-width="3"/>
+  <circle cx="120" cy="96" r="7" fill="#FFD23F" stroke="#D94E1F" stroke-width="2"/>
+
+  <!-- 臉 -->
+  <circle cx="98" cy="132" r="11" fill="#142850"/>
+  <circle cx="142" cy="132" r="11" fill="#142850"/>
+  <circle cx="101" cy="128" r="3.4" fill="#fff"/>
+  <circle cx="145" cy="128" r="3.4" fill="#fff"/>
+  <path d="M104 156 q16 14 32 0" stroke="#142850" stroke-width="5" fill="none" stroke-linecap="round"/>
+
+  <!-- 腮紅 -->
+  <ellipse cx="84" cy="148" rx="8" ry="5" fill="#FF9F7A" opacity="0.6"/>
+  <ellipse cx="156" cy="148" rx="8" ry="5" fill="#FF9F7A" opacity="0.6"/>
+
+  <!-- 手臂比讚 -->
+  <path d="M64 168 q-26 6 -30 30" stroke="#2B2100" stroke-width="10" fill="none" stroke-linecap="round"/>
+  <circle cx="34" cy="196" r="11" fill="#FFE873" stroke="#2B2100" stroke-width="3"/>
+  <path d="M30 190 l0 -10 M38 188 l0 -10" stroke="#2B2100" stroke-width="4" stroke-linecap="round"/>
+
+  <path d="M176 168 q26 6 30 30" stroke="#2B2100" stroke-width="10" fill="none" stroke-linecap="round"/>
+  <circle cx="206" cy="196" r="11" fill="#FFE873" stroke="#2B2100" stroke-width="3"/>
+
+  <!-- 腕帶 -->
+  <rect x="24" y="186" width="20" height="10" rx="4" fill="#004E98"/>
+  <rect x="196" y="186" width="20" height="10" rx="4" fill="#004E98"/>
+
+  <!-- 螫刺 -->
+  <path d="M120 205 q6 14 0 24 q-6 -10 0 -24" fill="#3A2B00"/>
+</svg>

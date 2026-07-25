@@ -1,0 +1,132 @@
+.wb-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.wb-filters {
+  display: flex;
+  gap: 0.75rem;
+  margin: 1rem 0;
+  flex-wrap: wrap;
+}
+
+.wb-filters input,
+.wb-filters select {
+  flex: 1;
+  min-width: 160px;
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--radius-md);
+  border: 2px solid rgba(0, 78, 152, 0.2);
+  font-size: 1rem;
+}
+
+.word-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.word-card {
+  border: 2px solid rgba(0, 78, 152, 0.12);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.word-card .wc-english {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  color: var(--color-secondary);
+}
+
+.word-card .wc-chinese {
+  color: var(--color-text);
+}
+
+.word-card .wc-sentence {
+  font-style: italic;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.word-card .wc-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.word-card .wc-tag {
+  background: var(--color-bg);
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.8rem;
+  color: var(--color-secondary);
+}
+
+.word-card .wc-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.word-card .wc-actions button {
+  flex: 1;
+  padding: 0.4rem;
+  font-size: 0.9rem;
+}
+
+.wb-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 40, 80, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 50;
+}
+
+.wb-form-panel {
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 1.5rem;
+}
+
+.wb-form-panel label {
+  display: block;
+  font-weight: bold;
+  margin: 0.75rem 0 0.25rem;
+}
+
+.wb-audio-section {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: var(--color-bg);
+  border-radius: var(--radius-md);
+}
+
+.wb-audio-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.wb-audio-buttons button {
+  font-size: 0.85rem;
+  padding: 0.45rem 0.8rem;
+}
+
+.wb-form-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+  justify-content: flex-end;
+}

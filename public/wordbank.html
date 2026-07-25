@@ -7,22 +7,69 @@
   <link rel="stylesheet" href="/css/theme.css" />
   <link rel="stylesheet" href="/css/base.css" />
   <link rel="stylesheet" href="/css/components.css" />
+  <link rel="stylesheet" href="/css/wordbank.css" />
 </head>
 <body data-theme="sports">
   <div data-nav-mount></div>
+
   <div class="container">
     <div class="panel container">
-      <h1>📚 單字庫</h1>
-      <p>新增/編輯單字功能即將登場，敬請期待！</p>
+      <div class="wb-header">
+        <h1>📚 單字庫</h1>
+        <button class="btn" id="open-add-form" type="button">➕ 新增單字</button>
+      </div>
+
+      <div class="wb-filters">
+        <input type="text" id="search-input" placeholder="搜尋英文或中文..." />
+        <select id="tag-filter">
+          <option value="">所有標籤</option>
+        </select>
+      </div>
+
+      <p class="error-text" id="list-error"></p>
+      <div id="word-list" class="word-list"></div>
     </div>
   </div>
-  <script type="module">
-    import { requireLogin } from '/js/auth.js';
-    import { mountNav } from '/js/nav-partial.js';
-    (async () => {
-      const user = await requireLogin();
-      if (user) await mountNav(user, 'wordbank');
-    })();
-  </script>
+
+  <!-- 新增/編輯單字表單（覆蓋層） -->
+  <div id="word-form-overlay" class="wb-overlay hidden">
+    <div class="panel wb-form-panel">
+      <h2 id="form-title">新增單字</h2>
+      <form id="word-form">
+        <label>英文單字</label>
+        <input type="text" id="f-english" required maxlength="40" placeholder="e.g. elephant" />
+
+        <label>中文翻譯</label>
+        <input type="text" id="f-chinese" required maxlength="60" placeholder="e.g. 大象" />
+
+        <label>英文例句（選填）</label>
+        <input type="text" id="f-sentence" maxlength="200" placeholder="e.g. The elephant is very big." />
+
+        <label>標籤（用逗號分開，例如：第1週,動物主題）</label>
+        <input type="text" id="f-tags" placeholder="第1週,動物主題" />
+
+        <div class="wb-audio-section">
+          <label>發音</label>
+          <p class="wb-audio-status" id="audio-status">目前使用瀏覽器語音朗讀</p>
+          <div class="wb-audio-buttons">
+            <button type="button" class="btn secondary" id="btn-play-preview">🔊 試聽</button>
+            <button type="button" class="btn" id="btn-record">🎙️ 錄音（5秒）</button>
+            <button type="button" class="btn secondary hidden" id="btn-remove-audio">🗑️ 改回語音朗讀</button>
+          </div>
+          <p class="error-text" id="audio-error"></p>
+        </div>
+
+        <p class="error-text" id="form-error"></p>
+
+        <div class="wb-form-actions">
+          <button type="button" class="btn secondary" id="btn-cancel-form">取消</button>
+          <button type="button" class="btn" id="btn-delete-word" style="display:none;">🗑️ 刪除單字</button>
+          <button type="submit" class="btn gold" id="btn-save-form">儲存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script type="module" src="/js/wordbank.js"></script>
 </body>
 </html>

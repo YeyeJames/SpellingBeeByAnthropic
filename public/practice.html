@@ -7,22 +7,52 @@
   <link rel="stylesheet" href="/css/theme.css" />
   <link rel="stylesheet" href="/css/base.css" />
   <link rel="stylesheet" href="/css/components.css" />
+  <link rel="stylesheet" href="/css/practice.css" />
 </head>
 <body data-theme="sports">
   <div data-nav-mount></div>
+
   <div class="container">
-    <div class="panel container">
+    <div class="panel container" id="setup-panel">
       <h1>🎧 聽寫練習</h1>
-      <p>練習畫面（含 Phaser 遊戲效果）即將登場，敬請期待！</p>
+      <p>選擇想練習的標籤（不選就是全部單字）：</p>
+      <div id="tag-checkboxes" class="tag-checkboxes"></div>
+      <label for="word-count">題數</label>
+      <input type="number" id="word-count" value="10" min="3" max="30" style="max-width:120px;" />
+      <div style="margin-top:1.25rem;">
+        <button class="btn gold" id="start-practice-btn" type="button">▶️ 開始練習</button>
+      </div>
+      <p class="error-text" id="setup-error"></p>
+    </div>
+
+    <div class="panel container hidden" id="practice-panel">
+      <div class="practice-topbar">
+        <span id="progress-label" class="display-font">1 / 10</span>
+        <span class="coin-badge" id="session-coin-badge">🪙 0</span>
+      </div>
+      <div id="game-container"></div>
+      <div id="answer-area">
+        <button class="btn secondary" id="replay-btn" type="button">🔊 再聽一次</button>
+        <input type="text" id="answer-input" placeholder="輸入你聽到的英文單字" autocomplete="off" autocapitalize="off" spellcheck="false" />
+        <button class="btn gold" id="submit-answer-btn" type="button">送出</button>
+      </div>
+      <div id="reveal-panel" class="hidden">
+        <p class="reveal-result" id="reveal-result"></p>
+        <p class="reveal-english" id="reveal-english"></p>
+        <p class="reveal-chinese" id="reveal-chinese"></p>
+        <p class="reveal-sentence" id="reveal-sentence"></p>
+        <button class="btn" id="next-btn" type="button">下一題 ➡️</button>
+      </div>
+    </div>
+
+    <div class="panel container hidden" id="summary-panel">
+      <h2 class="display-font">🏁 完成！</h2>
+      <p id="summary-text"></p>
+      <button class="btn gold" id="play-again-btn" type="button">再玩一次</button>
     </div>
   </div>
-  <script type="module">
-    import { requireLogin } from '/js/auth.js';
-    import { mountNav } from '/js/nav-partial.js';
-    (async () => {
-      const user = await requireLogin();
-      if (user) await mountNav(user, 'practice');
-    })();
-  </script>
+
+  <script src="/vendor/phaser.min.js"></script>
+  <script type="module" src="/js/practice.js"></script>
 </body>
 </html>

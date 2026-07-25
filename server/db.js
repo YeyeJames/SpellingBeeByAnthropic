@@ -1,4 +1,4 @@
-const { MongoClient } = require('mongodb');
+const { MongoClient, GridFSBucket } = require('mongodb');
 
 const uri = process.env.MONGODB_URI;
 if (!uri) {
@@ -7,11 +7,13 @@ if (!uri) {
 
 const client = new MongoClient(uri);
 let db;
+let audioBucket;
 
 async function connectDB() {
   if (db) return db;
   await client.connect();
   db = client.db();
+  audioBucket = new GridFSBucket(db, { bucketName: 'audio' });
   await ensureIndexes(db);
   return db;
 }
@@ -38,4 +40,11 @@ function getDB() {
   return db;
 }
 
-module.exports = { connectDB, getDB, client };
+function getAudioBucket() {
+  if (!audioBucket) {
+    throw new Error('Database not connected yet. Call connectDB() first.');
+  }
+  return audioBucket;
+}
+
+module.exports = { connectDB, getDB, getAudioBucket, client };

@@ -1,0 +1,85 @@
+.tag-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 1rem 0;
+}
+
+.tag-checkboxes label {
+  background: var(--color-bg);
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.tag-checkboxes input {
+  accent-color: var(--color-primary);
+}
+
+.practice-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+#game-container {
+  display: flex;
+  justify-content: center;
+  min-height: 260px;
+}
+
+#answer-area {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+#answer-input {
+  flex: 1;
+  min-width: 200px;
+  max-width: 320px;
+  text-align: center;
+  font-size: 1.3rem;
+  font-family: var(--font-display);
+  letter-spacing: 2px;
+}
+
+#reveal-panel {
+  text-align: center;
+  margin-top: 1.25rem;
+  padding: 1rem;
+  background: var(--color-bg);
+  border-radius: var(--radius-md);
+}
+
+.reveal-result {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+}
+
+.reveal-english {
+  font-size: 1.3rem;
+  font-weight: bold;
+  color: var(--color-secondary);
+}
+
+.reveal-chinese {
+  font-size: 1.1rem;
+}
+
+.reveal-sentence {
+  font-style: italic;
+  color: var(--color-text-muted);
+}
+
+#summary-panel {
+  text-align: center;
+}

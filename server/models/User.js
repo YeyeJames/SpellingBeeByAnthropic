@@ -1,6 +1,7 @@
 const { ObjectId } = require('mongodb');
 const { getDB } = require('../db');
 const { hashPin } = require('../utils/pin');
+const { calcCoinsForCorrectAnswer } = require('../utils/coins');
 
 const DEFAULT_THEME = 'sports';
 
@@ -58,6 +59,56 @@ async function updateAudioPrefs(id, prefs) {
   await collection().updateOne({ _id: new ObjectId(id) }, { $set: { audioPrefs: prefs } });
 }
 
+/**
+ * 記錄一次作答結果：更新 streak/正確率統計與金幣，回傳更新後的 user。
+ * 這個 app 一次只會有一個玩家在單一 session 內作答，故用讀取後寫入即可，不需要交易。
+ */
+async function applyAttemptResult(id, correct) {
+  const user = await findById(id);
+  const newStreak = correct ? user.stats.currentStreak + 1 : 0;
+  const bestStreak = Math.max(user.stats.bestStreak, newStreak);
+  const coinsAwarded = correct ? calcCoinsForCorrectAnswer(newStreak) : 0;
+
+  const update = {
+    $set: {
+      'stats.currentStreak': newStreak,
+      'stats.bestStreak': bestStreak,
+      'stats.lastPracticeDate': new Date()
+    },
+    $inc: {
+      'stats.totalWordsPracticed': 1,
+      'stats.totalCorrect': correct ? 1 : 0,
+      'stats.totalIncorrect': correct ? 0 : 1,
+      coins: coinsAwarded
+    }
+  };
+  await collection().updateOne({ _id: new ObjectId(id) }, update);
+  const updatedUser = await findById(id);
+  return { user: updatedUser, coinsAwarded, newStreak };
+}
+
+async function addOwnedItem(id, itemKey, cost) {
+  await collection().updateOne(
+    { _id: new ObjectId(id) },
+    { $addToSet: { ownedItemKeys: itemKey }, $inc: { coins: -cost } }
+  );
+  return findById(id);
+}
+
+async function equipItem(id, type, itemKey) {
+  if (type === 'theme') {
+    await collection().updateOne({ _id: new ObjectId(id) }, { $set: { activeTheme: itemKey } });
+  } else {
+    await collection().updateOne({ _id: new ObjectId(id) }, { $addToSet: { 'avatar.accessories': itemKey } });
+  }
+  return findById(id);
+}
+
+async function unequipAccessory(id, itemKey) {
+  await collection().updateOne({ _id: new ObjectId(id) }, { $pull: { 'avatar.accessories': itemKey } });
+  return findById(id);
+}
+
 function sanitizeUser(user) {
   if (!user) return null;
   const { pinHash, nicknameLower, ...safe } = user;
@@ -71,5 +122,9 @@ module.exports = {
   listProfiles,
   touchLastLogin,
   updateAudioPrefs,
+  applyAttemptResult,
+  addOwnedItem,
+  equipItem,
+  unequipAccessory,
   sanitizeUser
 };

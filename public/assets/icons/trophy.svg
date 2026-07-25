@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="trophyGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFE873"/>
+      <stop offset="100%" stop-color="#FFC93C"/>
+    </linearGradient>
+  </defs>
+  <path d="M20 10 h24 v14 a12 12 0 0 1 -24 0 z" fill="url(#trophyGrad)" stroke="#8A6D14" stroke-width="2.5"/>
+  <path d="M20 14 h-8 a10 10 0 0 0 10 10" fill="none" stroke="#8A6D14" stroke-width="2.5"/>
+  <path d="M44 14 h8 a10 10 0 0 1 -10 10" fill="none" stroke="#8A6D14" stroke-width="2.5"/>
+  <rect x="28" y="36" width="8" height="10" fill="#C99F1E"/>
+  <path d="M18 50 h28 l-3 6 h-22 z" fill="#C99F1E" stroke="#8A6D14" stroke-width="2"/>
+</svg>

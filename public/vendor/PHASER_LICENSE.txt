@@ -1,0 +1,3 @@
+Phaser (https://phaser.io) - vendored as public/vendor/phaser.min.js (v4.2.1)
+Licensed under the MIT License. Copyright (c) Phaser Studio Inc.
+See https://github.com/phaserjs/phaser/blob/master/license.txt for full text.

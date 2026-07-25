@@ -6,6 +6,8 @@ const MongoStore = require('connect-mongo');
 
 const { connectDB } = require('./db');
 const authRoutes = require('./routes/auth');
+const wordsRoutes = require('./routes/words');
+const practiceRoutes = require('./routes/practice');
 
 const PORT = process.env.PORT || 3000;
 
@@ -36,6 +38,8 @@ async function main() {
   );
 
   app.use('/api/auth', authRoutes);
+  app.use('/api/words', wordsRoutes);
+  app.use('/api/practice', practiceRoutes);
 
   app.use(express.static(path.join(__dirname, '..', 'public')));
 
