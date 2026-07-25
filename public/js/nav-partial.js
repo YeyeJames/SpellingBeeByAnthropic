@@ -1,4 +1,3 @@
-import { logout } from './auth.js';
 import { api } from './api.js';
 import * as sound from './sound-manager.js';
 
@@ -25,8 +24,14 @@ export async function mountNav(user, activePage) {
   const activeLink = mountPoint.querySelector(`[data-nav="${activePage}"]`);
   if (activeLink) activeLink.classList.add('active');
 
-  const logoutBtn = mountPoint.querySelector('[data-nav-logout]');
-  if (logoutBtn) logoutBtn.addEventListener('click', logout);
+  // 回選單換人：不登出，這樣選單上仍會顯示「繼續玩」，
+  // 想換別人就點別人的頭像輸入他的 PIN 即可
+  const switchBtn = mountPoint.querySelector('[data-nav-switch]');
+  if (switchBtn) {
+    switchBtn.addEventListener('click', () => {
+      window.location.href = '/index.html';
+    });
+  }
 
   sound.loadPrefs(user);
   const muteBtn = mountPoint.querySelector('[data-nav-mute]');

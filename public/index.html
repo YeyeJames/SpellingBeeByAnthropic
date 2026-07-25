@@ -19,6 +19,13 @@
         <div id="profile-grid" class="profile-grid">
           <!-- 動態填入 profile tiles -->
         </div>
+        <p id="logged-in-hint" class="hidden" style="text-align:center; font-size:0.85rem; color:var(--color-text-muted);">
+          目前登入：<strong id="logged-in-name"></strong>
+          <button type="button" id="logout-link"
+            style="background:none;border:none;color:var(--color-secondary);text-decoration:underline;cursor:pointer;font-size:0.85rem;">
+            登出
+          </button>
+        </p>
       </div>
 
       <div id="pin-step" class="hidden">

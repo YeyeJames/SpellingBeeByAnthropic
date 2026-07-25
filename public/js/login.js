@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { fetchCurrentUser } from './auth.js';
+import { fetchCurrentUser, logout } from './auth.js';
 import { runPageInit } from './ui-status.js';
 
 const profileStep = document.getElementById('profile-step');
@@ -26,17 +26,25 @@ function renderPinDots() {
   pinDots.forEach((dot, i) => dot.classList.toggle('filled', i < pinDigits.length));
 }
 
-async function loadProfiles() {
-  const { profiles } = await api.get('/auth/profiles');
+function renderProfiles(profiles, currentUser) {
   profileGrid.innerHTML = '';
   profiles.forEach((p) => {
+    const isCurrent = currentUser && p.nickname === currentUser.nickname;
     const tile = document.createElement('div');
-    tile.className = 'profile-tile';
+    tile.className = isCurrent ? 'profile-tile current' : 'profile-tile';
     tile.innerHTML = `
-      <div class="avatar-circle">${p.nickname.slice(0, 1).toUpperCase()}</div>
+      <div class="avatar-circle">${escapeHtml(p.nickname.slice(0, 1).toUpperCase())}</div>
       <div class="nickname">${escapeHtml(p.nickname)}</div>
+      ${isCurrent ? '<div class="current-badge">繼續玩</div>' : ''}
     `;
-    tile.addEventListener('click', () => startLogin(p.nickname));
+    // 已登入的那位不用再輸入 PIN，直接進去；其他人要輸入自己的 PIN
+    tile.addEventListener('click', () => {
+      if (isCurrent) {
+        window.location.href = '/practice.html';
+      } else {
+        startLogin(p.nickname);
+      }
+    });
     profileGrid.appendChild(tile);
   });
 
@@ -133,14 +141,15 @@ async function submitPin() {
 }
 
 runPageInit(async () => {
-  // 兩個請求平行送出：已登入就直接導向練習頁，沒登入才用得到玩家清單。
-  // 先等登入狀態再抓清單的話，會多一次串接的往返。
-  const profilesPromise = loadProfiles();
-  const user = await fetchCurrentUser();
+  // 這裡刻意「不」因為已登入就自動跳轉。
+  // 這是家裡共用的裝置，要停在選單讓使用者自己挑，
+  // 否則永遠只會用上一個人的帳號進去，換人玩還得先登出。
+  const [{ profiles }, user] = await Promise.all([api.get('/auth/profiles'), fetchCurrentUser()]);
+  renderProfiles(profiles, user);
+
   if (user) {
-    profilesPromise.catch(() => {});
-    window.location.href = '/practice.html';
-    return;
+    document.getElementById('logged-in-name').textContent = user.nickname;
+    document.getElementById('logged-in-hint').classList.remove('hidden');
+    document.getElementById('logout-link').addEventListener('click', logout);
   }
-  await profilesPromise;
 });
