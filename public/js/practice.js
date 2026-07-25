@@ -4,6 +4,7 @@ import { mountNav, refreshNavCoins } from './nav-partial.js';
 import { playWordAudio } from './audio-player.js';
 import * as sound from './sound-manager.js';
 import { createPracticeGame } from './game/practice-scene.js';
+import { runPageInit } from './ui-status.js';
 
 const setupPanel = document.getElementById('setup-panel');
 const practicePanel = document.getElementById('practice-panel');
@@ -213,10 +214,10 @@ playAgainBtn.addEventListener('click', () => {
   refreshReviewButton();
 });
 
-(async function init() {
+runPageInit(async () => {
   const user = await requireLogin();
   if (!user) return;
   await mountNav(user, 'practice');
   await loadTags();
   await refreshReviewButton();
-})();
+});

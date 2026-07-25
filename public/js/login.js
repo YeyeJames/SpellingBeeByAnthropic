@@ -1,5 +1,6 @@
 import { api } from './api.js';
 import { fetchCurrentUser } from './auth.js';
+import { runPageInit } from './ui-status.js';
 
 const profileStep = document.getElementById('profile-step');
 const profileGrid = document.getElementById('profile-grid');
@@ -131,11 +132,11 @@ async function submitPin() {
   }
 }
 
-(async function init() {
+runPageInit(async () => {
   const user = await fetchCurrentUser();
   if (user) {
     window.location.href = '/practice.html';
     return;
   }
   await loadProfiles();
-})();
+});

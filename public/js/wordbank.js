@@ -3,6 +3,7 @@ import { requireLogin } from './auth.js';
 import { mountNav } from './nav-partial.js';
 import { playWordAudio, speakWord } from './audio-player.js';
 import { createRecorder } from './recorder.js';
+import { runPageInit } from './ui-status.js';
 
 const wordListEl = document.getElementById('word-list');
 const listErrorEl = document.getElementById('list-error');
@@ -246,9 +247,9 @@ async function uploadAudio(wordId, blob, mimeType, durationSec) {
 searchInput.addEventListener('input', debounce(loadWords, 300));
 tagFilter.addEventListener('change', loadWords);
 
-(async function init() {
+runPageInit(async () => {
   const user = await requireLogin();
   if (!user) return;
   await mountNav(user, 'wordbank');
   await Promise.all([loadTags(), loadWords()]);
-})();
+});

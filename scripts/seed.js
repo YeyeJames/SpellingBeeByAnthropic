@@ -1,6 +1,6 @@
 // 建立/更新商店初始品項。執行方式：npm run seed（需先在 .env 設定 MONGODB_URI）
 require('dotenv').config();
-const { connectDB, client } = require('../server/db');
+const { connectDB, getClient } = require('../server/db');
 const { upsertItem } = require('../server/models/ShopItem');
 
 const ITEMS = [
@@ -67,7 +67,7 @@ async function main() {
     console.log(`已建立/更新商品：${item.name}`);
   }
   console.log('✅ 商店品項建立完成');
-  await client.close();
+  await getClient().close();
 }
 
 main().catch((err) => {

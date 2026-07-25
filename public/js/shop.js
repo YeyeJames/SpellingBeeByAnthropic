@@ -4,6 +4,7 @@ import { mountNav, setNavCoins } from './nav-partial.js';
 import { applyTheme } from './theme.js';
 import * as sound from './sound-manager.js';
 import { createCoinCatchGame } from './game/minigame-coincatch.js';
+import { runPageInit } from './ui-status.js';
 
 const shopGrid = document.getElementById('shop-grid');
 const shopError = document.getElementById('shop-error');
@@ -147,10 +148,10 @@ document.getElementById('close-minigame-btn').addEventListener('click', () => {
   }
 });
 
-(async function init() {
+runPageInit(async () => {
   const user = await requireLogin();
   if (!user) return;
   currentUser = user;
   await mountNav(user, 'shop');
   await loadItems();
-})();
+});

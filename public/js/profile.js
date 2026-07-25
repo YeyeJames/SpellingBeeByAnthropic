@@ -3,6 +3,7 @@ import { requireLogin } from './auth.js';
 import { mountNav } from './nav-partial.js';
 import { applyTheme } from './theme.js';
 import * as sound from './sound-manager.js';
+import { runPageInit } from './ui-status.js';
 
 const THEME_NAMES = { sports: '🏅 運動風（預設）', space: '🚀 太空', dino: '🦖 恐龍' };
 const ACCESSORY_SPRITES = {
@@ -112,7 +113,7 @@ document.getElementById('save-audio-btn').addEventListener('click', async () => 
   }, 2000);
 });
 
-(async function init() {
+runPageInit(async () => {
   const user = await requireLogin();
   if (!user) return;
   currentUser = user;
@@ -121,4 +122,4 @@ document.getElementById('save-audio-btn').addEventListener('click', async () => 
   renderStats();
   renderThemeSwitcher();
   loadAudioControls();
-})();
+});

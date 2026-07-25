@@ -1,16 +1,26 @@
 const { MongoClient, GridFSBucket } = require('mongodb');
 
-const uri = process.env.MONGODB_URI;
-if (!uri) {
-  throw new Error('MONGODB_URI is not set');
-}
-
-const client = new MongoClient(uri);
+let client;
 let db;
 let audioBucket;
 
+/**
+ * 注意：這裡刻意「不」在模組載入時就建立連線或拋錯。
+ * 缺少 MONGODB_URI 或連線失敗時，伺服器仍要能啟動並透過 /api/health
+ * 說明原因，否則 Render 只會顯示一個沒有任何線索的通用錯誤頁。
+ */
 async function connectDB() {
   if (db) return db;
+
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
+    throw new Error('環境變數 MONGODB_URI 未設定');
+  }
+
+  if (!client) {
+    client = new MongoClient(uri, { serverSelectionTimeoutMS: 10000 });
+  }
+
   await client.connect();
   db = client.db();
   audioBucket = new GridFSBucket(db, { bucketName: 'audio' });
@@ -19,15 +29,9 @@ async function connectDB() {
 }
 
 async function ensureIndexes(database) {
-  await database.collection('users').createIndex(
-    { nicknameLower: 1 },
-    { unique: true }
-  );
+  await database.collection('users').createIndex({ nicknameLower: 1 }, { unique: true });
   await database.collection('words').createIndex({ tags: 1 });
-  await database.collection('wordProgress').createIndex(
-    { userId: 1, wordId: 1 },
-    { unique: true }
-  );
+  await database.collection('wordProgress').createIndex({ userId: 1, wordId: 1 }, { unique: true });
   await database.collection('wordProgress').createIndex({ userId: 1, nextReviewAt: 1 });
   await database.collection('attempts').createIndex({ userId: 1, attemptedAt: 1 });
   await database.collection('shopItems').createIndex({ key: 1 }, { unique: true });
@@ -35,16 +39,20 @@ async function ensureIndexes(database) {
 
 function getDB() {
   if (!db) {
-    throw new Error('Database not connected yet. Call connectDB() first.');
+    throw new Error('資料庫尚未連線');
   }
   return db;
 }
 
 function getAudioBucket() {
   if (!audioBucket) {
-    throw new Error('Database not connected yet. Call connectDB() first.');
+    throw new Error('資料庫尚未連線');
   }
   return audioBucket;
 }
 
-module.exports = { connectDB, getDB, getAudioBucket, client };
+function getClient() {
+  return client;
+}
+
+module.exports = { connectDB, getDB, getAudioBucket, getClient };
