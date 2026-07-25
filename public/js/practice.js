@@ -24,6 +24,7 @@ const revealSentence = document.getElementById('reveal-sentence');
 const nextBtn = document.getElementById('next-btn');
 const summaryText = document.getElementById('summary-text');
 const playAgainBtn = document.getElementById('play-again-btn');
+const reviewBtn = document.getElementById('review-practice-btn');
 
 let phaserGame = null;
 let gameScene = null;
@@ -71,7 +72,7 @@ function showPanel(panel) {
   panel.classList.remove('hidden');
 }
 
-async function startPractice() {
+async function startPractice({ reviewOnly = false } = {}) {
   setupError.textContent = '';
   const selectedTags = [...tagCheckboxes.querySelectorAll('input:checked')].map((cb) => cb.value);
   const count = Number(wordCountInput.value) || 10;
@@ -80,7 +81,7 @@ async function startPractice() {
 
   let data;
   try {
-    data = await api.post('/practice/session', { tags: selectedTags, count });
+    data = await api.post('/practice/session', { tags: selectedTags, count, reviewOnly });
   } catch (err) {
     setupError.textContent = err.message;
     return;
@@ -90,6 +91,20 @@ async function startPractice() {
   showPanel(practicePanel);
   await whenSceneReady();
   showQuestion();
+}
+
+async function refreshReviewButton() {
+  try {
+    const { words } = await api.get('/practice/review-queue');
+    if (words.length > 0) {
+      reviewBtn.textContent = `📋 複習到期單字 (${words.length})`;
+      reviewBtn.classList.remove('hidden');
+    } else {
+      reviewBtn.classList.add('hidden');
+    }
+  } catch (err) {
+    reviewBtn.classList.add('hidden');
+  }
 }
 
 async function showQuestion() {
@@ -166,11 +181,16 @@ async function finishSession() {
   await api.post(`/practice/session/${session.id}/complete`);
   summaryText.textContent = `這次練習了 ${session.words.length} 個單字，總共賺到 ${session.sessionCoins} 枚金幣！`;
   showPanel(summaryPanel);
+  await refreshReviewButton();
 }
 
 document.getElementById('start-practice-btn').addEventListener('click', () => {
   sound.playClick();
   startPractice();
+});
+reviewBtn.addEventListener('click', () => {
+  sound.playClick();
+  startPractice({ reviewOnly: true });
 });
 submitBtn.addEventListener('click', () => {
   sound.playClick();
@@ -190,12 +210,13 @@ nextBtn.addEventListener('click', () => {
 playAgainBtn.addEventListener('click', () => {
   sound.playClick();
   showPanel(setupPanel);
+  refreshReviewButton();
 });
 
 (async function init() {
   const user = await requireLogin();
   if (!user) return;
   await mountNav(user, 'practice');
-  sound.loadPrefs(user);
   await loadTags();
+  await refreshReviewButton();
 })();

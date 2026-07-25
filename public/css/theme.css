@@ -30,6 +30,47 @@ body[data-theme='sports'] {
   );
 }
 
+body[data-theme='space'] {
+  --color-primary: #7c4dff;
+  --color-primary-dark: #5a32c4;
+  --color-secondary: #1a2a6c;
+  --color-secondary-dark: #0f1a4a;
+  --color-accent: #00e5ff;
+  --color-bg: #eef1ff;
+  --color-bg-panel: #ffffff;
+  --color-text: #1a1a3d;
+  --color-text-muted: #5c5c8a;
+  --color-success: #2fae4e;
+  --color-danger: #e5383b;
+  --bg-gradient: linear-gradient(160deg, #0f1a4a 0%, #1a2a6c 45%, #3d2b7a 100%);
+  --field-lines: radial-gradient(2px 2px at 20% 30%, #fff 100%, transparent 100%),
+    radial-gradient(2px 2px at 70% 60%, #fff 100%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 40% 80%, #fff 100%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 90% 20%, #fff 100%, transparent 100%);
+}
+
+body[data-theme='dino'] {
+  --color-primary: #2fae4e;
+  --color-primary-dark: #1f8038;
+  --color-secondary: #6b4423;
+  --color-secondary-dark: #4a2f18;
+  --color-accent: #ffd23f;
+  --color-bg: #eefbf0;
+  --color-bg-panel: #ffffff;
+  --color-text: #1f3d1f;
+  --color-text-muted: #567056;
+  --color-success: #2fae4e;
+  --color-danger: #e5383b;
+  --bg-gradient: linear-gradient(160deg, #eefbf0 0%, #d9f2dc 45%, #f3e8cf 100%);
+  --field-lines: repeating-linear-gradient(
+    0deg,
+    rgba(107, 68, 35, 0.06) 0px,
+    rgba(107, 68, 35, 0.06) 2px,
+    transparent 2px,
+    transparent 40px
+  );
+}
+
 body {
   margin: 0;
   font-family: var(--font-body);

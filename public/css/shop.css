@@ -1,0 +1,70 @@
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.shop-card {
+  border: 2px solid rgba(0, 78, 152, 0.12);
+  border-radius: var(--radius-md);
+  background: #fff;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.4rem;
+}
+
+.shop-card img {
+  width: 64px;
+  height: 64px;
+}
+
+.shop-card .sc-name {
+  font-family: var(--font-display);
+  color: var(--color-secondary);
+}
+
+.shop-card .sc-desc {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  min-height: 2.4em;
+}
+
+.shop-card .sc-cost {
+  font-weight: bold;
+}
+
+.shop-card .sc-owned-badge {
+  background: var(--color-success);
+  color: #fff;
+  border-radius: 999px;
+  padding: 0.15rem 0.7rem;
+  font-size: 0.8rem;
+}
+
+.shop-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 40, 80, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 60;
+}
+
+.minigame-panel {
+  width: 100%;
+  max-width: 380px;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+#minigame-container {
+  display: flex;
+  justify-content: center;
+  margin: 0.5rem 0;
+}

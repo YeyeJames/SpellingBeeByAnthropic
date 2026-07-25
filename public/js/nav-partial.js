@@ -1,4 +1,6 @@
 import { logout } from './auth.js';
+import { api } from './api.js';
+import * as sound from './sound-manager.js';
 
 let coinsEl = null;
 let currentCoins = 0;
@@ -22,6 +24,22 @@ export async function mountNav(user, activePage) {
 
   const logoutBtn = mountPoint.querySelector('[data-nav-logout]');
   if (logoutBtn) logoutBtn.addEventListener('click', logout);
+
+  sound.loadPrefs(user);
+  const muteBtn = mountPoint.querySelector('[data-nav-mute]');
+  if (muteBtn) {
+    muteBtn.textContent = sound.isMuted() ? '🔇' : '🔊';
+    muteBtn.addEventListener('click', async () => {
+      const nowMuted = !sound.isMuted();
+      sound.setMuted(nowMuted);
+      muteBtn.textContent = nowMuted ? '🔇' : '🔊';
+      try {
+        await api.put('/auth/audio-prefs', { muted: nowMuted });
+      } catch (err) {
+        // 靜音狀態暫時只影響這次瀏覽，儲存失敗不影響操作
+      }
+    });
+  }
 }
 
 /** 練習/商店等頁面即時異動金幣時，同步更新 nav 上顯示的金幣數字（不用整頁重抓） */

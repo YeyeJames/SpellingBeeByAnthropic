@@ -29,6 +29,7 @@ router.post('/session', async (req, res, next) => {
   try {
     const tags = Array.isArray(req.body.tags) ? req.body.tags.filter(Boolean) : [];
     const count = Math.min(Math.max(Number(req.body.count) || DEFAULT_COUNT, 1), MAX_COUNT);
+    const reviewOnly = !!req.body.reviewOnly;
 
     const candidates = await Word.listWordsByTags(tags);
     if (!candidates.length) {
@@ -52,7 +53,11 @@ router.post('/session', async (req, res, next) => {
       else notDue.push(word);
     });
 
-    const ordered = [...shuffle(due), ...shuffle(fresh), ...shuffle(notDue)];
+    if (reviewOnly && !due.length) {
+      return res.status(400).json({ error: '目前沒有需要複習的單字，太棒了！' });
+    }
+
+    const ordered = reviewOnly ? shuffle(due) : [...shuffle(due), ...shuffle(fresh), ...shuffle(notDue)];
     const selected = shuffle(ordered.slice(0, count));
 
     const session = await PracticeSession.createSession(

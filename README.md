@@ -28,18 +28,54 @@
    # 或開發時自動重啟：npm run dev
    ```
 4. 瀏覽器開啟 http://localhost:3000
+5. （選用）建立幾個初始商店品項（造型、主題、小遊戲解鎖）：
+   ```bash
+   npm run seed
+   ```
 
 ## 目前進度
 
 - [x] Phase 1：專案骨架、資料庫連線、暱稱+PIN 登入系統、運動風主題 CSS 基礎
-- [ ] Phase 2：單字庫 CRUD
-- [ ] Phase 3：美術與音效素材
-- [ ] Phase 4：聽寫練習核心流程（Phaser 整合）
-- [ ] Phase 5：真人錄音（GridFS）
-- [ ] Phase 6：金幣、商店、造型
-- [ ] Phase 7：遊戲感官打磨
-- [ ] Phase 8：部署到 Render + MongoDB Atlas
+- [x] Phase 2：單字庫 CRUD
+- [x] Phase 3：美術與音效素材
+- [x] Phase 4：聽寫練習核心流程（Phaser 整合）
+- [x] Phase 5：真人錄音（GridFS）
+- [x] Phase 6：金幣、商店、造型
+- [x] Phase 7：遊戲感官打磨
+- [ ] Phase 8：部署到 Render + MongoDB Atlas（程式碼已就緒，需要你自己的帳號才能實際部署，見下方步驟）
 
 ## 帳號系統說明
 
 暱稱 + 4 位數 PIN 登入，家長與小孩使用同一種登入方式，沒有角色權限分層——任何登入的玩家都能新增/編輯單字庫。這是刻意的簡化設計，適合不對外公開的家庭內部使用。
+
+## 美術與音效素材說明
+
+開發這個專案的 sandbox 環境無法連上外部網站（Kenney.nl、Mixkit 等免費素材站、圖片生成服務都連不到），所以美術與音效改用完全自主生成的替代方案，不影響功能也沒有授權問題：
+
+- **美術**：吉祥物「拼字蜂」與所有圖示、造型配件都是手繪的 SVG（`/public/assets`），可直接編輯或替換成你喜歡的圖片
+- **音效與背景音樂**：全部用 Web Audio API 即時合成（`/public/js/sound-manager.js`），不需要任何音檔
+- **遊戲引擎**：練習畫面與小遊戲用 Phaser 4（vendored 在 `/public/vendor/phaser.min.js`，MIT 授權）
+
+之後如果想換成正式外包的美術或錄製的音樂，只要把檔案放進 `/public/assets` 對應資料夾，並更新程式碼裡的路徑即可，架構上不需要大改。
+
+## 部署到 Render + MongoDB Atlas
+
+### 1. 建立 MongoDB Atlas 免費叢集
+1. 到 [MongoDB Atlas](https://www.mongodb.com/cloud/atlas/register) 註冊帳號，建立一個免費的 M0 叢集
+2. 「Database Access」新增一組資料庫使用者帳密
+3. 「Network Access」新增 `0.0.0.0/0`（允許所有 IP）——因為 Render 免費方案沒有固定對外 IP
+4. 「Connect」取得連線字串（`mongodb+srv://...`），記得把 `<password>` 換成實際密碼，並在資料庫名稱處填 `spellingbee`
+
+### 2. 部署到 Render
+1. 到 [Render](https://render.com) 用你的 GitHub 帳號登入，新增一個 Web Service，選這個 repo
+2. Render 會讀到 repo 裡的 `render.yaml` 自動帶入設定（免費方案、`npm install` / `npm start`）
+3. 在 Render 的環境變數頁面設定：
+   - `MONGODB_URI`：上面拿到的 Atlas 連線字串
+   - `SESSION_SECRET`：隨便一組夠長的隨機字串（例如用 `openssl rand -hex 32` 產生）
+4. 部署完成後，第一次連線可能要等約 1 分鐘喚醒（免費方案閒置會休眠），之後就正常
+5. 部署成功後，記得執行一次 `npm run seed`（在你的本機，指向同一組 `MONGODB_URI`）建立商店的初始品項
+
+### 已知限制
+- Render 免費方案閒置一段時間會進入休眠，重新喚醒約需 1 分鐘，練習畫面目前沒有做「喚醒中」的讀取提示，第一次連線可能會看起來像卡住
+- MongoDB Atlas M0 總容量只有 512MB，真人錄音檔案與作答紀錄都會佔用空間，錄音已限制在約 5 秒/500KB 內
+- 4 位數 PIN 沒有忘記密碼救援機制，也沒有登入失敗鎖定介面提示（後端有速率限制），適合家庭內部使用，不建議公開對外

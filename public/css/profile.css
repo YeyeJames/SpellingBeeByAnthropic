@@ -1,0 +1,79 @@
+.profile-top {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 1rem 0 1.5rem;
+}
+
+.avatar-preview {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  flex-shrink: 0;
+}
+
+.avatar-preview img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.stats-grid {
+  flex: 1;
+  min-width: 220px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+
+.stat-tile {
+  background: var(--color-bg);
+  border-radius: var(--radius-md);
+  padding: 0.75rem;
+  text-align: center;
+}
+
+.stat-tile .stat-value {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  color: var(--color-secondary);
+}
+
+.stat-tile .stat-label {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.theme-switcher {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+
+.theme-switcher button {
+  font-size: 0.9rem;
+  padding: 0.5rem 1rem;
+}
+
+.audio-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 320px;
+}
+
+.audio-settings label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-weight: bold;
+}
+
+.mute-row {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 0.5rem !important;
+}

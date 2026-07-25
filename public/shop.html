@@ -7,22 +7,32 @@
   <link rel="stylesheet" href="/css/theme.css" />
   <link rel="stylesheet" href="/css/base.css" />
   <link rel="stylesheet" href="/css/components.css" />
+  <link rel="stylesheet" href="/css/shop.css" />
 </head>
 <body data-theme="sports">
   <div data-nav-mount></div>
+
   <div class="container">
     <div class="panel container">
       <h1>🛒 商店</h1>
-      <p>造型、主題與小遊戲解鎖即將登場，敬請期待！</p>
+      <p class="error-text" id="shop-error"></p>
+      <div id="shop-grid" class="shop-grid"></div>
     </div>
   </div>
-  <script type="module">
-    import { requireLogin } from '/js/auth.js';
-    import { mountNav } from '/js/nav-partial.js';
-    (async () => {
-      const user = await requireLogin();
-      if (user) await mountNav(user, 'shop');
-    })();
-  </script>
+
+  <div id="minigame-overlay" class="shop-overlay hidden">
+    <div class="panel minigame-panel">
+      <h2>🪙 接金幣小遊戲</h2>
+      <p>用滑鼠移動或方向鍵左右移動拼字蜂，接住掉下來的金幣！30 秒倒數。</p>
+      <div id="minigame-container"></div>
+      <p id="minigame-result" class="display-font" style="text-align:center;"></p>
+      <div style="text-align:center; margin-top:1rem;">
+        <button class="btn secondary" id="close-minigame-btn" type="button">關閉</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/vendor/phaser.min.js"></script>
+  <script type="module" src="/js/shop.js"></script>
 </body>
 </html>
