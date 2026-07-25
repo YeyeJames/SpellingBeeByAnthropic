@@ -21,6 +21,51 @@
   display: none !important;
 }
 
+/*
+ * 載入閘門：初始化完成前先把內容藏起來，只顯示一個載入指示，
+ * 等資料都到齊再一次淡入。否則導覽列、金幣、標籤會一個接一個冒出來，
+ * 在手機網路上看起來會很凌亂。
+ */
+body > .container,
+body > .center-column,
+[data-nav-mount] {
+  transition: opacity 0.25s ease;
+}
+
+body.page-loading > .container,
+body.page-loading > .center-column,
+body.page-loading [data-nav-mount] {
+  opacity: 0;
+  visibility: hidden;
+}
+
+body.page-loading::before {
+  content: '🐝';
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 46px;
+  animation: page-loading-bob 0.9s ease-in-out infinite;
+  z-index: 400;
+}
+
+body.page-loading::after {
+  content: '載入中…';
+  position: fixed;
+  left: 50%;
+  top: calc(50% + 46px);
+  transform: translateX(-50%);
+  font-weight: bold;
+  color: var(--color-text-muted, #5b6b8c);
+  z-index: 400;
+}
+
+@keyframes page-loading-bob {
+  0%, 100% { transform: translate(-50%, -50%); }
+  50% { transform: translate(-50%, calc(-50% - 10px)); }
+}
+
 a {
   color: var(--color-secondary, #004e98);
 }

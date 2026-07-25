@@ -152,6 +152,5 @@ runPageInit(async () => {
   const user = await requireLogin();
   if (!user) return;
   currentUser = user;
-  await mountNav(user, 'shop');
-  await loadItems();
+  await Promise.all([mountNav(user, 'shop'), loadItems()]);
 });

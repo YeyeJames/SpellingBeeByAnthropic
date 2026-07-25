@@ -217,7 +217,6 @@ playAgainBtn.addEventListener('click', () => {
 runPageInit(async () => {
   const user = await requireLogin();
   if (!user) return;
-  await mountNav(user, 'practice');
-  await loadTags();
-  await refreshReviewButton();
+  // 三件事互不相依，平行處理，避免畫面元素一個接一個冒出來
+  await Promise.all([mountNav(user, 'practice'), loadTags(), refreshReviewButton()]);
 });

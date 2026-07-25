@@ -250,6 +250,5 @@ tagFilter.addEventListener('change', loadWords);
 runPageInit(async () => {
   const user = await requireLogin();
   if (!user) return;
-  await mountNav(user, 'wordbank');
-  await Promise.all([loadTags(), loadWords()]);
+  await Promise.all([mountNav(user, 'wordbank'), loadTags(), loadWords()]);
 });

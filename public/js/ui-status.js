@@ -76,8 +76,15 @@ export function hideWaking() {
   }
 }
 
+/** 移除載入閘門，讓頁面內容一次淡入 */
+export function markPageReady() {
+  document.body.classList.remove('page-loading');
+}
+
 /**
- * 包住每個頁面的初始化流程：出錯時把錯誤顯示在畫面上，而不是留下一片空白。
+ * 包住每個頁面的初始化流程：
+ * 1. 出錯時把錯誤顯示在畫面上，而不是留下一片空白
+ * 2. 不論成功或失敗，最後都要解除載入閘門，避免畫面永遠卡在載入中
  */
 export async function runPageInit(fn) {
   try {
@@ -86,5 +93,7 @@ export async function runPageInit(fn) {
     hideWaking();
     console.error(err);
     showFatalError('載入失敗', err && err.message ? err.message : String(err));
+  } finally {
+    markPageReady();
   }
 }

@@ -5,13 +5,16 @@ import * as sound from './sound-manager.js';
 let coinsEl = null;
 let currentCoins = 0;
 
+// 在模組載入的當下就開始抓導覽列樣板，跟登入驗證的請求平行進行。
+// 若等到 mountNav() 被呼叫才抓，就會多一次串接的往返，導覽列會明顯晚一拍才出現。
+const navHtmlPromise = fetch('/partials/nav.html').then((r) => r.text());
+
 /** 載入共用 nav，並用目前登入的 user 填入暱稱/金幣、標記目前頁面 */
 export async function mountNav(user, activePage) {
   const mountPoint = document.querySelector('[data-nav-mount]');
   if (!mountPoint) return;
 
-  const html = await fetch('/partials/nav.html').then((r) => r.text());
-  mountPoint.innerHTML = html;
+  mountPoint.innerHTML = await navHtmlPromise;
 
   coinsEl = mountPoint.querySelector('[data-nav-coins]');
   currentCoins = user.coins;

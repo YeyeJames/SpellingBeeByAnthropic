@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="/css/base.css" />
   <link rel="stylesheet" href="/css/components.css" />
 </head>
-<body data-theme="sports">
+<body data-theme="sports" class="page-loading">
   <div class="center-column">
     <div class="panel container" style="max-width: 480px;">
       <h1 class="display-font" style="text-align:center; color: var(--color-primary);">🐝 拼字蜂</h1>
@@ -57,5 +57,10 @@
   </div>
 
   <script type="module" src="/js/login.js"></script>
+  <script>
+    // 保險：萬一 JS 模組完全載入失敗，仍要把內容顯示出來，避免永遠卡在載入畫面
+    /* page-loading-failsafe */
+    setTimeout(function () { document.body.classList.remove("page-loading"); }, 30000);
+  </script>
 </body>
 </html>

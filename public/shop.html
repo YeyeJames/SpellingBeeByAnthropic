@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="/css/components.css" />
   <link rel="stylesheet" href="/css/shop.css" />
 </head>
-<body data-theme="sports">
+<body data-theme="sports" class="page-loading">
   <div data-nav-mount></div>
 
   <div class="container">
@@ -35,5 +35,10 @@
 
   <script src="/vendor/phaser.min.js"></script>
   <script type="module" src="/js/shop.js"></script>
+  <script>
+    // 保險：萬一 JS 模組完全載入失敗，仍要把內容顯示出來，避免永遠卡在載入畫面
+    /* page-loading-failsafe */
+    setTimeout(function () { document.body.classList.remove("page-loading"); }, 30000);
+  </script>
 </body>
 </html>

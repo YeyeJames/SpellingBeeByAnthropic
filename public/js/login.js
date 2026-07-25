@@ -133,10 +133,14 @@ async function submitPin() {
 }
 
 runPageInit(async () => {
+  // 兩個請求平行送出：已登入就直接導向練習頁，沒登入才用得到玩家清單。
+  // 先等登入狀態再抓清單的話，會多一次串接的往返。
+  const profilesPromise = loadProfiles();
   const user = await fetchCurrentUser();
   if (user) {
+    profilesPromise.catch(() => {});
     window.location.href = '/practice.html';
     return;
   }
-  await loadProfiles();
+  await profilesPromise;
 });
