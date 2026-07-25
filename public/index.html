@@ -8,6 +8,14 @@
   <link rel="stylesheet" href="/css/theme.css" />
   <link rel="stylesheet" href="/css/base.css" />
   <link rel="stylesheet" href="/css/components.css" />
+
+<!-- 一次預載整張模組相依圖：否則瀏覽器要一層一層追 import，形成多段瀑布 -->
+  <link rel="modulepreload" href="/js/login.js" />
+  <link rel="modulepreload" href="/js/api.js" />
+  <link rel="modulepreload" href="/js/ui-status.js" />
+  <link rel="modulepreload" href="/js/auth.js" />
+  <link rel="modulepreload" href="/js/theme.js" />
+  <link rel="modulepreload" href="/js/local-store.js" />
 </head>
 <body data-theme="sports" class="page-loading">
   <div class="center-column">

@@ -3,7 +3,7 @@ import { requireLogin } from './auth.js';
 import { mountNav, setNavCoins } from './nav-partial.js';
 import { applyTheme } from './theme.js';
 import * as sound from './sound-manager.js';
-import { createCoinCatchGame } from './game/minigame-coincatch.js';
+import { loadPhaser } from './game/load-phaser.js';
 import { runPageInit } from './ui-status.js';
 import { initOutbox, enqueue, onApplied } from './outbox.js';
 import { readShared, writeShared } from './local-store.js';
@@ -28,19 +28,26 @@ function renderFromCache() {
   renderItems(cachedItems);
 }
 
+function refreshItems() {
+  return api.get('/shop/items').then(({ items }) => {
+    // 只快取商品本身，「是否擁有」以本地的使用者資料為準，避免蓋掉尚未同步的購買
+    cachedItems = items.map(({ owned, ...item }) => item);
+    writeShared('shopItems', cachedItems);
+    renderFromCache();
+  });
+}
+
+/** 有快取就立刻畫出來並直接返回，更新丟到背景 */
 async function loadItems() {
   shopError.textContent = '';
   const cached = readShared('shopItems');
   if (cached) {
     cachedItems = cached;
     renderFromCache();
+    refreshItems().catch(() => {});
+    return;
   }
-
-  const { items } = await api.get('/shop/items');
-  // 只快取商品本身，「是否擁有」以本地的使用者資料為準，避免蓋掉尚未同步的購買
-  cachedItems = items.map(({ owned, ...item }) => item);
-  writeShared('shopItems', cachedItems);
-  renderFromCache();
+  await refreshItems();
 }
 
 function renderItems(items) {
@@ -152,11 +159,16 @@ function toggleAccessory(itemKey, currentlyEquipped) {
   });
 }
 
-function openMinigame() {
+async function openMinigame() {
   sound.playClick();
   minigameResult.textContent = '';
   minigameOverlay.classList.remove('hidden');
   if (!minigameInstance) {
+    // 小遊戲才需要 Phaser，等按下去才載入
+    minigameResult.textContent = '載入中…';
+    await loadPhaser();
+    const { createCoinCatchGame } = await import('./game/minigame-coincatch.js');
+    minigameResult.textContent = '';
     minigameInstance = createCoinCatchGame('minigame-container');
   }
   window.addEventListener('coincatch-coin', () => sound.playCoin());

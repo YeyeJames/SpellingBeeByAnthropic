@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { fetchCurrentUser, logout } from './auth.js';
+import { fetchCurrentUser, logout, cacheUser } from './auth.js';
 import { runPageInit } from './ui-status.js';
 
 const profileStep = document.getElementById('profile-step');
@@ -127,11 +127,10 @@ async function submitPin() {
   const pin = pinDigits.join('');
   pinError.textContent = '';
   try {
-    if (mode === 'login') {
-      await api.post('/auth/login', { nickname: activeNickname, pin });
-    } else {
-      await api.post('/auth/register', { nickname: activeNickname, pin });
-    }
+    const path = mode === 'login' ? '/auth/login' : '/auth/register';
+    const { user } = await api.post(path, { nickname: activeNickname, pin });
+    // 立刻寫入快取，下一頁就不必再等一次登入驗證
+    cacheUser(user);
     window.location.href = '/practice.html';
   } catch (err) {
     pinError.textContent = err.message || '發生錯誤，請再試一次';

@@ -9,6 +9,18 @@
   <link rel="stylesheet" href="/css/base.css" />
   <link rel="stylesheet" href="/css/components.css" />
   <link rel="stylesheet" href="/css/shop.css" />
+
+<!-- 一次預載整張模組相依圖：否則瀏覽器要一層一層追 import，形成多段瀑布 -->
+  <link rel="modulepreload" href="/js/shop.js" />
+  <link rel="modulepreload" href="/js/api.js" />
+  <link rel="modulepreload" href="/js/ui-status.js" />
+  <link rel="modulepreload" href="/js/auth.js" />
+  <link rel="modulepreload" href="/js/theme.js" />
+  <link rel="modulepreload" href="/js/local-store.js" />
+  <link rel="modulepreload" href="/js/nav-partial.js" />
+  <link rel="modulepreload" href="/js/outbox.js" />
+  <link rel="modulepreload" href="/js/sound-manager.js" />
+  <link rel="modulepreload" href="/js/game/load-phaser.js" />
 </head>
 <body data-theme="sports" class="page-loading">
   <div data-nav-mount></div>
@@ -33,7 +45,6 @@
     </div>
   </div>
 
-  <script src="/vendor/phaser.min.js"></script>
   <script type="module" src="/js/shop.js"></script>
   <script>
     // 保險：萬一 JS 模組完全載入失敗，仍要把內容顯示出來，避免永遠卡在載入畫面

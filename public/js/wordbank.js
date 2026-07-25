@@ -78,7 +78,19 @@ function renderFiltered() {
   renderWords(filterLocally());
 }
 
-/** 先用快取畫出來，再到背景抓最新的 */
+function refreshWords() {
+  return api.get('/words').then(({ words }) => {
+    allWords = words;
+    writeShared('words', words);
+    refreshTagOptions();
+    renderFiltered();
+  });
+}
+
+/**
+ * 有快取就立刻畫出來並直接返回，更新丟到背景。
+ * 不能 await 網路，否則載入閘門會等到伺服器回應才放行。
+ */
 async function loadWords() {
   listErrorEl.textContent = '';
   const cached = readShared('words');
@@ -86,13 +98,10 @@ async function loadWords() {
     allWords = cached;
     refreshTagOptions();
     renderFiltered();
+    refreshWords().catch(() => {});
+    return;
   }
-
-  const { words } = await api.get('/words');
-  allWords = words;
-  writeShared('words', words);
-  refreshTagOptions();
-  renderFiltered();
+  await refreshWords();
 }
 
 function renderWords(words) {

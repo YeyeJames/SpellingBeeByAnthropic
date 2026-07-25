@@ -3,7 +3,7 @@ import { requireLogin } from './auth.js';
 import { mountNav, refreshNavCoins, setNavCoins } from './nav-partial.js';
 import { playWordAudio } from './audio-player.js';
 import * as sound from './sound-manager.js';
-import { createPracticeGame } from './game/practice-scene.js';
+import { loadPhaser } from './game/load-phaser.js';
 import { runPageInit } from './ui-status.js';
 import { initOutbox, enqueue, onApplied } from './outbox.js';
 import { readShared, writeShared, newId } from './local-store.js';
@@ -34,12 +34,14 @@ let gameScene = null;
 let currentUser = null;
 let session = null; // { id, words, index, sessionCoins, streak }
 
-function whenSceneReady() {
+async function whenSceneReady() {
+  if (gameScene) return gameScene;
+
+  // Phaser 與場景都在此時才載入：只有真的要練習才需要它們
+  await loadPhaser();
+  const { createPracticeGame } = await import('./game/practice-scene.js');
+
   return new Promise((resolve) => {
-    if (gameScene) {
-      resolve(gameScene);
-      return;
-    }
     window.addEventListener(
       'practice-scene-ready',
       () => {
@@ -52,6 +54,12 @@ function whenSceneReady() {
   });
 }
 
+/** 頁面閒下來時先把 Phaser 抓進快取，等使用者按開始練習就不用等下載 */
+function warmUpGameEngine() {
+  const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 1200));
+  idle(() => loadPhaser().catch(() => {}));
+}
+
 function renderTags(tags) {
   const checked = new Set([...tagCheckboxes.querySelectorAll('input:checked')].map((cb) => cb.value));
   tagCheckboxes.innerHTML = '';
@@ -62,14 +70,26 @@ function renderTags(tags) {
   });
 }
 
-/** 先用快取立刻畫出來，再到背景更新——重複造訪時不用等伺服器 */
+function refreshTags() {
+  return api.get('/words/tags-list').then(({ tags }) => {
+    writeShared('tags', tags);
+    renderTags(tags);
+  });
+}
+
+/**
+ * 有快取就立刻畫出來並「直接返回」，更新丟到背景。
+ * 關鍵是不能 await 網路——否則載入閘門會一直等到伺服器回應才放行，
+ * 快取畫得再快也沒用。
+ */
 async function loadTags() {
   const cached = readShared('tags');
-  if (cached) renderTags(cached);
-
-  const { tags } = await api.get('/words/tags-list');
-  writeShared('tags', tags);
-  renderTags(tags);
+  if (cached) {
+    renderTags(cached);
+    refreshTags().catch(() => {});
+    return;
+  }
+  await refreshTags();
 }
 
 function escapeHtml(str) {
@@ -113,18 +133,30 @@ async function startPractice({ reviewOnly = false } = {}) {
   showQuestion();
 }
 
-async function refreshReviewButton() {
-  try {
-    const { words } = await api.get('/practice/review-queue');
-    if (words.length > 0) {
-      reviewBtn.textContent = `📋 複習到期單字 (${words.length})`;
-      reviewBtn.classList.remove('hidden');
-    } else {
-      reviewBtn.classList.add('hidden');
-    }
-  } catch (err) {
+function renderReviewButton(count) {
+  if (count > 0) {
+    reviewBtn.textContent = `📋 複習到期單字 (${count})`;
+    reviewBtn.classList.remove('hidden');
+  } else {
     reviewBtn.classList.add('hidden');
   }
+}
+
+/** 同樣先用上次的數字顯示，實際數量在背景更新 */
+async function refreshReviewButton({ background = false } = {}) {
+  const cached = readShared('reviewCount');
+  if (background && cached !== null) {
+    renderReviewButton(cached);
+    fetchReviewCount().catch(() => {});
+    return;
+  }
+  await fetchReviewCount().catch(() => renderReviewButton(0));
+}
+
+async function fetchReviewCount() {
+  const { words } = await api.get('/practice/review-queue');
+  writeShared('reviewCount', words.length);
+  renderReviewButton(words.length);
 }
 
 async function showQuestion() {
@@ -267,5 +299,6 @@ runPageInit(async () => {
   currentUser = user;
   initOutbox(user._id);
   // 三件事互不相依，平行處理，避免畫面元素一個接一個冒出來
-  await Promise.all([mountNav(user, 'practice'), loadTags(), refreshReviewButton()]);
+  await Promise.all([mountNav(user, 'practice'), loadTags(), refreshReviewButton({ background: true })]);
+  warmUpGameEngine();
 });

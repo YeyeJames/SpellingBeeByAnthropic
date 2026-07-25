@@ -141,8 +141,15 @@ function main() {
     express.static(path.join(__dirname, '..', 'public'), {
       etag: true,
       lastModified: true,
-      setHeaders: (res) => {
-        res.setHeader('Cache-Control', 'no-cache');
+      setHeaders: (res, filePath) => {
+        // HTML 與導覽列樣板每次都要向伺服器確認，這樣部署後才會立刻帶到新的資源參照
+        if (/\.html$/.test(filePath)) {
+          res.setHeader('Cache-Control', 'no-cache');
+          return;
+        }
+        // CSS/JS/圖片給一分鐘的新鮮期：切換分頁時可直接用快取，不必每個檔案都往返一次。
+        // 一分鐘後自動重新驗證，所以部署新版最多一分鐘就會生效。
+        res.setHeader('Cache-Control', 'public, max-age=60');
       }
     })
   );
