@@ -49,21 +49,19 @@ function main() {
   app.set('trust proxy', 1);
   app.use(express.json());
 
-  app.use(
-    session({
-      name: 'connect.sid',
-      secret: process.env.SESSION_SECRET || 'insecure-fallback-secret',
-      resave: false,
-      saveUninitialized: false,
-      store: sessionStore,
-      cookie: {
-        httpOnly: true,
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 30 * 24 * 60 * 60 * 1000
-      }
-    })
-  );
+  const sessionMiddleware = session({
+    name: 'connect.sid',
+    secret: process.env.SESSION_SECRET || 'insecure-fallback-secret',
+    resave: false,
+    saveUninitialized: false,
+    store: sessionStore,
+    cookie: {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 30 * 24 * 60 * 60 * 1000
+    }
+  });
 
   // 健康檢查：直接用瀏覽器開 /api/health 就能看出伺服器與資料庫狀態
   app.get('/api/health', async (req, res) => {
@@ -74,6 +72,7 @@ function main() {
       lastConnectionAttempt: dbState.lastAttemptAt,
       hasMongoUri: !!process.env.MONGODB_URI,
       hasSessionSecret: !!process.env.SESSION_SECRET,
+      sessionStorage: sessionStore.isPersistent() ? 'mongodb' : 'memory(重啟後會被登出)',
       nodeEnv: process.env.NODE_ENV || null,
       time: new Date().toISOString()
     };
@@ -94,9 +93,11 @@ function main() {
     res.status(dbState.ready ? 200 : 503).json(info);
   });
 
-  // 資料庫還沒連上時，API 要回一個看得懂的錯誤，而不是各種奇怪的 500
+  // 這道關卡必須擋在 session 中介層「之前」。
+  // 否則資料庫還在連線時，session 會先從空的暫用 store 讀取（讀不到登入紀錄），
+  // 而等它讀完時資料庫剛好連上了，關卡就會放行，最後變成 401
+  //  → 使用者明明登入著卻被踢回登入頁，過幾秒又自己登入回來。
   app.use('/api', (req, res, next) => {
-    if (req.path === '/health') return next();
     if (!dbState.ready) {
       return res.status(503).json({
         error: `資料庫尚未連線：${dbState.error || '連線中，請稍候再試'}`
@@ -104,6 +105,10 @@ function main() {
     }
     next();
   });
+
+  // session 只掛在 /api 底下：靜態檔案（CSS/JS/圖片）不需要 session，
+  // 每個檔案都去查一次 session store 只是白白增加延遲
+  app.use('/api', sessionMiddleware);
 
   app.use('/api/auth', authRoutes);
   app.use('/api/words', wordsRoutes);

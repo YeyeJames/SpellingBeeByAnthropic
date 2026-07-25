@@ -20,12 +20,20 @@ class LazyMongoStore extends session.Store {
   }
 
   attachMongo(client) {
+    if (this.realStore) return true;
     try {
       this.realStore = MongoStore.create({ client, collectionName: 'sessions' });
       console.log('✅ Session 已切換為 MongoDB 儲存');
+      return true;
     } catch (err) {
       console.error('⚠️ Session store 掛載失敗，繼續使用記憶體儲存:', err.message);
+      return false;
     }
+  }
+
+  /** 是否已使用 MongoDB 儲存。若為 false，伺服器一重啟所有人就會被登出 */
+  isPersistent() {
+    return !!this.realStore;
   }
 
   active() {
