@@ -13,6 +13,12 @@ const usersRoutes = require('./routes/users');
 
 const PORT = process.env.PORT || 3000;
 
+// 版本標記：Render 部署時會帶入 commit SHA，本機開發則退回啟動時間。
+// 用來判斷「手機上看到的是不是最新版」，這種問題光看畫面猜不出來。
+const BUILD_ID =
+  process.env.RENDER_GIT_COMMIT || process.env.BUILD_ID || `dev-${Date.now().toString(36)}`;
+const STARTED_AT = new Date().toISOString();
+
 // 資料庫連線狀態。伺服器不會因為連不上資料庫就直接結束——
 // 而是照常啟動並在 /api/health 與 API 回應中明確說明原因，
 // 否則 Render 只會顯示一個沒有任何線索的通用錯誤頁。
@@ -73,6 +79,9 @@ function main() {
       hasMongoUri: !!process.env.MONGODB_URI,
       hasSessionSecret: !!process.env.SESSION_SECRET,
       sessionStorage: sessionStore.isPersistent() ? 'mongodb' : 'memory(重啟後會被登出)',
+      // 版本標記：用來確認手機拿到的是不是最新部署的版本
+      buildId: BUILD_ID,
+      startedAt: STARTED_AT,
       nodeEnv: process.env.NODE_ENV || null,
       time: new Date().toISOString()
     };
@@ -118,7 +127,25 @@ function main() {
 
   app.use('/api', (req, res) => res.status(404).json({ error: 'API 端點不存在' }));
 
-  app.use(express.static(path.join(__dirname, '..', 'public')));
+  /*
+   * 靜態檔案一律要求重新驗證。
+   *
+   * 這個專案刻意沒有建置步驟，檔名不含內容雜湊（style.css 而不是 style.abc123.css），
+   * 所以只要瀏覽器把 CSS/JS 快取起來，部署新版之後手機仍會拿舊檔案，
+   * 畫面看起來就像根本沒更新——這種問題非常難查。
+   *
+   * no-cache 的意思是「可以存，但每次都要跟伺服器確認」，
+   * 檔案沒變時回 304，幾乎不耗流量，卻能保證永遠拿到最新版本。
+   */
+  app.use(
+    express.static(path.join(__dirname, '..', 'public'), {
+      etag: true,
+      lastModified: true,
+      setHeaders: (res) => {
+        res.setHeader('Cache-Control', 'no-cache');
+      }
+    })
+  );
 
   app.use((req, res) => {
     res.status(404).send('找不到這個頁面');

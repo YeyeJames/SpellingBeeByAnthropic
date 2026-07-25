@@ -86,6 +86,9 @@
 - `database` 是 `connected` → 資料庫正常
 - `database` 是 `disconnected` → 看 `databaseError` 欄位的訊息（例如帳密錯誤、IP 沒開放）
 - `hasMongoUri` / `hasSessionSecret` 是 `false` → Render 的環境變數沒設好
+- `buildId` → 目前線上跑的版本（Render 會帶入 commit SHA）。畫面看起來沒更新時，
+  先比對這個值與 GitHub 上最新的 commit，就能分辨是「還沒部署完」還是「真的有 bug」
+- `startedAt` → 這次部署的啟動時間
 
 網頁本身若載入失敗，畫面最上方會直接顯示紅色錯誤橫幅說明原因，不會再變成一片空白。
 
