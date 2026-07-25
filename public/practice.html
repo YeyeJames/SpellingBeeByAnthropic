@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="/css/components.css" />
   <link rel="stylesheet" href="/css/practice.css" />
 </head>
-<body data-theme="sports" class="page-loading">
+<body data-theme="sports" class="page-loading fullscreen-page">
   <div data-nav-mount></div>
 
   <div class="container">
@@ -34,8 +34,10 @@
       </div>
       <div id="game-container"></div>
       <div id="answer-area">
-        <button class="btn secondary" id="replay-btn" type="button">🔊 再聽一次</button>
-        <input type="text" id="answer-input" placeholder="輸入你聽到的英文單字" autocomplete="off" autocapitalize="off" spellcheck="false" />
+        <button class="btn secondary" id="replay-btn" type="button" title="再聽一次">
+          🔊<span class="btn-label"> 再聽一次</span>
+        </button>
+        <input type="text" id="answer-input" placeholder="拼拼看…" autocomplete="off" autocapitalize="off" spellcheck="false" />
         <button class="btn gold" id="submit-answer-btn" type="button">送出</button>
       </div>
       <div id="reveal-panel" class="hidden">

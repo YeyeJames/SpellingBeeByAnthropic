@@ -92,28 +92,36 @@ input[type='password']:focus {
   min-height: 1.4em;
 }
 
+/* 導覽列：固定單排，手機上不換行也不佔掉半個螢幕 */
 .top-nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.75rem 1.25rem;
-  gap: 1rem;
-  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 14px;
+  flex-wrap: nowrap;
 }
 
 .top-nav .nav-links {
   display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  gap: 0.25rem;
+  flex-wrap: nowrap;
 }
 
 .top-nav .nav-links a {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
   text-decoration: none;
   font-family: var(--font-display, inherit);
+  font-size: 0.9rem;
   color: var(--color-secondary, #004e98);
   background: rgba(255, 255, 255, 0.7);
-  padding: 0.4rem 0.9rem;
+  padding: 0.3rem 0.6rem;
   border-radius: 999px;
+  white-space: nowrap;
 }
 
 .top-nav .nav-links a.active {
@@ -121,17 +129,125 @@ input[type='password']:focus {
   color: #fff;
 }
 
+.top-nav .nav-right {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.nav-user-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  border: none;
+  background: var(--color-secondary, #004e98);
+  color: #fff;
+  border-radius: 999px;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.85rem;
+  font-weight: bold;
+  cursor: pointer;
+  max-width: 7.5em;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.top-nav [data-nav-nickname] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-icon-btn {
+  border: none;
+  background: rgba(0, 78, 152, 0.1);
+  border-radius: 999px;
+  width: 32px;
+  height: 32px;
+  font-size: 1rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* 螢幕不夠寬時，導覽只留圖示 */
+@media (max-width: 600px) {
+  .top-nav .nav-label {
+    display: none;
+  }
+  .top-nav .nav-links a {
+    padding: 0.35rem 0.55rem;
+    font-size: 1.05rem;
+  }
+  .nav-user-btn {
+    max-width: 5.5em;
+  }
+}
+
+/* 小螢幕手機：再收緊一級，確保整排塞得下不被切掉 */
+@media (max-width: 420px) {
+  .top-nav {
+    padding: 0.3rem 0.4rem;
+    gap: 0.3rem;
+  }
+  .top-nav .nav-links {
+    gap: 0.1rem;
+  }
+  .top-nav .nav-links a {
+    padding: 0.28rem 0.38rem;
+    font-size: 0.95rem;
+  }
+  .top-nav .nav-right {
+    gap: 0.25rem;
+  }
+  .nav-icon-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 0.85rem;
+  }
+  .coin-badge {
+    padding: 0.2rem 0.45rem;
+    font-size: 0.78rem;
+  }
+  .nav-user-btn {
+    max-width: 4.2em;
+    padding: 0.25rem 0.4rem;
+    font-size: 0.75rem;
+  }
+}
+
 @media (max-width: 480px) {
   .container {
     padding: 1rem 0.75rem;
-  }
-
-  .top-nav {
-    justify-content: center;
   }
 
   .btn {
     padding: 0.65rem 1.1rem;
     font-size: 1rem;
   }
+}
+
+/*
+ * 滿版頁面：整頁固定為一個螢幕高，內容自己適應，不讓使用者捲動。
+ * 用 dvh 而非 vh，才不會被手機瀏覽器的網址列高度變化影響。
+ */
+body.fullscreen-page {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+body.fullscreen-page [data-nav-mount] {
+  flex: 0 0 auto;
+}
+
+body.fullscreen-page > .container {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 0.5rem 0.5rem;
+  width: 100%;
 }

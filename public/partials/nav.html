@@ -1,15 +1,17 @@
-<header class="top-nav panel" style="margin: 1rem; border-radius: 16px;">
-  <div class="nav-links">
-    <a href="/practice.html" data-nav="practice">🎧 練習</a>
-    <a href="/wordbank.html" data-nav="wordbank">📚 單字庫</a>
-    <a href="/shop.html" data-nav="shop">🛒 商店</a>
-    <a href="/profile.html" data-nav="profile">🏆 我的檔案</a>
-  </div>
-  <div class="nav-right" style="display:flex; align-items:center; gap:0.75rem;">
-    <button class="btn secondary" data-nav-mute type="button" style="padding:0.4rem 0.7rem; font-size:0.9rem;" title="靜音開關">🔊</button>
-    <span data-sync-status title="資料同步狀態" style="font-size:0.85rem;"></span>
+<header class="top-nav panel">
+  <nav class="nav-links">
+    <a href="/practice.html" data-nav="practice"><span class="nav-icon">🎧</span><span class="nav-label">練習</span></a>
+    <a href="/wordbank.html" data-nav="wordbank"><span class="nav-icon">📚</span><span class="nav-label">單字庫</span></a>
+    <a href="/shop.html" data-nav="shop"><span class="nav-icon">🛒</span><span class="nav-label">商店</span></a>
+    <a href="/profile.html" data-nav="profile"><span class="nav-icon">🏆</span><span class="nav-label">檔案</span></a>
+  </nav>
+  <div class="nav-right">
+    <button class="nav-icon-btn" data-nav-mute type="button" title="靜音開關">🔊</button>
+    <span data-sync-status title="資料同步狀態"></span>
     <span class="coin-badge" data-nav-coins>🪙 0</span>
-    <span data-nav-nickname style="font-weight:bold;"></span>
-    <button class="btn secondary" data-nav-switch type="button" style="padding:0.4rem 0.9rem; font-size:0.9rem;">換人玩</button>
+    <!-- 暱稱本身就是換人按鈕：共用裝置上「現在是誰在玩」要一直看得到 -->
+    <button class="nav-user-btn" data-nav-switch type="button" title="點一下換人玩">
+      👤<span data-nav-nickname></span>
+    </button>
   </div>
 </header>

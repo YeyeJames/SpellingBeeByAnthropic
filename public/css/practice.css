@@ -1,14 +1,47 @@
+/*
+ * 練習頁佈局：整個畫面剛好塞滿一個螢幕，不需要捲動。
+ * 由上而下是 進度列 / 遊戲畫面 / 作答區 / 答案揭曉，
+ * 其中只有遊戲畫面會伸縮，其餘都是固定高度，
+ * 這樣答案出現時就是遊戲區縮小，而不是把下面的內容擠出螢幕。
+ */
+
+#setup-panel,
+#practice-panel,
+#summary-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0.75rem 1rem;
+  width: 100%;
+  max-width: 640px;
+  align-self: center;
+}
+
+#setup-panel {
+  overflow-y: auto;
+  justify-content: center;
+}
+
+#setup-panel h1 {
+  margin: 0 0 0.5rem;
+  font-size: 1.4rem;
+}
+
 .tag-checkboxes {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.6rem;
-  margin: 1rem 0;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+  max-height: 30vh;
+  overflow-y: auto;
 }
 
 .tag-checkboxes label {
   background: var(--color-bg);
   border-radius: 999px;
-  padding: 0.4rem 0.9rem;
+  padding: 0.35rem 0.8rem;
   cursor: pointer;
   font-size: 0.9rem;
   display: flex;
@@ -21,65 +54,118 @@
 }
 
 .practice-topbar {
+  flex: 0 0 auto;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.25rem;
 }
 
+.practice-topbar .display-font {
+  font-size: 1rem;
+}
+
+/*
+ * 遊戲畫面是唯一會伸縮的區塊：進度列固定在上、作答與答案固定在下，
+ * 中間剩多少空間就給遊戲多少，蜜蜂會依空間自動放大縮小填滿。
+ */
 #game-container {
+  flex: 1 1 auto;
+  min-height: 90px;
   display: flex;
+  align-items: center;
   justify-content: center;
-  min-height: 260px;
+  overflow: hidden;
+}
+
+#game-container canvas {
+  max-width: 100%;
+  max-height: 100%;
 }
 
 #answer-area {
+  flex: 0 0 auto;
   display: flex;
-  gap: 0.6rem;
-  flex-wrap: wrap;
+  gap: 0.5rem;
   align-items: center;
   justify-content: center;
-  margin-top: 1rem;
+  margin-top: 0.5rem;
+}
+
+#answer-area .btn {
+  padding: 0.55rem 0.8rem;
+  font-size: 0.95rem;
+  white-space: nowrap;
 }
 
 #answer-input {
-  flex: 1;
-  min-width: 200px;
-  max-width: 320px;
+  flex: 1 1 auto;
+  min-width: 0;
   text-align: center;
-  font-size: 1.3rem;
+  font-size: 1.15rem;
   font-family: var(--font-display);
   letter-spacing: 2px;
+  padding: 0.5rem;
 }
 
 #reveal-panel {
+  flex: 0 0 auto;
   text-align: center;
-  margin-top: 1.25rem;
-  padding: 1rem;
+  margin-top: 0.5rem;
+  padding: 0.6rem 0.75rem;
   background: var(--color-bg);
   border-radius: var(--radius-md);
 }
 
+#reveal-panel p {
+  margin: 0.2rem 0;
+}
+
 .reveal-result {
   font-family: var(--font-display);
-  font-size: 1.4rem;
+  font-size: 1.1rem;
 }
 
 .reveal-english {
-  font-size: 1.3rem;
+  font-size: 1.15rem;
   font-weight: bold;
   color: var(--color-secondary);
 }
 
 .reveal-chinese {
-  font-size: 1.1rem;
+  font-size: 1rem;
 }
 
 .reveal-sentence {
   font-style: italic;
   color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+#reveal-panel .btn {
+  margin-top: 0.4rem;
+  padding: 0.5rem 1.2rem;
+  font-size: 1rem;
 }
 
 #summary-panel {
   text-align: center;
+  justify-content: center;
+}
+
+/* 窄螢幕：再聽一次只留喇叭圖示，把寬度讓給輸入框 */
+@media (max-width: 480px) {
+  #answer-area .btn-label {
+    display: none;
+  }
+}
+
+/* 螢幕很矮時（橫向、小手機）進一步縮，優先保住作答區與答案 */
+@media (max-height: 700px) {
+  #game-container {
+    min-height: 70px;
+  }
+  .reveal-sentence {
+    display: none;
+  }
 }
