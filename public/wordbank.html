@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>單字庫 - 拼字蜂</title>
+  <link rel="stylesheet" href="/css/theme.css" />
+  <link rel="stylesheet" href="/css/base.css" />
+  <link rel="stylesheet" href="/css/components.css" />
+</head>
+<body data-theme="sports">
+  <div data-nav-mount></div>
+  <div class="container">
+    <div class="panel container">
+      <h1>📚 單字庫</h1>
+      <p>新增/編輯單字功能即將登場，敬請期待！</p>
+    </div>
+  </div>
+  <script type="module">
+    import { requireLogin } from '/js/auth.js';
+    import { mountNav } from '/js/nav-partial.js';
+    (async () => {
+      const user = await requireLogin();
+      if (user) await mountNav(user, 'wordbank');
+    })();
+  </script>
+</body>
+</html>

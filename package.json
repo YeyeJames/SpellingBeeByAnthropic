@@ -1,0 +1,25 @@
+{
+  "name": "spelling-bee-by-anthropic",
+  "version": "1.0.0",
+  "description": "拼字蜂 - 小學生英語聽寫練習遊戲網頁",
+  "private": true,
+  "type": "commonjs",
+  "engines": {
+    "node": "20.x"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "seed": "node scripts/seed.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "connect-mongo": "^5.1.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.4.0",
+    "express-session": "^1.18.0",
+    "mongodb": "^6.9.0",
+    "multer": "^2.0.0"
+  }
+}

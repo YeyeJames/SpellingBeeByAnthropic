@@ -1,0 +1,99 @@
+/* 拼字蜂 - 主題系統。之後新增主題只需加一個 body[data-theme="..."] 區塊 */
+
+:root {
+  --font-display: 'Arial Black', 'Microsoft JhengHei', sans-serif;
+  --font-body: 'Trebuchet MS', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  --radius-lg: 20px;
+  --radius-md: 12px;
+  --shadow-pop: 0 6px 0 rgba(0, 0, 0, 0.2);
+}
+
+body[data-theme='sports'] {
+  --color-primary: #ff6b35;
+  --color-primary-dark: #d94e1f;
+  --color-secondary: #004e98;
+  --color-secondary-dark: #003569;
+  --color-accent: #ffd23f;
+  --color-bg: #eef6ff;
+  --color-bg-panel: #ffffff;
+  --color-text: #142850;
+  --color-text-muted: #5b6b8c;
+  --color-success: #2fae4e;
+  --color-danger: #e5383b;
+  --bg-gradient: linear-gradient(160deg, #eef6ff 0%, #dceeff 45%, #fff3d6 100%);
+  --field-lines: repeating-linear-gradient(
+    0deg,
+    rgba(0, 78, 152, 0.05) 0px,
+    rgba(0, 78, 152, 0.05) 2px,
+    transparent 2px,
+    transparent 40px
+  );
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  color: var(--color-text);
+  background: var(--bg-gradient), var(--field-lines);
+  min-height: 100vh;
+}
+
+h1, h2, h3, .display-font {
+  font-family: var(--font-display);
+  letter-spacing: 0.5px;
+}
+
+.panel {
+  background: var(--color-bg-panel);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-pop), 0 10px 30px rgba(20, 40, 80, 0.12);
+  border: 3px solid rgba(0, 78, 152, 0.08);
+}
+
+.btn {
+  font-family: var(--font-display);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1.5rem;
+  font-size: 1.1rem;
+  cursor: pointer;
+  color: #fff;
+  background: var(--color-primary);
+  box-shadow: 0 5px 0 var(--color-primary-dark);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+
+.btn:active {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 var(--color-primary-dark);
+}
+
+.btn.secondary {
+  background: var(--color-secondary);
+  box-shadow: 0 5px 0 var(--color-secondary-dark);
+}
+
+.btn.gold {
+  background: var(--color-accent);
+  color: #5a4300;
+  box-shadow: 0 5px 0 #c99f1e;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.coin-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--color-accent);
+  color: #5a4300;
+  font-family: var(--font-display);
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  box-shadow: 0 3px 0 #c99f1e;
+}
