@@ -1,10 +1,12 @@
 import { api } from './api.js';
 import { requireLogin } from './auth.js';
-import { mountNav, refreshNavCoins } from './nav-partial.js';
+import { mountNav, refreshNavCoins, setNavCoins } from './nav-partial.js';
 import { playWordAudio } from './audio-player.js';
 import * as sound from './sound-manager.js';
 import { createPracticeGame } from './game/practice-scene.js';
 import { runPageInit } from './ui-status.js';
+import { initOutbox, enqueue, onApplied } from './outbox.js';
+import { readShared, writeShared, newId } from './local-store.js';
 
 const setupPanel = document.getElementById('setup-panel');
 const practicePanel = document.getElementById('practice-panel');
@@ -29,7 +31,8 @@ const reviewBtn = document.getElementById('review-practice-btn');
 
 let phaserGame = null;
 let gameScene = null;
-let session = null; // { id, words, index, sessionCoins }
+let currentUser = null;
+let session = null; // { id, words, index, sessionCoins, streak }
 
 function whenSceneReady() {
   return new Promise((resolve) => {
@@ -49,14 +52,24 @@ function whenSceneReady() {
   });
 }
 
-async function loadTags() {
-  const { tags } = await api.get('/words/tags-list');
+function renderTags(tags) {
+  const checked = new Set([...tagCheckboxes.querySelectorAll('input:checked')].map((cb) => cb.value));
   tagCheckboxes.innerHTML = '';
   tags.forEach((tag) => {
     const label = document.createElement('label');
-    label.innerHTML = `<input type="checkbox" value="${escapeAttr(tag)}" /> ${escapeHtml(tag)}`;
+    label.innerHTML = `<input type="checkbox" value="${escapeAttr(tag)}"${checked.has(tag) ? ' checked' : ''} /> ${escapeHtml(tag)}`;
     tagCheckboxes.appendChild(label);
   });
+}
+
+/** 先用快取立刻畫出來，再到背景更新——重複造訪時不用等伺服器 */
+async function loadTags() {
+  const cached = readShared('tags');
+  if (cached) renderTags(cached);
+
+  const { tags } = await api.get('/words/tags-list');
+  writeShared('tags', tags);
+  renderTags(tags);
 }
 
 function escapeHtml(str) {
@@ -88,7 +101,13 @@ async function startPractice({ reviewOnly = false } = {}) {
     return;
   }
 
-  session = { id: data.session._id, words: data.words, index: 0, sessionCoins: 0 };
+  session = {
+    id: newId(), // 由前端產生，作答紀錄在離線時也能先排隊
+    words: data.words,
+    index: 0,
+    sessionCoins: 0,
+    streak: (currentUser && currentUser.stats.currentStreak) || 0
+  };
   showPanel(practicePanel);
   await whenSceneReady();
   showQuestion();
@@ -122,31 +141,35 @@ async function showQuestion() {
   await playWordAudio(word);
 }
 
-async function submitAnswer() {
+function normalizeAnswer(str) {
+  return (str || '').trim().toLowerCase();
+}
+
+/**
+ * 在本地判定對錯並立即給畫面回饋，作答紀錄丟進背景佇列補送。
+ *
+ * 為什麼可以在本地判定：出題時整個單字（含正確拼法）就已經傳到前端了，
+ * 本地比對並沒有多洩漏任何資訊，卻可以省掉一次來回等待。
+ * 伺服器收到後仍會自行重新判定，金幣與統計最終以伺服器為準。
+ */
+function submitAnswer() {
   if (answerInput.disabled) return;
   const word = session.words[session.index];
   const userAnswer = answerInput.value;
   answerInput.disabled = true;
   submitBtn.disabled = true;
 
-  let result;
-  try {
-    result = await api.post(`/practice/session/${session.id}/attempt`, {
-      wordId: word._id,
-      userAnswer
-    });
-  } catch (err) {
-    setupError.textContent = err.message;
-    answerInput.disabled = false;
-    submitBtn.disabled = false;
-    return;
-  }
+  const correct = normalizeAnswer(userAnswer) === normalizeAnswer(word.english);
 
-  session.sessionCoins += result.coinsAwarded;
+  // 用與伺服器相同的公式先算出金幣與連勝，讓畫面立刻有反應
+  session.streak = correct ? session.streak + 1 : 0;
+  const coinsAwarded = correct ? 10 + Math.floor(session.streak / 5) * 5 : 0;
+
+  session.sessionCoins += coinsAwarded;
   sessionCoinBadge.textContent = `🪙 ${session.sessionCoins}`;
-  refreshNavCoins(result.coinsAwarded);
+  if (coinsAwarded) refreshNavCoins(coinsAwarded);
 
-  if (result.correct) {
+  if (correct) {
     sound.playCorrect();
     gameScene.reactCorrect();
     revealResult.textContent = '🎉 答對了！';
@@ -158,31 +181,42 @@ async function submitAnswer() {
     revealResult.style.color = 'var(--color-danger)';
   }
 
-  if (result.currentStreak > 0 && result.currentStreak % 5 === 0) {
+  if (session.streak > 0 && session.streak % 5 === 0) {
     sound.playStreak();
     gameScene.reactStreak();
   }
 
-  revealEnglish.textContent = `✏️ ${result.correctSpelling}`;
-  revealChinese.textContent = `🀄 ${result.chinese}`;
-  revealSentence.textContent = result.exampleSentence ? `💬 ${result.exampleSentence}` : '';
+  revealEnglish.textContent = `✏️ ${word.english}`;
+  revealChinese.textContent = `🀄 ${word.chinese}`;
+  revealSentence.textContent = word.exampleSentence ? `💬 ${word.exampleSentence}` : '';
   revealPanel.classList.remove('hidden');
+
+  enqueue({
+    kind: 'attempt',
+    path: '/practice/attempt',
+    body: {
+      wordId: word._id,
+      userAnswer,
+      clientSessionId: session.id,
+      attemptedAt: new Date().toISOString()
+    }
+  });
 }
 
 async function nextQuestion() {
   session.index += 1;
   if (session.index >= session.words.length) {
-    await finishSession();
+    finishSession();
     return;
   }
   await showQuestion();
 }
 
-async function finishSession() {
-  await api.post(`/practice/session/${session.id}/complete`);
+function finishSession() {
+  // 總結畫面用本地資料立刻顯示；作答紀錄由背景佇列負責送出
   summaryText.textContent = `這次練習了 ${session.words.length} 個單字，總共賺到 ${session.sessionCoins} 枚金幣！`;
   showPanel(summaryPanel);
-  await refreshReviewButton();
+  refreshReviewButton();
 }
 
 document.getElementById('start-practice-btn').addEventListener('click', () => {
@@ -214,9 +248,24 @@ playAgainBtn.addEventListener('click', () => {
   refreshReviewButton();
 });
 
+// 每筆作答成功送達後，用伺服器回傳的金幣數校正畫面。
+// 本地與伺服器用同一套公式，正常情況下不會有差異；
+// 若因為在別台裝置上也練習過而不一致，一律以伺服器為準。
+onApplied('attempt', (result) => {
+  if (result && typeof result.coins === 'number') {
+    setNavCoins(result.coins);
+    if (currentUser) {
+      currentUser.coins = result.coins;
+      if (result.stats) currentUser.stats = result.stats;
+    }
+  }
+});
+
 runPageInit(async () => {
   const user = await requireLogin();
   if (!user) return;
+  currentUser = user;
+  initOutbox(user._id);
   // 三件事互不相依，平行處理，避免畫面元素一個接一個冒出來
   await Promise.all([mountNav(user, 'practice'), loadTags(), refreshReviewButton()]);
 });

@@ -4,6 +4,8 @@ import { mountNav } from './nav-partial.js';
 import { playWordAudio, speakWord } from './audio-player.js';
 import { createRecorder } from './recorder.js';
 import { runPageInit } from './ui-status.js';
+import { initOutbox } from './outbox.js';
+import { readShared, writeShared } from './local-store.js';
 
 const wordListEl = document.getElementById('word-list');
 const listErrorEl = document.getElementById('list-error');
@@ -31,6 +33,7 @@ let pendingAudioDuration = null;
 let pendingRemoveAudio = false;
 let isRecording = false;
 let recorder = null;
+let allWords = [];
 
 function debounce(fn, ms) {
   let t;
@@ -40,8 +43,7 @@ function debounce(fn, ms) {
   };
 }
 
-async function loadTags() {
-  const { tags } = await api.get('/words/tags-list');
+function renderTagOptions(tags) {
   const current = tagFilter.value;
   tagFilter.innerHTML = '<option value="">所有標籤</option>';
   tags.forEach((tag) => {
@@ -53,17 +55,44 @@ async function loadTags() {
   tagFilter.value = current;
 }
 
+/** 標籤直接從本地單字庫推導，省一次請求 */
+function refreshTagOptions() {
+  renderTagOptions([...new Set(allWords.flatMap((w) => w.tags || []))].sort());
+}
+
+/** 從本地完整單字庫做搜尋與標籤篩選，不必每次都問伺服器 */
+function filterLocally() {
+  const search = searchInput.value.trim().toLowerCase();
+  const tag = tagFilter.value;
+  return allWords.filter((w) => {
+    if (tag && !(w.tags || []).includes(tag)) return false;
+    if (!search) return true;
+    return (
+      (w.english || '').toLowerCase().includes(search) ||
+      (w.chinese || '').toLowerCase().includes(search)
+    );
+  });
+}
+
+function renderFiltered() {
+  renderWords(filterLocally());
+}
+
+/** 先用快取畫出來，再到背景抓最新的 */
 async function loadWords() {
   listErrorEl.textContent = '';
-  const params = new URLSearchParams();
-  if (searchInput.value.trim()) params.set('search', searchInput.value.trim());
-  if (tagFilter.value) params.set('tag', tagFilter.value);
-  try {
-    const { words } = await api.get(`/words?${params.toString()}`);
-    renderWords(words);
-  } catch (err) {
-    listErrorEl.textContent = err.message;
+  const cached = readShared('words');
+  if (cached) {
+    allWords = cached;
+    refreshTagOptions();
+    renderFiltered();
   }
+
+  const { words } = await api.get('/words');
+  allWords = words;
+  writeShared('words', words);
+  refreshTagOptions();
+  renderFiltered();
 }
 
 function renderWords(words) {
@@ -183,15 +212,35 @@ btnRemoveAudio.addEventListener('click', () => {
   btnRemoveAudio.classList.add('hidden');
 });
 
+/** 就地更新本地單字庫並重畫，不用再跟伺服器要一次完整清單 */
+function upsertLocalWord(word) {
+  const idx = allWords.findIndex((w) => w._id === word._id);
+  if (idx >= 0) allWords[idx] = word;
+  else allWords.unshift(word);
+  writeShared('words', allWords);
+  refreshTagOptions();
+  renderFiltered();
+}
+
+function removeLocalWord(wordId) {
+  allWords = allWords.filter((w) => w._id !== wordId);
+  writeShared('words', allWords);
+  refreshTagOptions();
+  renderFiltered();
+}
+
 btnDeleteWord.addEventListener('click', async () => {
   if (!editingWord) return;
   if (!confirm(`確定要刪除「${editingWord.english}」嗎？`)) return;
+  const wordId = editingWord._id;
+  // 畫面立刻反應，請求在背景送出；失敗才把單字放回來
+  removeLocalWord(wordId);
+  closeForm();
   try {
-    await api.del(`/words/${editingWord._id}`);
-    closeForm();
-    await Promise.all([loadTags(), loadWords()]);
+    await api.del(`/words/${wordId}`);
   } catch (err) {
-    formError.textContent = err.message;
+    listErrorEl.textContent = `刪除失敗：${err.message}`;
+    await loadWords();
   }
 });
 
@@ -217,13 +266,15 @@ form.addEventListener('submit', async (e) => {
     }
 
     if (pendingAudioBlob) {
-      await uploadAudio(word._id, pendingAudioBlob, pendingAudioMime, pendingAudioDuration);
+      const updated = await uploadAudio(word._id, pendingAudioBlob, pendingAudioMime, pendingAudioDuration);
+      if (updated) word = updated;
     } else if (pendingRemoveAudio) {
-      await api.del(`/words/${word._id}/audio`);
+      ({ word } = await api.del(`/words/${word._id}/audio`));
     }
 
+    // 直接把回應寫進本地清單，省掉存檔後重新抓一整份單字庫
+    upsertLocalWord(word);
     closeForm();
-    await Promise.all([loadTags(), loadWords()]);
   } catch (err) {
     formError.textContent = err.message;
   }
@@ -242,13 +293,17 @@ async function uploadAudio(wordId, blob, mimeType, durationSec) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error || '音檔上傳失敗');
   }
+  const data = await res.json().catch(() => null);
+  return data && data.word;
 }
 
-searchInput.addEventListener('input', debounce(loadWords, 300));
-tagFilter.addEventListener('change', loadWords);
+// 搜尋與篩選都在本地做，不用等伺服器，打字就即時反應
+searchInput.addEventListener('input', debounce(renderFiltered, 120));
+tagFilter.addEventListener('change', renderFiltered);
 
 runPageInit(async () => {
   const user = await requireLogin();
   if (!user) return;
-  await Promise.all([mountNav(user, 'wordbank'), loadTags(), loadWords()]);
+  initOutbox(user._id);
+  await Promise.all([mountNav(user, 'wordbank'), loadWords()]);
 });

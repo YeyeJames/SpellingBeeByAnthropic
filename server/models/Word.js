@@ -5,13 +5,18 @@ function collection() {
   return getDB().collection('words');
 }
 
-async function createWord({ english, chinese, exampleSentence, tags }, createdBy) {
+async function getWordByOpId(opId) {
+  return collection().findOne({ opId });
+}
+
+async function createWord({ english, chinese, exampleSentence, tags }, createdBy, opId) {
   const now = new Date();
   const doc = {
     english,
     chinese,
     exampleSentence,
     tags,
+    opId: opId || null,
     audio: { type: 'tts', gridfsFileId: null, mimeType: null, durationSec: null },
     createdBy: new ObjectId(createdBy),
     createdAt: now,
@@ -104,6 +109,7 @@ async function incrementStats(id, correct) {
 
 module.exports = {
   createWord,
+  getWordByOpId,
   findDuplicateEnglish,
   listWords,
   listWordsByTags,

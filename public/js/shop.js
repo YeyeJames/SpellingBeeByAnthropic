@@ -5,6 +5,8 @@ import { applyTheme } from './theme.js';
 import * as sound from './sound-manager.js';
 import { createCoinCatchGame } from './game/minigame-coincatch.js';
 import { runPageInit } from './ui-status.js';
+import { initOutbox, enqueue, onApplied } from './outbox.js';
+import { readShared, writeShared } from './local-store.js';
 
 const shopGrid = document.getElementById('shop-grid');
 const shopError = document.getElementById('shop-error');
@@ -13,6 +15,7 @@ const minigameResult = document.getElementById('minigame-result');
 
 let currentUser = null;
 let minigameInstance = null;
+let cachedItems = [];
 
 function escapeHtml(str) {
   const div = document.createElement('div');
@@ -20,14 +23,24 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+/** 用本地的擁有清單重畫，不必再問伺服器 */
+function renderFromCache() {
+  renderItems(cachedItems);
+}
+
 async function loadItems() {
   shopError.textContent = '';
-  try {
-    const { items } = await api.get('/shop/items');
-    renderItems(items);
-  } catch (err) {
-    shopError.textContent = err.message;
+  const cached = readShared('shopItems');
+  if (cached) {
+    cachedItems = cached;
+    renderFromCache();
   }
+
+  const { items } = await api.get('/shop/items');
+  // 只快取商品本身，「是否擁有」以本地的使用者資料為準，避免蓋掉尚未同步的購買
+  cachedItems = items.map(({ owned, ...item }) => item);
+  writeShared('shopItems', cachedItems);
+  renderFromCache();
 }
 
 function renderItems(items) {
@@ -48,12 +61,15 @@ function renderItems(items) {
 }
 
 function buildActionElement(item) {
-  if (!item.owned) {
+  // 「是否擁有」一律看本地的使用者資料，這樣剛買下去畫面就會立刻變成已擁有
+  const owned = (currentUser.ownedItemKeys || []).includes(item.key);
+
+  if (!owned) {
     const btn = document.createElement('button');
     btn.className = 'btn gold';
     btn.textContent = `購買 🪙${item.cost}`;
     btn.disabled = currentUser.coins < item.cost;
-    btn.addEventListener('click', () => purchaseItem(item.key));
+    btn.addEventListener('click', () => purchaseItem(item));
     return btn;
   }
 
@@ -87,42 +103,53 @@ function buildActionElement(item) {
   return document.createElement('span');
 }
 
-async function purchaseItem(itemKey) {
+/**
+ * 樂觀購買：先在本地扣款並解鎖，畫面立刻更新，實際請求丟給背景佇列。
+ * 若伺服器最後不接受（例如在別台裝置上已經把金幣花掉了），
+ * onApplied 會把本地狀態改回來並說明原因。
+ */
+function purchaseItem(item) {
   shopError.textContent = '';
-  try {
-    const { user } = await api.post('/shop/purchase', { itemKey });
-    currentUser = user;
-    setNavCoins(user.coins);
-    sound.playCoin();
-    await loadItems();
-  } catch (err) {
-    shopError.textContent = err.message;
+  if ((currentUser.ownedItemKeys || []).includes(item.key)) return;
+  if (currentUser.coins < item.cost) {
+    shopError.textContent = '金幣不夠喔，再多練習賺一點吧！';
+    return;
   }
+
+  currentUser.coins -= item.cost;
+  currentUser.ownedItemKeys = [...(currentUser.ownedItemKeys || []), item.key];
+  setNavCoins(currentUser.coins);
+  sound.playCoin();
+  renderFromCache();
+
+  enqueue({
+    kind: 'purchase',
+    path: '/shop/purchase',
+    body: { itemKey: item.key, cost: item.cost }
+  });
 }
 
-async function equipTheme(themeKey) {
+// 換造型/主題純粹是外觀，先在本地套用，變更丟背景佇列
+function equipTheme(themeKey) {
   sound.playClick();
-  try {
-    const { user } = await api.post('/user/equip', { type: 'theme', itemKey: themeKey });
-    currentUser = user;
-    applyTheme(themeKey);
-    await loadItems();
-  } catch (err) {
-    shopError.textContent = err.message;
-  }
+  currentUser.activeTheme = themeKey;
+  applyTheme(themeKey);
+  renderFromCache();
+  enqueue({ kind: 'equip', path: '/user/equip', body: { type: 'theme', itemKey: themeKey } });
 }
 
-async function toggleAccessory(itemKey, currentlyEquipped) {
+function toggleAccessory(itemKey, currentlyEquipped) {
   sound.playClick();
-  try {
-    const path = currentlyEquipped ? '/user/unequip' : '/user/equip';
-    const body = currentlyEquipped ? { itemKey } : { type: 'avatarAccessory', itemKey };
-    const { user } = await api.post(path, body);
-    currentUser = user;
-    await loadItems();
-  } catch (err) {
-    shopError.textContent = err.message;
-  }
+  const list = currentUser.avatar.accessories || [];
+  currentUser.avatar.accessories = currentlyEquipped
+    ? list.filter((k) => k !== itemKey)
+    : [...list, itemKey];
+  renderFromCache();
+  enqueue({
+    kind: 'equip',
+    path: currentlyEquipped ? '/user/unequip' : '/user/equip',
+    body: currentlyEquipped ? { itemKey } : { type: 'avatarAccessory', itemKey }
+  });
 }
 
 function openMinigame() {
@@ -148,9 +175,28 @@ document.getElementById('close-minigame-btn').addEventListener('click', () => {
   }
 });
 
+// 伺服器是金幣與擁有清單的最終權威。若購買被拒絕（例如在別台裝置上
+// 已經把金幣花掉了），把本地的樂觀更新收回來並說明原因。
+onApplied('purchase', (result, op, err) => {
+  if (err) {
+    currentUser.coins += op.body.cost;
+    currentUser.ownedItemKeys = (currentUser.ownedItemKeys || []).filter((k) => k !== op.body.itemKey);
+    setNavCoins(currentUser.coins);
+    shopError.textContent = `「${op.body.itemKey}」購買失敗：${err.message}`;
+    renderFromCache();
+    return;
+  }
+  if (result && result.user) {
+    currentUser = result.user;
+    setNavCoins(currentUser.coins);
+    renderFromCache();
+  }
+});
+
 runPageInit(async () => {
   const user = await requireLogin();
   if (!user) return;
   currentUser = user;
+  initOutbox(user._id);
   await Promise.all([mountNav(user, 'shop'), loadItems()]);
 });

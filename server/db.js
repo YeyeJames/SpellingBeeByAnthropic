@@ -35,6 +35,21 @@ async function ensureIndexes(database) {
   await database.collection('wordProgress').createIndex({ userId: 1, nextReviewAt: 1 });
   await database.collection('attempts').createIndex({ userId: 1, attemptedAt: 1 });
   await database.collection('shopItems').createIndex({ key: 1 }, { unique: true });
+
+  // 去重用的索引。背景同步一定會重試，沒有這些索引的話
+  // 同一筆作答會被重複計分、同一筆購買會被重複扣款。
+  await database.collection('attempts').createIndex(
+    { userId: 1, opId: 1 },
+    { unique: true, partialFilterExpression: { opId: { $type: 'string' } } }
+  );
+  await database.collection('purchases').createIndex(
+    { userId: 1, opId: 1 },
+    { unique: true, partialFilterExpression: { opId: { $type: 'string' } } }
+  );
+  await database.collection('words').createIndex(
+    { opId: 1 },
+    { unique: true, partialFilterExpression: { opId: { $type: 'string' } } }
+  );
 }
 
 function getDB() {

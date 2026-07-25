@@ -1,4 +1,5 @@
 import { api } from './api.js';
+import { onSyncState } from './outbox.js';
 import * as sound from './sound-manager.js';
 
 let coinsEl = null;
@@ -23,6 +24,20 @@ export async function mountNav(user, activePage) {
 
   const activeLink = mountPoint.querySelector(`[data-nav="${activePage}"]`);
   if (activeLink) activeLink.classList.add('active');
+
+  // 同步狀態：讓家長看得出來練習紀錄有沒有真的存到伺服器
+  const syncEl = mountPoint.querySelector('[data-sync-status]');
+  if (syncEl) {
+    onSyncState(({ pending, flushing }) => {
+      if (pending === 0) {
+        syncEl.textContent = '✅';
+        syncEl.title = '資料已全部同步';
+      } else {
+        syncEl.textContent = flushing ? `⏳ ${pending}` : `📤 ${pending}`;
+        syncEl.title = `還有 ${pending} 筆資料等待同步`;
+      }
+    });
+  }
 
   // 回選單換人：不登出，這樣選單上仍會顯示「繼續玩」，
   // 想換別人就點別人的頭像輸入他的 PIN 即可

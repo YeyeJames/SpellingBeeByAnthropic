@@ -55,10 +55,21 @@ router.post('/', wordCreateLimiter, async (req, res, next) => {
     const { valid, errors, cleaned } = validateWordInput(req.body || {});
     if (!valid) return res.status(400).json({ error: errors.join('; ') });
 
+    // 背景同步重試時不能重複建立同一個單字
+    const opId = req.body && req.body.opId;
+    if (opId) {
+      const existing = await Word.getWordByOpId(opId);
+      if (existing) return res.status(200).json({ word: existing, duplicate: true });
+    }
+
     const duplicate = await Word.findDuplicateEnglish(cleaned.english);
-    const word = await Word.createWord(cleaned, req.user._id);
+    const word = await Word.createWord(cleaned, req.user._id, opId);
     res.status(201).json({ word, duplicateWarning: !!duplicate });
   } catch (err) {
+    if (err.code === 11000 && req.body && req.body.opId) {
+      const existing = await Word.getWordByOpId(req.body.opId);
+      if (existing) return res.status(200).json({ word: existing, duplicate: true });
+    }
     next(err);
   }
 });
