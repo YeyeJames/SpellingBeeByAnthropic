@@ -7,33 +7,34 @@ import { runPageInit } from './ui-status.js';
 import { initOutbox } from './outbox.js';
 import { readShared, writeShared } from './local-store.js';
 
+/**
+ * 單字庫是唯讀的：內容寫死在 server/data/word-bank.js，
+ * 這一頁只用來瀏覽、聽發音，以及替單字錄真人發音。
+ */
+const PARTS = [1, 2, 3, 4];
+
 const wordListEl = document.getElementById('word-list');
 const listErrorEl = document.getElementById('list-error');
 const searchInput = document.getElementById('search-input');
-const tagFilter = document.getElementById('tag-filter');
-const overlay = document.getElementById('word-form-overlay');
-const form = document.getElementById('word-form');
-const formTitle = document.getElementById('form-title');
-const fEnglish = document.getElementById('f-english');
-const fChinese = document.getElementById('f-chinese');
-const fSentence = document.getElementById('f-sentence');
-const fTags = document.getElementById('f-tags');
-const formError = document.getElementById('form-error');
+const partTabs = document.getElementById('part-tabs');
+const countEl = document.getElementById('wb-count');
+const overlay = document.getElementById('record-overlay');
+const recordTitle = document.getElementById('record-title');
 const audioStatus = document.getElementById('audio-status');
 const audioError = document.getElementById('audio-error');
 const btnPlayPreview = document.getElementById('btn-play-preview');
 const btnRecord = document.getElementById('btn-record');
 const btnRemoveAudio = document.getElementById('btn-remove-audio');
-const btnDeleteWord = document.getElementById('btn-delete-word');
+const btnSaveRecord = document.getElementById('btn-save-record');
 
-let editingWord = null; // null = 新增模式
+let allWords = [];
+let activePart = null; // null = 全部
+let recordingWord = null;
 let pendingAudioBlob = null;
 let pendingAudioMime = null;
 let pendingAudioDuration = null;
-let pendingRemoveAudio = false;
 let isRecording = false;
 let recorder = null;
-let allWords = [];
 
 function debounce(fn, ms) {
   let t;
@@ -43,29 +44,33 @@ function debounce(fn, ms) {
   };
 }
 
-function renderTagOptions(tags) {
-  const current = tagFilter.value;
-  tagFilter.innerHTML = '<option value="">所有標籤</option>';
-  tags.forEach((tag) => {
-    const opt = document.createElement('option');
-    opt.value = tag;
-    opt.textContent = tag;
-    tagFilter.appendChild(opt);
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str == null ? '' : str;
+  return div.innerHTML;
+}
+
+function renderPartTabs() {
+  partTabs.innerHTML = '';
+  [null, ...PARTS].forEach((part) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = part === activePart ? 'wb-part-tab active' : 'wb-part-tab';
+    btn.textContent = part === null ? '全部' : `Part ${part}`;
+    btn.addEventListener('click', () => {
+      activePart = part;
+      writeShared('wbPart', part);
+      renderPartTabs();
+      renderFiltered();
+    });
+    partTabs.appendChild(btn);
   });
-  tagFilter.value = current;
 }
 
-/** 標籤直接從本地單字庫推導，省一次請求 */
-function refreshTagOptions() {
-  renderTagOptions([...new Set(allWords.flatMap((w) => w.tags || []))].sort());
-}
-
-/** 從本地完整單字庫做搜尋與標籤篩選，不必每次都問伺服器 */
 function filterLocally() {
   const search = searchInput.value.trim().toLowerCase();
-  const tag = tagFilter.value;
   return allWords.filter((w) => {
-    if (tag && !(w.tags || []).includes(tag)) return false;
+    if (activePart !== null && w.part !== activePart) return false;
     if (!search) return true;
     return (
       (w.english || '').toLowerCase().includes(search) ||
@@ -75,28 +80,52 @@ function filterLocally() {
 }
 
 function renderFiltered() {
-  renderWords(filterLocally());
+  const words = filterLocally();
+  countEl.textContent = `${words.length} / ${allWords.length} 字`;
+  renderWords(words);
+}
+
+function renderWords(words) {
+  wordListEl.innerHTML = '';
+  if (!words.length) {
+    wordListEl.innerHTML = '<p>找不到符合的單字。</p>';
+    return;
+  }
+  words.forEach((word) => {
+    const card = document.createElement('div');
+    card.className = 'word-card';
+    card.innerHTML = `
+      <div class="wc-top">
+        <span class="wc-english">${escapeHtml(word.english)}</span>
+        <span class="wc-part">Part ${word.part}</span>
+      </div>
+      <div class="wc-chinese">${escapeHtml(word.chinese)}</div>
+      ${word.exampleSentence ? `<div class="wc-sentence">${escapeHtml(word.exampleSentence)}</div>` : ''}
+      <div class="wc-actions">
+        <button class="btn secondary" data-action="play" type="button">🔊 播放</button>
+        <button class="btn" data-action="record" type="button">${word.audio && word.audio.type === 'recorded' ? '🎙️ 已錄音' : '🎙️ 錄音'}</button>
+      </div>
+    `;
+    card.querySelector('[data-action="play"]').addEventListener('click', () => playWordAudio(word));
+    card.querySelector('[data-action="record"]').addEventListener('click', () => openRecorder(word));
+    wordListEl.appendChild(card);
+  });
 }
 
 function refreshWords() {
   return api.get('/words').then(({ words }) => {
     allWords = words;
     writeShared('words', words);
-    refreshTagOptions();
     renderFiltered();
   });
 }
 
-/**
- * 有快取就立刻畫出來並直接返回，更新丟到背景。
- * 不能 await 網路，否則載入閘門會等到伺服器回應才放行。
- */
+/** 有快取就立刻畫出來並直接返回，更新丟到背景 */
 async function loadWords() {
   listErrorEl.textContent = '';
   const cached = readShared('words');
   if (cached) {
     allWords = cached;
-    refreshTagOptions();
     renderFiltered();
     refreshWords().catch(() => {});
     return;
@@ -104,84 +133,36 @@ async function loadWords() {
   await refreshWords();
 }
 
-function renderWords(words) {
-  wordListEl.innerHTML = '';
-  if (!words.length) {
-    wordListEl.innerHTML = '<p>還沒有單字，點右上角「新增單字」開始建立吧！</p>';
-    return;
-  }
-  words.forEach((word) => {
-    const card = document.createElement('div');
-    card.className = 'word-card';
-    card.innerHTML = `
-      <div class="wc-english">${escapeHtml(word.english)}</div>
-      <div class="wc-chinese">${escapeHtml(word.chinese)}</div>
-      ${word.exampleSentence ? `<div class="wc-sentence">${escapeHtml(word.exampleSentence)}</div>` : ''}
-      <div class="wc-tags">${word.tags.map((t) => `<span class="wc-tag">${escapeHtml(t)}</span>`).join('')}</div>
-      <div class="wc-actions">
-        <button class="btn secondary" data-action="play" type="button">🔊 播放</button>
-        <button class="btn" data-action="edit" type="button">✏️ 編輯</button>
-      </div>
-    `;
-    card.querySelector('[data-action="play"]').addEventListener('click', () => playWordAudio(word));
-    card.querySelector('[data-action="edit"]').addEventListener('click', () => openForm(word));
-    wordListEl.appendChild(card);
-  });
-}
+// ── 錄音 ────────────────────────────────────────────────
 
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
-
-function resetAudioState(word) {
+function openRecorder(word) {
+  recordingWord = word;
   pendingAudioBlob = null;
   pendingAudioMime = null;
   pendingAudioDuration = null;
-  pendingRemoveAudio = false;
   audioError.textContent = '';
-  const hasRecording = word && word.audio && word.audio.type === 'recorded';
+  recordTitle.textContent = `${word.english}（${word.chinese}）`;
+  const hasRecording = word.audio && word.audio.type === 'recorded';
   audioStatus.textContent = hasRecording ? '目前使用真人錄音' : '目前使用瀏覽器語音朗讀';
   btnRemoveAudio.classList.toggle('hidden', !hasRecording);
+  btnSaveRecord.classList.add('hidden');
   btnRecord.textContent = '🎙️ 錄音（5秒）';
-}
-
-function openForm(word) {
-  editingWord = word || null;
-  formTitle.textContent = word ? '編輯單字' : '新增單字';
-  fEnglish.value = word ? word.english : '';
-  fChinese.value = word ? word.chinese : '';
-  fSentence.value = word ? word.exampleSentence : '';
-  fTags.value = word ? word.tags.join(',') : '';
-  formError.textContent = '';
-  btnDeleteWord.style.display = word ? 'block' : 'none';
-  resetAudioState(word);
   overlay.classList.remove('hidden');
 }
 
-function closeForm() {
+function closeRecorder() {
   overlay.classList.add('hidden');
   if (isRecording && recorder) recorder.cancel();
   isRecording = false;
+  recordingWord = null;
 }
-
-document.getElementById('open-add-form').addEventListener('click', () => openForm(null));
-document.getElementById('btn-cancel-form').addEventListener('click', closeForm);
 
 btnPlayPreview.addEventListener('click', async () => {
   if (pendingAudioBlob) {
-    const url = URL.createObjectURL(pendingAudioBlob);
-    const audio = new Audio(url);
-    audio.play();
+    new Audio(URL.createObjectURL(pendingAudioBlob)).play();
     return;
   }
-  if (editingWord && editingWord.audio && editingWord.audio.type === 'recorded') {
-    await playWordAudio(editingWord);
-    return;
-  }
-  const english = fEnglish.value.trim();
-  if (english) await speakWord(english);
+  if (recordingWord) await playWordAudio(recordingWord);
 });
 
 btnRecord.addEventListener('click', () => {
@@ -193,13 +174,12 @@ btnRecord.addEventListener('click', () => {
   recorder = createRecorder({
     onDone: (blob, mimeType, durationSec) => {
       isRecording = false;
-      btnRecord.textContent = '🎙️ 錄音（5秒）';
+      btnRecord.textContent = '🎙️ 重新錄音';
       pendingAudioBlob = blob;
       pendingAudioMime = mimeType;
       pendingAudioDuration = durationSec;
-      pendingRemoveAudio = false;
-      audioStatus.textContent = '已錄好新音檔（尚未儲存，按下方「儲存」才會生效）';
-      btnRemoveAudio.classList.remove('hidden');
+      audioStatus.textContent = '已錄好新音檔，按「儲存錄音」才會生效';
+      btnSaveRecord.classList.remove('hidden');
     },
     onError: (err) => {
       isRecording = false;
@@ -212,82 +192,30 @@ btnRecord.addEventListener('click', () => {
   recorder.start();
 });
 
-btnRemoveAudio.addEventListener('click', () => {
-  pendingAudioBlob = null;
-  pendingAudioMime = null;
-  pendingAudioDuration = null;
-  pendingRemoveAudio = true;
-  audioStatus.textContent = '儲存後將改用瀏覽器語音朗讀';
-  btnRemoveAudio.classList.add('hidden');
-});
-
-/** 就地更新本地單字庫並重畫，不用再跟伺服器要一次完整清單 */
-function upsertLocalWord(word) {
-  const idx = allWords.findIndex((w) => w._id === word._id);
-  if (idx >= 0) allWords[idx] = word;
-  else allWords.unshift(word);
-  writeShared('words', allWords);
-  refreshTagOptions();
-  renderFiltered();
-}
-
-function removeLocalWord(wordId) {
-  allWords = allWords.filter((w) => w._id !== wordId);
-  writeShared('words', allWords);
-  refreshTagOptions();
-  renderFiltered();
-}
-
-btnDeleteWord.addEventListener('click', async () => {
-  if (!editingWord) return;
-  if (!confirm(`確定要刪除「${editingWord.english}」嗎？`)) return;
-  const wordId = editingWord._id;
-  // 畫面立刻反應，請求在背景送出；失敗才把單字放回來
-  removeLocalWord(wordId);
-  closeForm();
+btnSaveRecord.addEventListener('click', async () => {
+  if (!pendingAudioBlob || !recordingWord) return;
+  audioError.textContent = '';
   try {
-    await api.del(`/words/${wordId}`);
+    await uploadAudio(recordingWord._id, pendingAudioBlob, pendingAudioMime, pendingAudioDuration);
+    closeRecorder();
+    await refreshWords();
   } catch (err) {
-    listErrorEl.textContent = `刪除失敗：${err.message}`;
-    await loadWords();
+    audioError.textContent = err.message;
   }
 });
 
-form.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  formError.textContent = '';
-  const payload = {
-    english: fEnglish.value.trim(),
-    chinese: fChinese.value.trim(),
-    exampleSentence: fSentence.value.trim(),
-    tags: fTags.value
-      .split(',')
-      .map((t) => t.trim())
-      .filter(Boolean)
-  };
-
+btnRemoveAudio.addEventListener('click', async () => {
+  if (!recordingWord) return;
   try {
-    let word;
-    if (editingWord) {
-      ({ word } = await api.put(`/words/${editingWord._id}`, payload));
-    } else {
-      ({ word } = await api.post('/words', payload));
-    }
-
-    if (pendingAudioBlob) {
-      const updated = await uploadAudio(word._id, pendingAudioBlob, pendingAudioMime, pendingAudioDuration);
-      if (updated) word = updated;
-    } else if (pendingRemoveAudio) {
-      ({ word } = await api.del(`/words/${word._id}/audio`));
-    }
-
-    // 直接把回應寫進本地清單，省掉存檔後重新抓一整份單字庫
-    upsertLocalWord(word);
-    closeForm();
+    await api.del(`/words/${recordingWord._id}/audio`);
+    closeRecorder();
+    await refreshWords();
   } catch (err) {
-    formError.textContent = err.message;
+    audioError.textContent = err.message;
   }
 });
+
+document.getElementById('btn-close-record').addEventListener('click', closeRecorder);
 
 async function uploadAudio(wordId, blob, mimeType, durationSec) {
   const formData = new FormData();
@@ -302,17 +230,16 @@ async function uploadAudio(wordId, blob, mimeType, durationSec) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error || '音檔上傳失敗');
   }
-  const data = await res.json().catch(() => null);
-  return data && data.word;
 }
 
-// 搜尋與篩選都在本地做，不用等伺服器，打字就即時反應
-searchInput.addEventListener('input', debounce(renderFiltered, 120));
-tagFilter.addEventListener('change', renderFiltered);
+searchInput.addEventListener('input', debounce(renderFiltered, 200));
 
 runPageInit(async () => {
   const user = await requireLogin();
   if (!user) return;
   initOutbox(user._id);
+  const savedPart = readShared('wbPart');
+  activePart = savedPart === undefined ? null : savedPart;
+  renderPartTabs();
   await Promise.all([mountNav(user, 'wordbank'), loadWords()]);
 });

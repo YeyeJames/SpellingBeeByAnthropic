@@ -5,30 +5,19 @@ function collection() {
   return getDB().collection('practiceSessions');
 }
 
-async function createSession(userId, tagsFilter, wordIds) {
+/**
+ * 記錄一次練習開了哪些單字。
+ * wordIds 是單字庫的字串 id（例如 p1-account），不是 ObjectId。
+ */
+async function createSession(userId, partLabel, wordIds) {
   const doc = {
     userId: new ObjectId(userId),
-    tagsFilter: tagsFilter || [],
-    wordIds: wordIds.map((id) => new ObjectId(id)),
-    startedAt: new Date(),
-    completedAt: null,
-    coinsEarned: 0
+    partLabel: partLabel || null,
+    wordIds,
+    startedAt: new Date()
   };
   const result = await collection().insertOne(doc);
   return { ...doc, _id: result.insertedId };
 }
 
-async function getSession(id, userId) {
-  return collection().findOne({ _id: new ObjectId(id), userId: new ObjectId(userId) });
-}
-
-async function addCoinsEarned(id, amount) {
-  await collection().updateOne({ _id: new ObjectId(id) }, { $inc: { coinsEarned: amount } });
-}
-
-async function completeSession(id) {
-  await collection().updateOne({ _id: new ObjectId(id) }, { $set: { completedAt: new Date() } });
-  return collection().findOne({ _id: new ObjectId(id) });
-}
-
-module.exports = { createSession, getSession, addCoinsEarned, completeSession };
+module.exports = { createSession };

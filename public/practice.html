@@ -29,11 +29,17 @@
   <div class="container">
     <div class="panel container" id="setup-panel">
       <h1>🎧 聽寫練習</h1>
-      <p>選擇想練習的標籤（不選就是全部單字）：</p>
-      <div id="tag-checkboxes" class="tag-checkboxes"></div>
-      <label for="word-count">題數</label>
-      <input type="number" id="word-count" value="10" min="3" max="30" style="max-width:120px;" />
-      <div style="margin-top:1.25rem; display:flex; gap:0.75rem; flex-wrap:wrap;">
+
+      <p class="setup-label">選擇要練習的部分（每部分 25 字）</p>
+      <div id="part-picker" class="part-picker"></div>
+
+      <p class="setup-label">出題順序</p>
+      <div class="order-picker">
+        <label><input type="radio" name="order" value="sequential" checked /> 📖 照順序</label>
+        <label><input type="radio" name="order" value="random" /> 🎲 隨機</label>
+      </div>
+
+      <div class="setup-actions">
         <button class="btn gold" id="start-practice-btn" type="button">▶️ 開始練習</button>
         <button class="btn secondary hidden" id="review-practice-btn" type="button">📋 複習到期單字</button>
       </div>
@@ -42,7 +48,7 @@
 
     <div class="panel container hidden" id="practice-panel">
       <div class="practice-topbar">
-        <span id="progress-label" class="display-font">1 / 10</span>
+        <span id="progress-label" class="display-font">1 / 25</span>
         <span class="coin-badge" id="session-coin-badge">🪙 0</span>
       </div>
       <div id="game-container"></div>

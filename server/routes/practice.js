@@ -9,9 +9,6 @@ const { requireAuth } = require('../middleware/auth');
 const router = express.Router();
 router.use(requireAuth);
 
-const DEFAULT_COUNT = 10;
-const MAX_COUNT = 30;
-
 function shuffle(arr) {
   const copy = [...arr];
   for (let i = copy.length - 1; i > 0; i -= 1) {
@@ -27,46 +24,36 @@ function normalizeAnswer(str) {
 
 router.post('/session', async (req, res, next) => {
   try {
-    const tags = Array.isArray(req.body.tags) ? req.body.tags.filter(Boolean) : [];
-    const count = Math.min(Math.max(Number(req.body.count) || DEFAULT_COUNT, 1), MAX_COUNT);
+    const part = Number(req.body.part);
+    const order = req.body.order === 'sequential' ? 'sequential' : 'random';
     const reviewOnly = !!req.body.reviewOnly;
 
-    const candidates = await Word.listWordsByTags(tags);
-    if (!candidates.length) {
-      return res.status(400).json({ error: '這個範圍內還沒有單字，先去單字庫新增幾個吧！' });
+    let candidates;
+    if (reviewOnly) {
+      // 複習模式跨 Part，把所有到期的單字都撈進來
+      const dueProgress = await WordProgress.getReviewQueue(req.user._id);
+      const dueIds = new Set(dueProgress.map((p) => p.wordId));
+      candidates = (await Word.listWords()).filter((w) => dueIds.has(w._id));
+      if (!candidates.length) {
+        return res.status(400).json({ error: '目前沒有需要複習的單字，太棒了！' });
+      }
+    } else {
+      if (!Word.PARTS.includes(part)) {
+        return res.status(400).json({ error: '請選擇要練習的 Part' });
+      }
+      candidates = await Word.listWordsByPart(part);
     }
 
-    const progressDocs = await WordProgress.getForUser(
+    // 順序模式照單字表原本的排列，隨機模式才打亂
+    const selected = order === 'sequential' ? candidates : shuffle(candidates);
+
+    await PracticeSession.createSession(
       req.user._id,
-      candidates.map((w) => w._id)
-    );
-    const progressMap = new Map(progressDocs.map((p) => [p.wordId.toString(), p]));
-    const now = Date.now();
-
-    const due = [];
-    const fresh = [];
-    const notDue = [];
-    candidates.forEach((word) => {
-      const progress = progressMap.get(word._id.toString());
-      if (!progress) fresh.push(word);
-      else if (new Date(progress.nextReviewAt).getTime() <= now) due.push(word);
-      else notDue.push(word);
-    });
-
-    if (reviewOnly && !due.length) {
-      return res.status(400).json({ error: '目前沒有需要複習的單字，太棒了！' });
-    }
-
-    const ordered = reviewOnly ? shuffle(due) : [...shuffle(due), ...shuffle(fresh), ...shuffle(notDue)];
-    const selected = shuffle(ordered.slice(0, count));
-
-    const session = await PracticeSession.createSession(
-      req.user._id,
-      tags,
+      reviewOnly ? 'review' : `part${part}`,
       selected.map((w) => w._id)
     );
 
-    res.status(201).json({ session: { _id: session._id }, words: selected });
+    res.status(201).json({ words: selected });
   } catch (err) {
     next(err);
   }
@@ -123,8 +110,7 @@ router.post('/attempt', async (req, res, next) => {
 
     const [{ user: updatedUser, coinsAwarded, newStreak }] = await Promise.all([
       User.applyAttemptResult(req.user._id, correct),
-      WordProgress.recordResult(req.user._id, wordId, correct),
-      Word.incrementStats(wordId, correct)
+      WordProgress.recordResult(req.user._id, wordId, correct)
     ]);
 
     res.json({
@@ -137,17 +123,6 @@ router.post('/attempt', async (req, res, next) => {
       coins: updatedUser.coins,
       stats: updatedUser.stats
     });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.post('/session/:id/complete', async (req, res, next) => {
-  try {
-    const session = await PracticeSession.getSession(req.params.id, req.user._id);
-    if (!session) return res.status(404).json({ error: '找不到這個練習場次' });
-    const completed = await PracticeSession.completeSession(session._id);
-    res.json({ session: completed });
   } catch (err) {
     next(err);
   }

@@ -11,8 +11,7 @@ import { readShared, writeShared, newId } from './local-store.js';
 const setupPanel = document.getElementById('setup-panel');
 const practicePanel = document.getElementById('practice-panel');
 const summaryPanel = document.getElementById('summary-panel');
-const tagCheckboxes = document.getElementById('tag-checkboxes');
-const wordCountInput = document.getElementById('word-count');
+const partPicker = document.getElementById('part-picker');
 const setupError = document.getElementById('setup-error');
 const progressLabel = document.getElementById('progress-label');
 const sessionCoinBadge = document.getElementById('session-coin-badge');
@@ -60,45 +59,28 @@ function warmUpGameEngine() {
   idle(() => loadPhaser().catch(() => {}));
 }
 
-function renderTags(tags) {
-  const checked = new Set([...tagCheckboxes.querySelectorAll('input:checked')].map((cb) => cb.value));
-  tagCheckboxes.innerHTML = '';
-  tags.forEach((tag) => {
-    const label = document.createElement('label');
-    label.innerHTML = `<input type="checkbox" value="${escapeAttr(tag)}"${checked.has(tag) ? ' checked' : ''} /> ${escapeHtml(tag)}`;
-    tagCheckboxes.appendChild(label);
+const PARTS = [1, 2, 3, 4];
+let selectedPart = null;
+
+function renderPartPicker() {
+  partPicker.innerHTML = '';
+  PARTS.forEach((part) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = part === selectedPart ? 'part-btn selected' : 'part-btn';
+    btn.innerHTML = `<span class="part-title">Part ${part}</span><span class="part-sub">25 個單字</span>`;
+    btn.addEventListener('click', () => {
+      selectedPart = part;
+      writeShared('lastPart', part);
+      renderPartPicker();
+    });
+    partPicker.appendChild(btn);
   });
 }
 
-function refreshTags() {
-  return api.get('/words/tags-list').then(({ tags }) => {
-    writeShared('tags', tags);
-    renderTags(tags);
-  });
-}
-
-/**
- * 有快取就立刻畫出來並「直接返回」，更新丟到背景。
- * 關鍵是不能 await 網路——否則載入閘門會一直等到伺服器回應才放行，
- * 快取畫得再快也沒用。
- */
-async function loadTags() {
-  const cached = readShared('tags');
-  if (cached) {
-    renderTags(cached);
-    refreshTags().catch(() => {});
-    return;
-  }
-  await refreshTags();
-}
-
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
-function escapeAttr(str) {
-  return escapeHtml(str).replace(/"/g, '&quot;');
+function selectedOrder() {
+  const checked = document.querySelector('input[name="order"]:checked');
+  return checked ? checked.value : 'sequential';
 }
 
 function showPanel(panel) {
@@ -108,14 +90,21 @@ function showPanel(panel) {
 
 async function startPractice({ reviewOnly = false } = {}) {
   setupError.textContent = '';
-  const selectedTags = [...tagCheckboxes.querySelectorAll('input:checked')].map((cb) => cb.value);
-  const count = Number(wordCountInput.value) || 10;
+
+  if (!reviewOnly && !selectedPart) {
+    setupError.textContent = '請先選擇要練習哪一個 Part';
+    return;
+  }
 
   sound.startBgm();
 
   let data;
   try {
-    data = await api.post('/practice/session', { tags: selectedTags, count, reviewOnly });
+    data = await api.post('/practice/session', {
+      part: selectedPart,
+      order: selectedOrder(),
+      reviewOnly
+    });
   } catch (err) {
     setupError.textContent = err.message;
     return;
@@ -299,6 +288,8 @@ runPageInit(async () => {
   currentUser = user;
   initOutbox(user._id);
   // 三件事互不相依，平行處理，避免畫面元素一個接一個冒出來
-  await Promise.all([mountNav(user, 'practice'), loadTags(), refreshReviewButton({ background: true })]);
+  selectedPart = readShared('lastPart') || null;
+  renderPartPicker();
+  await Promise.all([mountNav(user, 'practice'), refreshReviewButton({ background: true })]);
   warmUpGameEngine();
 });

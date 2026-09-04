@@ -91,7 +91,7 @@ function main() {
         const db = getDB();
         info.databaseName = db.databaseName;
         info.userCount = await db.collection('users').countDocuments();
-        info.wordCount = await db.collection('words').countDocuments();
+        info.recordedAudioCount = await db.collection('wordAudio').countDocuments();
         info.shopItemCount = await db.collection('shopItems').countDocuments();
       } catch (err) {
         info.database = 'error';

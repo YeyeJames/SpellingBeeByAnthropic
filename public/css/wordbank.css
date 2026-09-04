@@ -6,11 +6,55 @@
   gap: 1rem;
 }
 
+.wb-count {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
 .wb-filters {
   display: flex;
-  gap: 0.75rem;
-  margin: 1rem 0;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.wb-part-tabs {
+  display: flex;
+  gap: 0.4rem;
   flex-wrap: wrap;
+}
+
+.wb-part-tab {
+  border: 2px solid rgba(0, 78, 152, 0.15);
+  background: #fff;
+  color: var(--color-secondary);
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.wb-part-tab.active {
+  background: var(--color-secondary);
+  border-color: var(--color-secondary);
+  color: #fff;
+}
+
+.wc-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.wc-part {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  white-space: nowrap;
 }
 
 .wb-filters input,

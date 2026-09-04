@@ -6,14 +6,15 @@ function collection() {
   return getDB().collection('wordProgress');
 }
 
+/** wordId 是單字庫裡的字串 id（例如 p1-account），不是 ObjectId */
 async function getForUser(userId, wordIds) {
   return collection()
-    .find({ userId: new ObjectId(userId), wordId: { $in: wordIds.map((id) => new ObjectId(id)) } })
+    .find({ userId: new ObjectId(userId), wordId: { $in: wordIds } })
     .toArray();
 }
 
 async function recordResult(userId, wordId, correct) {
-  const key = { userId: new ObjectId(userId), wordId: new ObjectId(wordId) };
+  const key = { userId: new ObjectId(userId), wordId };
   const existing = await collection().findOne(key);
   const currentBox = existing ? existing.boxLevel : 0;
   const boxLevel = nextBoxLevel(currentBox, correct);
