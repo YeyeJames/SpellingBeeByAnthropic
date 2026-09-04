@@ -3,6 +3,7 @@ import { requireLogin } from './auth.js';
 import { mountNav } from './nav-partial.js';
 import { applyTheme } from './theme.js';
 import * as sound from './sound-manager.js';
+import { listEnglishVoices, getPreferredVoiceURI, setPreferredVoiceURI, speakWord } from './audio-player.js';
 import { runPageInit } from './ui-status.js';
 
 const THEME_NAMES = { sports: '🏅 運動風（預設）', space: '🚀 太空', dino: '🦖 恐龍' };
@@ -84,6 +85,47 @@ async function switchTheme(themeKey) {
   }
 }
 
+/**
+ * 英文語音挑選。可用的語音由裝置提供，各家瀏覽器/系統差很多，
+ * 所以設定存在本機而不是帳號裡——同步到別台裝置只會選到不存在的語音。
+ */
+function renderVoicePicker() {
+  const select = document.getElementById('voice-select');
+  const hint = document.getElementById('voice-hint');
+  const voices = listEnglishVoices();
+
+  select.innerHTML = '';
+  if (!voices.length) {
+    hint.textContent = '這個瀏覽器目前找不到英文語音，會使用系統預設的朗讀方式。';
+    select.disabled = true;
+    return;
+  }
+
+  const preferred = getPreferredVoiceURI();
+  const defaultOpt = document.createElement('option');
+  defaultOpt.value = '';
+  defaultOpt.textContent = '（自動選擇）';
+  select.appendChild(defaultOpt);
+
+  voices.forEach((v) => {
+    const opt = document.createElement('option');
+    opt.value = v.voiceURI;
+    opt.textContent = `${v.name}（${v.lang}）`;
+    if (v.voiceURI === preferred) opt.selected = true;
+    select.appendChild(opt);
+  });
+
+  select.addEventListener('change', () => {
+    setPreferredVoiceURI(select.value);
+    speakWord('spelling bee');
+  });
+}
+
+document.getElementById('test-voice-btn').addEventListener('click', () => {
+  sound.playClick();
+  speakWord('spelling bee');
+});
+
 function loadAudioControls() {
   const { bgmVolume, sfxVolume, muted } = currentUser.audioPrefs;
   bgmVolumeInput.value = bgmVolume;
@@ -121,5 +163,6 @@ runPageInit(async () => {
   renderAvatar();
   renderStats();
   renderThemeSwitcher();
+  renderVoicePicker();
   loadAudioControls();
 });

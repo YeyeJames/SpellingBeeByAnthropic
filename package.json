@@ -10,7 +10,8 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
-    "seed": "node scripts/seed.js"
+    "seed": "node scripts/seed.js",
+    "gen-preload": "node scripts/gen-preload.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

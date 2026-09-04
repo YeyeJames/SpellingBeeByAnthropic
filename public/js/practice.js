@@ -1,7 +1,7 @@
 import { api } from './api.js';
 import { requireLogin } from './auth.js';
 import { mountNav, refreshNavCoins, setNavCoins } from './nav-partial.js';
-import { playWordAudio } from './audio-player.js';
+import { playWordAudio, speakSentence, playCompetitionSequence, stopSpeaking } from './audio-player.js';
 import * as sound from './sound-manager.js';
 import { loadPhaser } from './game/load-phaser.js';
 import { runPageInit } from './ui-status.js';
@@ -18,6 +18,8 @@ const sessionCoinBadge = document.getElementById('session-coin-badge');
 const answerInput = document.getElementById('answer-input');
 const submitBtn = document.getElementById('submit-answer-btn');
 const replayBtn = document.getElementById('replay-btn');
+const slowBtn = document.getElementById('slow-btn');
+const sentenceBtn = document.getElementById('sentence-btn');
 const revealPanel = document.getElementById('reveal-panel');
 const revealResult = document.getElementById('reveal-result');
 const revealEnglish = document.getElementById('reveal-english');
@@ -32,6 +34,7 @@ let phaserGame = null;
 let gameScene = null;
 let currentUser = null;
 let session = null; // { id, words, index, sessionCoins, streak }
+let readMode = 'word';
 
 async function whenSceneReady() {
   if (gameScene) return gameScene;
@@ -83,6 +86,21 @@ function selectedOrder() {
   return checked ? checked.value : 'sequential';
 }
 
+function selectedReadMode() {
+  const checked = document.querySelector('input[name="readMode"]:checked');
+  return checked ? checked.value : 'word';
+}
+
+/** 還原上次的出題順序與朗讀方式 */
+function restoreSetupPrefs() {
+  const savedOrder = readShared('lastOrder');
+  const savedReadMode = readShared('lastReadMode');
+  const orderInput = savedOrder && document.querySelector(`input[name="order"][value="${savedOrder}"]`);
+  if (orderInput) orderInput.checked = true;
+  const readInput = savedReadMode && document.querySelector(`input[name="readMode"][value="${savedReadMode}"]`);
+  if (readInput) readInput.checked = true;
+}
+
 function showPanel(panel) {
   [setupPanel, practicePanel, summaryPanel].forEach((p) => p.classList.add('hidden'));
   panel.classList.remove('hidden');
@@ -97,6 +115,9 @@ async function startPractice({ reviewOnly = false } = {}) {
   }
 
   sound.startBgm();
+  writeShared('lastOrder', selectedOrder());
+  writeShared('lastReadMode', selectedReadMode());
+  readMode = selectedReadMode();
 
   let data;
   try {
@@ -158,8 +179,25 @@ async function showQuestion() {
   revealPanel.classList.add('hidden');
   answerInput.focus();
 
+  setToolsEnabled(true);
   gameScene.reactListening();
-  await playWordAudio(word);
+  await playCurrentWord();
+}
+
+/** 依設定播放：只唸單字，或競賽模式（單字 → 例句 → 單字） */
+async function playCurrentWord() {
+  const word = session.words[session.index];
+  if (readMode === 'competition') {
+    await playCompetitionSequence(word);
+  } else {
+    await playWordAudio(word);
+  }
+}
+
+function setToolsEnabled(enabled) {
+  [replayBtn, slowBtn, sentenceBtn].forEach((b) => {
+    if (b) b.disabled = !enabled;
+  });
 }
 
 function normalizeAnswer(str) {
@@ -179,6 +217,8 @@ function submitAnswer() {
   const userAnswer = answerInput.value;
   answerInput.disabled = true;
   submitBtn.disabled = true;
+  setToolsEnabled(false);
+  stopSpeaking();
 
   const correct = normalizeAnswer(userAnswer) === normalizeAnswer(word.english);
 
@@ -259,6 +299,15 @@ replayBtn.addEventListener('click', () => {
   sound.playClick();
   playWordAudio(session.words[session.index]);
 });
+slowBtn.addEventListener('click', () => {
+  sound.playClick();
+  playWordAudio(session.words[session.index], { slow: true });
+});
+sentenceBtn.addEventListener('click', () => {
+  sound.playClick();
+  const word = session.words[session.index];
+  if (word.exampleSentence) speakSentence(word.exampleSentence);
+});
 nextBtn.addEventListener('click', () => {
   sound.playClick();
   nextQuestion();
@@ -290,6 +339,7 @@ runPageInit(async () => {
   // 三件事互不相依，平行處理，避免畫面元素一個接一個冒出來
   selectedPart = readShared('lastPart') || null;
   renderPartPicker();
+  restoreSetupPrefs();
   await Promise.all([mountNav(user, 'practice'), refreshReviewButton({ background: true })]);
   warmUpGameEngine();
 });

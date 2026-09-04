@@ -77,3 +77,36 @@
   align-items: center;
   gap: 0.5rem !important;
 }
+
+.voice-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-width: 360px;
+  margin-bottom: 1.5rem;
+}
+
+.voice-settings label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-weight: bold;
+}
+
+.voice-settings select {
+  padding: 0.55rem 0.7rem;
+  border-radius: var(--radius-md);
+  border: 2px solid rgba(0, 78, 152, 0.2);
+  font-size: 0.95rem;
+  max-width: 100%;
+}
+
+.voice-hint {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.voice-settings .btn {
+  align-self: flex-start;
+}

@@ -9,8 +9,7 @@
   <link rel="stylesheet" href="/css/base.css" />
   <link rel="stylesheet" href="/css/components.css" />
   <link rel="stylesheet" href="/css/shop.css" />
-
-<!-- 一次預載整張模組相依圖：否則瀏覽器要一層一層追 import，形成多段瀑布 -->
+  <!-- modulepreload:start 由 npm run gen-preload 產生，請勿手動編輯 -->
   <link rel="modulepreload" href="/js/shop.js" />
   <link rel="modulepreload" href="/js/api.js" />
   <link rel="modulepreload" href="/js/ui-status.js" />
@@ -21,6 +20,7 @@
   <link rel="modulepreload" href="/js/outbox.js" />
   <link rel="modulepreload" href="/js/sound-manager.js" />
   <link rel="modulepreload" href="/js/game/load-phaser.js" />
+  <!-- modulepreload:end -->
 </head>
 <body data-theme="sports" class="page-loading">
   <div data-nav-mount></div>

@@ -1,7 +1,7 @@
 import { api } from './api.js';
 import { requireLogin } from './auth.js';
 import { mountNav } from './nav-partial.js';
-import { playWordAudio, speakWord } from './audio-player.js';
+import { playWordAudio } from './audio-player.js';
 import { createRecorder } from './recorder.js';
 import { runPageInit } from './ui-status.js';
 import { initOutbox } from './outbox.js';

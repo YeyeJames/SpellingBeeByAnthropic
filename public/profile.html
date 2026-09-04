@@ -9,8 +9,7 @@
   <link rel="stylesheet" href="/css/base.css" />
   <link rel="stylesheet" href="/css/components.css" />
   <link rel="stylesheet" href="/css/profile.css" />
-
-<!-- 一次預載整張模組相依圖：否則瀏覽器要一層一層追 import，形成多段瀑布 -->
+  <!-- modulepreload:start 由 npm run gen-preload 產生，請勿手動編輯 -->
   <link rel="modulepreload" href="/js/profile.js" />
   <link rel="modulepreload" href="/js/api.js" />
   <link rel="modulepreload" href="/js/ui-status.js" />
@@ -20,6 +19,8 @@
   <link rel="modulepreload" href="/js/nav-partial.js" />
   <link rel="modulepreload" href="/js/outbox.js" />
   <link rel="modulepreload" href="/js/sound-manager.js" />
+  <link rel="modulepreload" href="/js/audio-player.js" />
+  <!-- modulepreload:end -->
 </head>
 <body data-theme="sports" class="page-loading">
   <div data-nav-mount></div>
@@ -35,6 +36,17 @@
 
       <h2>🎨 主題</h2>
       <div id="theme-switcher" class="theme-switcher"></div>
+
+      <h2>🗣️ 英文發音</h2>
+      <div class="voice-settings">
+        <label>朗讀單字的語音
+          <select id="voice-select"></select>
+        </label>
+        <p class="voice-hint" id="voice-hint">
+          語音是由這台裝置提供的，所以設定只會套用在這台裝置上。
+        </p>
+        <button class="btn secondary" id="test-voice-btn" type="button">🔊 試聽</button>
+      </div>
 
       <h2>🔊 音效設定</h2>
       <div class="audio-settings">

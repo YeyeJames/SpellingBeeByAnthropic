@@ -93,6 +93,48 @@
   accent-color: var(--color-primary);
 }
 
+.setup-hint {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  margin: 0.4rem 0 0;
+}
+
+/* 聽力輔助鍵：獨立一排的小圓鈕，手機上才排得下三個 */
+#listen-tools {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-top: 0.4rem;
+}
+
+.tool-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  border: 2px solid rgba(0, 78, 152, 0.15);
+  background: #fff;
+  color: var(--color-secondary);
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.95rem;
+  font-family: var(--font-display);
+  cursor: pointer;
+}
+
+.tool-btn:active {
+  background: var(--color-bg);
+}
+
+.tool-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tool-label {
+  font-size: 0.8rem;
+}
+
 .setup-actions {
   margin-top: 1rem;
   display: flex;
@@ -200,9 +242,9 @@
   justify-content: center;
 }
 
-/* 窄螢幕：再聽一次只留喇叭圖示，把寬度讓給輸入框 */
-@media (max-width: 480px) {
-  #answer-area .btn-label {
+/* 窄螢幕：輔助鍵只留圖示 */
+@media (max-width: 420px) {
+  .tool-label {
     display: none;
   }
 }

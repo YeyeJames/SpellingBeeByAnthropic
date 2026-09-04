@@ -9,8 +9,7 @@
   <link rel="stylesheet" href="/css/base.css" />
   <link rel="stylesheet" href="/css/components.css" />
   <link rel="stylesheet" href="/css/practice.css" />
-
-<!-- 一次預載整張模組相依圖：否則瀏覽器要一層一層追 import，形成多段瀑布 -->
+  <!-- modulepreload:start 由 npm run gen-preload 產生，請勿手動編輯 -->
   <link rel="modulepreload" href="/js/practice.js" />
   <link rel="modulepreload" href="/js/api.js" />
   <link rel="modulepreload" href="/js/ui-status.js" />
@@ -22,6 +21,7 @@
   <link rel="modulepreload" href="/js/sound-manager.js" />
   <link rel="modulepreload" href="/js/audio-player.js" />
   <link rel="modulepreload" href="/js/game/load-phaser.js" />
+  <!-- modulepreload:end -->
 </head>
 <body data-theme="sports" class="page-loading fullscreen-page">
   <div data-nav-mount></div>
@@ -39,6 +39,13 @@
         <label><input type="radio" name="order" value="random" /> 🎲 隨機</label>
       </div>
 
+      <p class="setup-label">朗讀方式</p>
+      <div class="order-picker">
+        <label><input type="radio" name="readMode" value="word" checked /> 🔤 只唸單字</label>
+        <label><input type="radio" name="readMode" value="competition" /> 🏆 競賽模式</label>
+      </div>
+      <p class="setup-hint">競賽模式會像真實比賽一樣：唸單字 → 用在例句中 → 再唸一次單字</p>
+
       <div class="setup-actions">
         <button class="btn gold" id="start-practice-btn" type="button">▶️ 開始練習</button>
         <button class="btn secondary hidden" id="review-practice-btn" type="button">📋 複習到期單字</button>
@@ -52,10 +59,13 @@
         <span class="coin-badge" id="session-coin-badge">🪙 0</span>
       </div>
       <div id="game-container"></div>
+      <!-- 聽力輔助：跟真實比賽一樣，選手可以要求再唸一次、放慢、或用在句子裡 -->
+      <div id="listen-tools">
+        <button class="tool-btn" id="replay-btn" type="button" title="再聽一次">🔊<span class="tool-label">再聽</span></button>
+        <button class="tool-btn" id="slow-btn" type="button" title="慢慢唸">🐢<span class="tool-label">慢唸</span></button>
+        <button class="tool-btn" id="sentence-btn" type="button" title="用在句子裡">💬<span class="tool-label">例句</span></button>
+      </div>
       <div id="answer-area">
-        <button class="btn secondary" id="replay-btn" type="button" title="再聽一次">
-          🔊<span class="btn-label"> 再聽一次</span>
-        </button>
         <input type="text" id="answer-input" placeholder="拼拼看…" autocomplete="off" autocapitalize="off" spellcheck="false" />
         <button class="btn gold" id="submit-answer-btn" type="button">送出</button>
       </div>
