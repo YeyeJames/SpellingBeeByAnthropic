@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>蜂巢保衛戰 - 拼字蜂</title>
+  <link rel="icon" href="/assets/icons/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/css/game.css" />
+</head>
+<body class="page-loading">
+  <!-- 遊戲畫面沒有導覽列：遊戲就是遊戲，選單另外走 -->
+  <div id="game-root"></div>
+
+  <div id="game-chrome">
+    <a class="chrome-link" href="/practice.html">← 回練習</a>
+    <span id="seed-label" class="chrome-seed"></span>
+    <button type="button" id="btn-restart" class="chrome-btn">重開一場</button>
+    <!-- 小孩覺得「剛剛怪怪的」就按這個，我拿到錄影檔就能完整重現 -->
+    <button type="button" id="btn-replay-file" class="chrome-btn">剛剛怪怪的</button>
+    <span class="chrome-hint">↑再聽 ↓慢唸 →例句 · Esc 暫停 · F3 除錯</span>
+  </div>
+
+  <p id="game-error" class="game-error"></p>
+
+  <div id="loading-note">載入中…</div>
+
+  <script type="module" src="/js/game.js"></script>
+</body>
+</html>

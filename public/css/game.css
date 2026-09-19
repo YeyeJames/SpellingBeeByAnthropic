@@ -1,0 +1,141 @@
+/*
+ * 遊戲頁樣式。
+ *
+ * 刻意不引用 base.css / components.css：那些是給一般網頁用的，
+ * 有邊距、捲動、導覽列的假設。遊戲要的是整個視窗、不捲動、沒有頁面框架。
+ */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden; /* 遊戲不捲動 */
+  background: #10131f;
+  color: #e2e8f0;
+  font-family: system-ui, -apple-system, "Noto Sans TC", sans-serif;
+}
+
+#game-root {
+  position: absolute;
+  inset: 0;
+}
+
+#game-root canvas {
+  display: block;
+}
+
+/* ── 遊戲外框（暫停鍵、種子、除錯入口） ─────────────────── */
+
+#game-chrome {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.9rem;
+  background: rgba(8, 10, 18, 0.72);
+  font-size: 0.82rem;
+  flex-wrap: wrap;
+}
+
+.chrome-link {
+  color: #94a3b8;
+  text-decoration: none;
+}
+
+.chrome-link:hover {
+  color: #e2e8f0;
+}
+
+.chrome-seed {
+  color: #64748b;
+  font-family: ui-monospace, monospace;
+}
+
+.chrome-btn {
+  background: #1e293b;
+  color: #cbd5e1;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.chrome-btn:hover {
+  background: #334155;
+}
+
+.chrome-hint {
+  margin-left: auto;
+  color: #64748b;
+}
+
+/* ── 暫停 ─────────────────────────────────────────────── */
+
+body.is-paused #game-root::after {
+  content: "已暫停　按 Esc 繼續";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 10, 18, 0.7);
+  font-size: 1.6rem;
+  letter-spacing: 0.05em;
+}
+
+/* ── 錯誤與載入 ───────────────────────────────────────── */
+
+.game-error {
+  position: fixed;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  color: #fca5a5;
+  background: rgba(8, 10, 18, 0.9);
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  max-width: 90vw;
+}
+
+#loading-note {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+}
+
+body.page-loading #loading-note {
+  display: flex;
+}
+
+/* ── F3 除錯疊加層 ────────────────────────────────────── */
+
+.debug-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  margin: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  background: rgba(8, 10, 18, 0.82);
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre;
+  color: #a5f3c4;
+  pointer-events: none;
+  z-index: 10;
+}

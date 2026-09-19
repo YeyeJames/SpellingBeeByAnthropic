@@ -11,7 +11,10 @@
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
     "seed": "node scripts/seed.js",
-    "gen-preload": "node scripts/gen-preload.js"
+    "gen-preload": "node scripts/gen-preload.js",
+    "test:determinism": "node scripts/determinism.mjs",
+    "test:bot": "node scripts/bot.mjs",
+    "test": "node scripts/determinism.mjs"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -22,5 +25,8 @@
     "express-session": "^1.18.0",
     "mongodb": "^6.9.0",
     "multer": "^2.0.0"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.49.1"
   }
 }

@@ -3,7 +3,7 @@ services:
     name: spelling-bee-by-anthropic
     runtime: node
     plan: free
-    buildCommand: npm install
+    buildCommand: npm install --omit=dev
     startCommand: npm start
     envVars:
       - key: MONGODB_URI

@@ -10,6 +10,7 @@ const wordsRoutes = require('./routes/words');
 const practiceRoutes = require('./routes/practice');
 const shopRoutes = require('./routes/shop');
 const usersRoutes = require('./routes/users');
+const wordBank = require('./data/word-bank');
 
 const PORT = process.env.PORT || 3000;
 
@@ -102,6 +103,21 @@ function main() {
     res.status(dbState.ready ? 200 : 503).json(info);
   });
 
+  /*
+   * 單字庫的唯讀端點，刻意擋在資料庫關卡「之前」。
+   *
+   * 單字庫是寫死在 server/data/word-bank.js 的靜態資料，不碰資料庫也不需要登入
+   * （那是公開的競賽單字表，沒有任何個人資料）。放在關卡前面有兩個好處：
+   *   - 資料庫掛掉時遊戲頁仍然打得開
+   *   - 自動化測試不必先登入就能跑，測試環境因此不需要 MongoDB
+   */
+  app.get('/api/wordbank', (req, res) => {
+    const { part } = req.query;
+    const words = part ? wordBank.wordsByPart(part) : wordBank.allWords();
+    res.set('Cache-Control', 'public, max-age=300');
+    res.json({ words, parts: wordBank.PARTS });
+  });
+
   // 這道關卡必須擋在 session 中介層「之前」。
   // 否則資料庫還在連線時，session 會先從空的暫用 store 讀取（讀不到登入紀錄），
   // 而等它讀完時資料庫剛好連上了，關卡就會放行，最後變成 401
@@ -126,6 +142,13 @@ function main() {
   app.use('/api/user', usersRoutes);
 
   app.use('/api', (req, res) => res.status(404).json({ error: 'API 端點不存在' }));
+
+  // 乾淨網址：/game 直接給遊戲頁。遊戲刻意與現有練習頁分開，
+  // 做到一半也不會影響小孩每天在用的東西。
+  app.get('/game', (req, res) => {
+    res.set('Cache-Control', 'no-cache');
+    res.sendFile(path.join(__dirname, '..', 'public', 'game.html'));
+  });
 
   /*
    * 靜態檔案一律要求重新驗證。
