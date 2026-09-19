@@ -20,6 +20,9 @@ export function createOverlay(ctx) {
   function refresh() {
     const s = ctx.debug.state();
     const p = perfReport(ctx.perf);
+    const l = ctx.debug.latency();
+    const q = ctx.debug.queue();
+    const fx = ctx.getEffectStats();
     if (!s) {
       el.textContent = '（尚未開始）';
       return;
@@ -30,6 +33,9 @@ export function createOverlay(ctx) {
       `影格 p50 ${p.p50}ms  p95 ${p.p95}ms  最差 ${p.worst}ms  掉格 ${p.dropped}`,
       `heap ${p.heapMB ?? '—'}MB  成長 ${p.heapGrowthMB ?? '—'}MB`,
       `本影格邏輯步 ${ctx.getClockSteps()}  丟棄 ${Math.round(ctx.getClockDropped())}ms`,
+      `延遲 p50 ${l.p50}ms  p95 ${l.p95}ms  最差 ${l.worst}ms（${l.samples} 筆）`,
+      `物件池 針 ${fx.stingers} 碎 ${fx.fragments} 濺 ${fx.splashes}  回收 ${fx.recycled}`,
+      `輸入佇列 ${q.size}  丟棄 ${q.dropped}`,
       '',
       `單字 ${s.wordIndex} "${s.target}"  已打 ${s.typed}/${s.target.length}`,
       `敵人 ${(s.progress * 100).toFixed(1)}%  橫越 ${s.crossMs}ms`,

@@ -74,6 +74,11 @@ export function installDebugApi(ctx) {
       return latencyReport(ctx.getLatency());
     },
 
+    /** 物件池使用量：常常回收代表池子開太小。 */
+    effects() {
+      return ctx.getEffectStats();
+    },
+
     /** 輸入緩衝區狀態：排隊中幾個、曾經因為爆滿被丟掉幾個。 */
     queue() {
       const q = ctx.getQueue();

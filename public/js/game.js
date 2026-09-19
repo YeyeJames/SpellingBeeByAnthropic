@@ -53,9 +53,13 @@ const ctx = {
   isPaused: () => ctx.paused,
   getClockSteps: () => ctx.scene?.clock.lastSteps ?? 0,
   getClockDropped: () => ctx.scene?.clock.droppedMs ?? 0,
+  getEffectStats: () =>
+    ctx.scene?.effects?.stats() ?? { stingers: 0, fragments: 0, splashes: 0, recycled: 0 },
 
   onSceneReady(scene) {
     ctx.scene = scene;
+    // 給測試腳本探測畫面內部用；正式遊玩完全不碰它
+    window.__spellbeeScene = scene;
     ctx.debug.ready = true;
   },
 
@@ -100,7 +104,13 @@ const ctx = {
     markRendered(ctx.latency, now);
   },
 
-  /** 測試鉤子：人為封鎖輸入 ms 毫秒，用來驗證緩衝區真的有把按鍵留住。 */
+  /**
+   * 封鎖輸入 ms 毫秒。
+   *
+   * 真實的用途是擊殺頓挫：世界凍結的那 80ms 不該把按鍵直接套用在
+   * 看不見的畫面上，而是先排隊、解凍後照順序補上。測試也用同一個入口
+   * 來人為製造空窗，驗證按鍵確實沒有被吃掉。
+   */
   blockInput(ms) {
     ctx.blockedUntil = performance.now() + Number(ms || 0);
     return ctx.blockedUntil;
@@ -139,6 +149,7 @@ function startBattle() {
   });
   ctx.paused = false;
   ctx.blockedUntil = 0;
+  ctx.scene?.effects?.reset();
   clearInputQueue(ctx.queue);
   resetPerf(ctx.perf);
   resetLatency(ctx.latency);

@@ -4,23 +4,44 @@
  * 這裡只做兩件事：把 battle.js 的狀態畫出來、把事件演成聲光。
  * 絕對不可以反過來改狀態——規則的唯一來源是 battle.js。
  *
- * 1.1 的畫面刻意樸素：幾何圖形、沒有粒子、沒有音效。
- * 這一步要驗證的是骨架（固定時間步、重播一致、bot 跑得動），
- * 手感與美術從 1.3、1.4 才開始堆。
+ * 1.3 開始堆手感：蜂針、閃白、擠壓、字母碎片、裂痕、擊殺噴濺與頓挫。
+ * 音效是 1.4，真正的美術素材也還沒進來，所以外形仍是基本圖形。
  *
  * 紀律：所有顯示物件都在 create() 建好，update() 裡不新建任何東西。
- * 這個習慣現在養成，1.3 加粒子時才不會變成 GC 卡頓的來源。
+ * 動畫全部自己算，不用 Phaser 的 tween——tween 每次都會配置物件，
+ * 而這些特效每秒會觸發好幾次。
  */
 
 import { BALANCE } from './core/balance.js';
 import { createClock, advanceClock } from './core/clock.js';
 import { stepBattle, clearEvents, EV } from './core/battle.js';
 import { samplePerf } from './perf.js';
+import { createEffects } from './effects.js';
 
-const SCAFFOLD_NOTE = '（1.1 臨時顯示：發音做好後會拿掉）';
+const SCAFFOLD_NOTE = '（臨時顯示：發音做好後會拿掉）';
 
 const LANE_LEFT = 0.18; // 蜂巢位置（畫面寬度的比例）
 const LANE_RIGHT = 0.92; // 入侵口
+
+/* 擊殺頓挫：短暫凍結世界，讓「打掉了」這件事有重量。 */
+const HIT_STOP_MS = 80;
+/* 敵人被擊中的擠壓與閃白時間 */
+const ENEMY_HIT_MS = 130;
+
+const ENEMY_BASE_COLOR = 0x2b3350;
+const ENEMY_FLASH_COLOR = 0xffffff;
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+/** 兩個 0xRRGGBB 之間插值，用來做閃白後的淡回。 */
+function lerpColor(from, to, t) {
+  const r = Math.round(lerp((from >> 16) & 0xff, (to >> 16) & 0xff, t));
+  const g = Math.round(lerp((from >> 8) & 0xff, (to >> 8) & 0xff, t));
+  const b = Math.round(lerp(from & 0xff, to & 0xff, t));
+  return (r << 16) | (g << 8) | b;
+}
 
 export function createBattleScene(ctx) {
   const Phaser = window.Phaser;
@@ -35,39 +56,37 @@ export function createBattleScene(ctx) {
       this.lastTyped = -1;
       this.lastWordIndex = -2;
       this.lastStatus = '';
+      // 特效用的計時器（毫秒，-1 代表沒在跑）
+      this.enemyHitT = -1;
+      this.hitStopUntil = 0;
+      this.energyPulseT = -1;
     }
 
     create() {
       const { width, height } = this.scale;
 
-      // ── 背景：三層，之後 1.3 會換成真正的視差 ──────────────
+      // ── 背景：三層，之後會換成真正的視差 ──────────────────
       this.bgFar = this.add.rectangle(0, 0, width, height, 0x10131f).setOrigin(0);
-      this.bgMid = this.add.rectangle(0, height * 0.55, width, height * 0.45, 0x171c2e).setOrigin(0);
-      this.ground = this.add.rectangle(0, height * 0.78, width, height * 0.22, 0x1e2540).setOrigin(0);
+      this.bgMid = this.add.rectangle(0, height * 0.52, width, height * 0.48, 0x171c2e).setOrigin(0);
+      this.ground = this.add.rectangle(0, height * 0.72, width, height * 0.28, 0x1e2540).setOrigin(0);
 
       /*
-       * 蜂巢與敵人先用 ellipse / rectangle 這種定位語意明確的基本圖形。
+       * 蜂巢與敵人用 ellipse / rectangle 這種定位語意明確的基本圖形。
        *
-       * 試過用 Polygon 畫出六角形與甲蟲外形，但 Phaser 的 Polygon 是以外框
-       * 左上角定位、setOrigin 對它無效，結果本體與裂痕標記總是錯開一段。
-       * 1.3 本來就要換成真正的 SVG 素材，沒必要為了中繼版本去猜引擎的行為——
-       * 改用原點可預測的圖形，一次消掉這整類問題。
+       * 試過用 Polygon 畫六角形與甲蟲外形，但 Phaser 的 Polygon 是以外框
+       * 左上角定位、setOrigin 對它無效，本體與附掛物總是錯開一段。
+       * 真正的 SVG 素材本來就要另外做，沒必要為了中繼版本去猜引擎的行為。
        */
       this.hiveGlow = this.add.circle(0, 0, 62, 0xf5b301, 0.12);
       this.hive = this.add.ellipse(0, 0, 84, 84, 0xf5b301);
 
-      /*
-       * 敵人放進 Container。
-       *
-       * Phaser 的 Polygon 是以外框的左上角定位的，setOrigin 對它沒有作用，
-       * 所以直接把本體與裂痕各自設座標時，兩者會錯開一段（實測就是這樣）。
-       * 包成 Container 之後只要移動容器，裡面的東西必然跟著走——
-       * 1.3 要往敵人身上加動畫與粒子時，這個結構也正好用得上。
-       */
+      // 敵人包成 Container：移動容器時裡面的裂痕必然跟著走
       this.enemy = this.add.container(0, 0);
-      const body = this.add.ellipse(0, 0, 68, 52, 0x2b3350).setStrokeStyle(3, 0xff5d5d);
-      this.enemyCrack = this.add.rectangle(0, 0, 5, 40, 0xff9f43).setAlpha(0);
-      this.enemy.add([body, this.enemyCrack]);
+      this.enemyBody = this.add.ellipse(0, 0, 68, 52, ENEMY_BASE_COLOR).setStrokeStyle(3, 0xff5d5d);
+      this.enemy.add(this.enemyBody);
+
+      this.effects = createEffects(this, ctx.getSeed());
+      this.effects.attachCracksTo(this.enemy);
 
       // ── HUD ────────────────────────────────────────────────
       this.hpDots = [];
@@ -87,7 +106,7 @@ export function createBattleScene(ctx) {
         .setOrigin(1, 0.5);
 
       /*
-       * 臨時鷹架：1.1 還沒有發音（音效是 1.4），不把單字顯示出來就沒辦法玩。
+       * 臨時鷹架：還沒有發音（音效是 1.4），不把單字顯示出來就沒辦法玩。
        * 1.4 接上發音之後這一行就會拿掉——設計上畫面是不顯示字母的，
        * 壓力要來自敵人逼近，不是來自讀字。
        */
@@ -127,8 +146,9 @@ export function createBattleScene(ctx) {
 
       // 戰場：地面帶的稍微上方，讓角色站在地上而不是浮在半空
       this.laneY = height * 0.68;
-      this.hive.setPosition(width * LANE_LEFT, this.laneY);
-      this.hiveGlow.setPosition(width * LANE_LEFT, this.laneY);
+      this.hiveX = width * LANE_LEFT;
+      this.hive.setPosition(this.hiveX, this.laneY);
+      this.hiveGlow.setPosition(this.hiveX, this.laneY);
 
       const hudY = height * 0.12;
       this.hpDots.forEach((dot, i) => dot.setPosition(width * 0.06 + i * 30, hudY));
@@ -137,6 +157,7 @@ export function createBattleScene(ctx) {
       this.energyBg.setPosition(width * 0.5 - barW / 2, hudY).setSize(barW, 16);
       this.energyFill.setPosition(width * 0.5 - barW / 2, hudY).setSize(1, 16);
       this.energyBarWidth = barW;
+      this.energyBarX = width * 0.5 - barW / 2;
 
       this.comboText.setPosition(width * 0.94, hudY);
       this.honeyText.setPosition(width * 0.94, hudY + 30);
@@ -167,12 +188,33 @@ export function createBattleScene(ctx) {
       // 空窗期間排隊的按鍵，在這裡照原順序補上（見 input-queue.js）
       if (ctx.drainQueue() > 0) this.consumeEvents(state);
 
-      if (!ctx.isPaused()) {
+      /*
+       * 擊殺頓挫：短暫凍結邏輯，讓「打掉了」有重量。
+       *
+       * 凍結期間不推進時鐘，累積的真實時間也一併丟掉——這正是「世界停住」
+       * 的意思。這段期間的按鍵會由輸入佇列留著，不會被吃掉（1.2 做的機制
+       * 在這裡第一次派上真正的用場）。
+       */
+      const frozen = performance.now() < this.hitStopUntil;
+
+      if (!ctx.isPaused() && !frozen) {
         const steps = advanceClock(this.clock, delta);
         for (let i = 0; i < steps && state.status === 'running'; i += 1) {
           stepBattle(state);
           this.consumeEvents(state);
         }
+      }
+
+      /*
+       * 特效在「頓挫」時要繼續播，在「暫停」時要停。
+       *
+       * 頓挫是演出的一部分，凍結的是遊戲世界不是畫面；暫停則是玩家離開，
+       * 整個畫面都該定住。兩者看起來像，但混在一起處理會讓暫停期間的粒子
+       * 自己飄完，回來時場面已經不一樣了。
+       */
+      if (!ctx.isPaused()) {
+        this.effects.update(delta);
+        this.updateEnemyHit(delta);
       }
       this.render(state);
 
@@ -184,30 +226,79 @@ export function createBattleScene(ctx) {
       samplePerf(ctx.perf, delta, now - workStart);
     }
 
-    /** 把這一步產生的邏輯事件轉成演出與紀錄。1.4 之後這裡也會觸發音效。 */
+    /** 把邏輯事件轉成演出與紀錄。1.4 之後這裡也會觸發音效。 */
     consumeEvents(state) {
       for (let i = 0; i < state.evCount; i += 1) {
         const ev = state.ev[i];
         ctx.debug._recordBattleEvent(ev);
         switch (ev.type) {
-          case EV.LETTER_OK:
-            this.enemyCrack.setAlpha(Math.min(1, ev.a / Math.max(1, ev.b)));
+          case EV.LETTER_OK: {
+            const ex = this.enemy.x;
+            const ey = this.enemy.y;
+            // 蜂針從蜂巢飛出去打到敵人
+            this.effects.fireStinger(this.hiveX, this.laneY, ex, ey);
+            // 一片字母碎片從敵人飛回蜂巢
+            const letter = state.target[ev.a - 1] || '';
+            if (letter) this.effects.spawnFragment(letter, ex, ey, this.hiveX, this.laneY);
+            this.effects.setCrackProgress(ev.a / Math.max(1, ev.b));
+            this.enemyHitT = 0;
+            this.energyPulseT = 0;
             break;
+          }
           case EV.LETTER_BAD:
             this.cameras.main.flash(90, 255, 60, 60, false);
+            this.cameras.main.shake(60, 0.003);
             break;
           case EV.WORD_KILLED:
-            this.enemyCrack.setAlpha(0);
+            this.effects.burst(this.enemy.x, this.enemy.y, 18);
+            this.effects.setCrackProgress(0);
             this.cameras.main.shake(70, 0.004);
+            // 頓挫：凍結世界，同時讓輸入排隊而不是打在看不見的畫面上
+            this.hitStopUntil = performance.now() + HIT_STOP_MS;
+            ctx.blockInput(HIT_STOP_MS);
+            this.enemyHitT = -1;
+            this.enemyBody.setScale(1, 1);
             break;
           case EV.WORD_MISSED:
             this.cameras.main.shake(180, 0.01);
+            this.effects.setCrackProgress(0);
+            break;
+          case EV.WORD_START:
+            this.effects.setCrackProgress(0);
             break;
           default:
             break;
         }
       }
       clearEvents(state);
+    }
+
+    /** 敵人被擊中時的擠壓與閃白，自己算不用 tween。 */
+    updateEnemyHit(delta) {
+      if (this.enemyHitT >= 0) {
+        this.enemyHitT += delta;
+        const k = this.enemyHitT / ENEMY_HIT_MS;
+        if (k >= 1) {
+          this.enemyHitT = -1;
+          this.enemyBody.setScale(1, 1);
+          this.enemyBody.setFillStyle(ENEMY_BASE_COLOR);
+        } else {
+          // 先被擠扁再彈回來
+          this.enemyBody.setScale(lerp(1.22, 1, k), lerp(0.78, 1, k));
+          this.enemyBody.setFillStyle(lerpColor(ENEMY_FLASH_COLOR, ENEMY_BASE_COLOR, k));
+        }
+      }
+
+      if (this.energyPulseT >= 0) {
+        this.energyPulseT += delta;
+        const k = this.energyPulseT / 140;
+        if (k >= 1) {
+          this.energyPulseT = -1;
+          this.energyFill.setAlpha(1);
+        } else {
+          this.energyFill.setAlpha(lerp(0.55, 1, k));
+        }
+      }
     }
 
     render(state) {
@@ -225,7 +316,6 @@ export function createBattleScene(ctx) {
        *
        * 每個影格組字串等於每秒配置一兩百個字串物件，GC 遲早會在某個
        * 隨機時間點介入造成掉格——正是「戰鬥中不新建物件」要防的東西。
-       * 量測有抓到：修之前一場 12 個字 heap 成長 6.9MB。
        */
       if (state.combo !== this.lastCombo) {
         this.lastCombo = state.combo;
@@ -260,4 +350,3 @@ export function createBattleScene(ctx) {
     }
   })();
 }
-
