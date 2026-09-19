@@ -13,6 +13,7 @@
 
 import { snapshot, fingerprint, EV_NAME } from './core/battle.js';
 import { perfReport } from './perf.js';
+import { latencyReport } from './latency.js';
 
 const EVENT_LOG_CAPACITY = 500;
 
@@ -68,6 +69,26 @@ export function installDebugApi(ctx) {
       return perfReport(ctx.getPerf());
     },
 
+    /** keydown → 畫面畫出新狀態的延遲統計。手感的核心指標。 */
+    latency() {
+      return latencyReport(ctx.getLatency());
+    },
+
+    /** 輸入緩衝區狀態：排隊中幾個、曾經因為爆滿被丟掉幾個。 */
+    queue() {
+      const q = ctx.getQueue();
+      return { size: q.size, dropped: q.dropped };
+    },
+
+    /** 測試鉤子：人為封鎖輸入一段時間，驗證按鍵會排隊而不是被吃掉。 */
+    blockInput(ms) {
+      return ctx.blockInput(ms);
+    },
+
+    imeSuspected() {
+      return !!ctx.input?.isImeSuspected();
+    },
+
     /** 最後 500 個事件（含邏輯事件與演出事件），用來對帳與查偶發問題。 */
     events() {
       return readEventLog();
@@ -93,6 +114,8 @@ export function installDebugApi(ctx) {
       return {
         state: api.state(),
         perf: api.perf(),
+        latency: api.latency(),
+        queue: api.queue(),
         events: readEventLog(),
         log: ctx.getLog()
       };

@@ -20,6 +20,31 @@
     <span class="chrome-hint">↑再聽 ↓慢唸 →例句 · Esc 暫停 · F3 除錯</span>
   </div>
 
+  <!-- 觸控裝置專用：桌機用方向鍵，這三顆只在有觸控時才顯示 -->
+  <div id="listen-buttons">
+    <button type="button" class="listen-btn" data-listen="replay">🔊 再聽</button>
+    <button type="button" class="listen-btn" data-listen="slow">🐢 慢唸</button>
+    <button type="button" class="listen-btn" data-listen="sentence">💬 例句</button>
+  </div>
+
+  <!--
+    輸入法警告：停在注音模式時按字母會跳選字視窗，遊戲完全不能玩。
+    小孩不會自己想到要切輸入法，所以直接把話講明白。
+  -->
+  <div id="ime-warning" hidden>
+    <strong>請把輸入法切成英文</strong>
+    <span>現在是中文輸入法，打出來的字母遊戲收不到。<br />按鍵盤上的切換鍵（通常是 Shift 或 Ctrl+空白鍵）換成英文再繼續。</span>
+  </div>
+
+  <!--
+    觸控裝置沒有使用者的點擊就不會叫出螢幕鍵盤，等於完全不能打字。
+    先擋一層「點一下開始」。
+  -->
+  <div id="tap-to-start" hidden>
+    <strong>點一下開始</strong>
+    <span>會叫出鍵盤，然後把螢幕上的單字打出來</span>
+  </div>
+
   <p id="game-error" class="game-error"></p>
 
   <div id="loading-note">載入中…</div>

@@ -141,3 +141,89 @@ body.page-loading #loading-note {
   pointer-events: none;
   z-index: 10;
 }
+
+/* ── 觸控裝置 ─────────────────────────────────────────── */
+
+/*
+ * 隱形輸入框：它唯一的工作是讓 iOS/iPadOS 願意叫出螢幕鍵盤。
+ * 真正的按鍵仍由 window 的 keydown 收，這個框永遠保持空白。
+ * font-size 必須 >= 16px，否則 iOS 會自動放大整個頁面。
+ */
+.touch-input {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  font-size: 16px;
+  background: transparent;
+  color: transparent;
+  caret-color: transparent;
+}
+
+#listen-buttons {
+  display: none;
+}
+
+/* 觸控裝置上沒有方向鍵與 Esc、F3，那行提示只會造成困惑 */
+body.is-touch .chrome-hint {
+  display: none;
+}
+
+body.is-touch #listen-buttons {
+  position: fixed;
+  right: 0.6rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  z-index: 6;
+}
+
+.listen-btn {
+  background: rgba(30, 41, 59, 0.9);
+  color: #cbd5e1;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+/* ── 全螢幕提示（輸入法、點一下開始） ────────────────── */
+
+#ime-warning,
+#tap-to-start {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  padding: 2rem;
+  text-align: center;
+  background: rgba(8, 10, 18, 0.92);
+}
+
+#ime-warning[hidden],
+#tap-to-start[hidden] {
+  display: none;
+}
+
+#ime-warning strong,
+#tap-to-start strong {
+  font-size: 1.5rem;
+  color: #ffd166;
+}
+
+#ime-warning span,
+#tap-to-start span {
+  color: #94a3b8;
+  line-height: 1.7;
+}

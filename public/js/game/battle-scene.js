@@ -164,6 +164,9 @@ export function createBattleScene(ctx) {
        */
       this.consumeEvents(state);
 
+      // 空窗期間排隊的按鍵，在這裡照原順序補上（見 input-queue.js）
+      if (ctx.drainQueue() > 0) this.consumeEvents(state);
+
       if (!ctx.isPaused()) {
         const steps = advanceClock(this.clock, delta);
         for (let i = 0; i < steps && state.status === 'running'; i += 1) {
@@ -173,9 +176,12 @@ export function createBattleScene(ctx) {
       }
       this.render(state);
 
+      const now = performance.now();
+      // 新狀態已經畫出來了，結算這一格的按鍵延遲
+      ctx.markRendered(now);
       // interval 是「實際跑到幾 fps」，work 是「這一格花了多少 CPU」。
       // 無頭瀏覽器量得準的是後者，所以兩個都記。
-      samplePerf(ctx.perf, delta, performance.now() - workStart);
+      samplePerf(ctx.perf, delta, now - workStart);
     }
 
     /** 把這一步產生的邏輯事件轉成演出與紀錄。1.4 之後這裡也會觸發音效。 */

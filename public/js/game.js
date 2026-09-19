@@ -1,7 +1,7 @@
 /**
- * 遊戲頁進入點（Phase 1.1）。
+ * 遊戲頁進入點。
  *
- * 職責是把零件接起來：拿單字 → 建戰鬥狀態 → 開 Phaser → 綁鍵盤 →
+ * 職責是把零件接起來：拿單字 → 建戰鬥狀態 → 開 Phaser → 綁輸入 →
  * 裝除錯 API 與 F3 疊加層。所有規則都在 core/ 裡，這裡不做任何遊戲判斷。
  *
  * 這一頁刻意跟現有的練習頁完全分開（新網址 /game），
@@ -11,7 +11,9 @@
 import { loadPhaser } from './game/load-phaser.js';
 import { createBattle, applyAction } from './game/core/battle.js';
 import { createRecorder, recordAction, serializeLog } from './game/core/recorder.js';
-import { createInput } from './game/input.js';
+import { createInput, isTouchDevice } from './game/input.js';
+import { createInputQueue, enqueueInput, drainInput, clearInputQueue } from './game/input-queue.js';
+import { createLatency, markApplied, markRendered, resetLatency } from './game/latency.js';
 import { installDebugApi } from './game/debug-api.js';
 import { createOverlay } from './game/overlay.js';
 import { createPerf, resetPerf } from './game/perf.js';
@@ -37,11 +39,17 @@ const ctx = {
   scene: null,
   phaserGame: null,
   perf: createPerf(),
+  latency: createLatency(),
+  queue: createInputQueue(),
+  // 測試用：人為讓遊戲有一段「不接受輸入」的空窗，驗證按鍵不會被吃掉
+  blockedUntil: 0,
 
   getState: () => ctx.state,
   getLog: () => ctx.log,
   getSeed: () => ctx.seed,
   getPerf: () => ctx.perf,
+  getLatency: () => ctx.latency,
+  getQueue: () => ctx.queue,
   isPaused: () => ctx.paused,
   getClockSteps: () => ctx.scene?.clock.lastSteps ?? 0,
   getClockDropped: () => ctx.scene?.clock.droppedMs ?? 0,
@@ -51,18 +59,51 @@ const ctx = {
     ctx.debug.ready = true;
   },
 
-  sendAction(action) {
-    if (!ctx.state || ctx.state.status !== 'running' || ctx.paused) return false;
-    /*
-     * 立刻套用，不等下一個邏輯步。
-     *
-     * 邏輯是 120Hz，等步界最多會多 8.3ms，加上等畫面更新就可能吃掉
-     * 「keydown → 畫面回饋 ≤ 16ms」的預算。錄影檔記在「目前這一步」，
-     * 重播時也是在同一步的步前套用，兩邊順序一致。
-     */
-    recordAction(ctx.log, ctx.state.tick, action);
-    applyAction(ctx.state, action);
+  /** 現在收不收得下輸入。1.3 加了擊殺頓挫之後，這裡會再多一個條件。 */
+  acceptingInput() {
+    return (
+      !!ctx.state &&
+      ctx.state.status === 'running' &&
+      !ctx.paused &&
+      performance.now() >= ctx.blockedUntil
+    );
+  },
+
+  /**
+   * 收到一個玩家動作。
+   *
+   * 能收就立刻套用，不等下一個邏輯步——邏輯是 120Hz，等步界最多多 8.3ms，
+   * 加上等畫面更新就會吃掉「keydown → 畫面回饋 ≤ 16ms」的預算。
+   * 收不下就排隊，等空窗結束再照原順序補上，而且保留原本的時間戳。
+   */
+  sendAction(action, t0 = performance.now()) {
+    if (!ctx.state) return false;
+    if (!ctx.acceptingInput()) {
+      return enqueueInput(ctx.queue, action, t0);
+    }
+    applyNow(action, t0);
     return true;
+  },
+
+  /** 每個影格開頭呼叫：把空窗期間排隊的按鍵補上。 */
+  drainQueue() {
+    if (ctx.queue.size === 0) return 0;
+    return drainInput(ctx.queue, (slot) => {
+      if (!ctx.acceptingInput()) return false;
+      applyNow(slot, slot.t0);
+      return true;
+    });
+  },
+
+  /** 畫面已經把新狀態畫出來了，結算這一格的延遲樣本。 */
+  markRendered(now) {
+    markRendered(ctx.latency, now);
+  },
+
+  /** 測試鉤子：人為封鎖輸入 ms 毫秒，用來驗證緩衝區真的有把按鍵留住。 */
+  blockInput(ms) {
+    ctx.blockedUntil = performance.now() + Number(ms || 0);
+    return ctx.blockedUntil;
   },
 
   restart(opts = {}) {
@@ -73,6 +114,12 @@ const ctx = {
     return ctx.seed;
   }
 };
+
+function applyNow(action, t0) {
+  recordAction(ctx.log, ctx.state.tick, action);
+  applyAction(ctx.state, action);
+  markApplied(ctx.latency, t0);
+}
 
 ctx.debug = installDebugApi(ctx);
 
@@ -91,7 +138,11 @@ function startBattle() {
     wordIds: ctx.words.map((w) => w.id)
   });
   ctx.paused = false;
+  ctx.blockedUntil = 0;
+  clearInputQueue(ctx.queue);
   resetPerf(ctx.perf);
+  resetLatency(ctx.latency);
+  document.body.classList.remove('is-paused');
   updateHud();
 }
 
@@ -112,16 +163,31 @@ function downloadLog() {
 }
 
 async function fetchWords() {
-  // 這個端點不需要登入、也不碰資料庫（單字庫是寫死的靜態資料），
-  // 所以遊戲頁在資料庫掛掉時仍然打得開，自動化測試也不必先登入。
-  const res = await fetch('/api/wordbank?part=1');
+  /*
+   * 這個端點不需要登入、也不碰資料庫（單字庫是寫死的靜態資料），
+   * 所以遊戲頁在資料庫掛掉時仍然打得開，自動化測試也不必先登入。
+   *
+   * ?part=all 拿全部 100 個字。測試要連打數百個字母時用得到——
+   * 一場打得完就不必中途重開，統計才不會被重置切斷。
+   */
+  const part = params.get('part') || '1';
+  const query = part === 'all' ? '' : `?part=${encodeURIComponent(part)}`;
+  const res = await fetch(`/api/wordbank${query}`);
   if (!res.ok) throw new Error(`拿不到單字庫（${res.status}）`);
   const data = await res.json();
   return data.words;
 }
 
+function setPaused(next) {
+  ctx.paused = next;
+  document.body.classList.toggle('is-paused', ctx.paused);
+}
+
 async function boot() {
   const errorEl = document.getElementById('game-error');
+  const imeEl = document.getElementById('ime-warning');
+  const tapEl = document.getElementById('tap-to-start');
+
   try {
     const [words] = await Promise.all([fetchWords(), loadPhaser()]);
     // Phase 1 只要少量單字就夠驗證手感，不用一次上 25 個
@@ -132,17 +198,53 @@ async function boot() {
     startBattle();
 
     const overlay = createOverlay(ctx);
-    createInput({
-      onAction: (action) => ctx.sendAction(action),
-      onPause: () => {
-        ctx.paused = !ctx.paused;
-        document.body.classList.toggle('is-paused', ctx.paused);
+    const input = createInput({
+      onAction: (action, t0) => ctx.sendAction(action, t0),
+      onPause: (info) => setPaused(info?.force ? true : !ctx.paused),
+      onToggleOverlay: () => overlay.toggle(),
+      onImeSuspected: () => {
+        if (imeEl) imeEl.hidden = false;
       },
-      onToggleOverlay: () => overlay.toggle()
+      onImeCleared: () => {
+        if (imeEl) imeEl.hidden = true;
+      }
     });
+    ctx.input = input;
+
+    /*
+     * 觸控裝置：沒有使用者的點擊，iOS/iPadOS 不會叫出螢幕鍵盤，
+     * 等於完全不能玩。所以先擋一層「點一下開始」，順便當成暫停解除。
+     */
+    if (isTouchDevice()) {
+      document.body.classList.add('is-touch');
+      if (tapEl) {
+        tapEl.hidden = false;
+        const start = () => {
+          input.focusForTyping();
+          tapEl.hidden = true;
+        };
+        tapEl.addEventListener('click', start);
+        tapEl.addEventListener('touchstart', start, { passive: true });
+      }
+      // 點畫面任何地方都把鍵盤叫回來（切出去再回來時很常需要）
+      document.getElementById('game-root')?.addEventListener('click', () => {
+        input.focusForTyping();
+      });
+      // iPad 上把三個聽力鍵放回螢幕
+      document.querySelectorAll('[data-listen]').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          ctx.sendAction({ kind: 'listen', listen: btn.dataset.listen });
+          input.focusForTyping();
+        });
+      });
+    }
 
     document.getElementById('btn-replay-file')?.addEventListener('click', downloadLog);
-    document.getElementById('btn-restart')?.addEventListener('click', () => ctx.restart());
+    document.getElementById('btn-restart')?.addEventListener('click', () => {
+      ctx.restart();
+      input.focusForTyping();
+    });
 
     ctx.phaserGame = new window.Phaser.Game({
       type: window.Phaser.AUTO,

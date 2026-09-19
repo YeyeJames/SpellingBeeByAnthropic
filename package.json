@@ -14,7 +14,8 @@
     "gen-preload": "node scripts/gen-preload.js",
     "test:determinism": "node scripts/determinism.mjs",
     "test:bot": "node scripts/bot.mjs",
-    "test": "node scripts/determinism.mjs"
+    "test": "node scripts/determinism.mjs",
+    "test:input": "node scripts/input-test.mjs"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
