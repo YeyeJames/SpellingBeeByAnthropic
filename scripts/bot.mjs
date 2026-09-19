@@ -48,7 +48,17 @@ function randomWrongLetter(expected) {
   return ch;
 }
 
-const browser = await chromium.launch({ executablePath: CHROME });
+/*
+ * --expose-gc 讓我們可以主動觸發垃圾回收。
+ *
+ * 沒有它的話，usedJSHeapSize 只會一路往上到 GC 自己跑為止，
+ * 量到的「成長」分不出是真的留著不放，還是只是還沒回收的鋸齒。
+ * 主動 GC 之後再量，剩下的才是真正被留住的記憶體。
+ */
+const browser = await chromium.launch({
+  executablePath: CHROME,
+  args: ['--js-flags=--expose-gc']
+});
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 
 // 把瀏覽器的錯誤帶回終端機——bot 跑的時候沒有人在看 console
@@ -69,6 +79,15 @@ for (let run = 0; run < runs; run += 1) {
   // 等除錯 API 就緒（表示場景也建好了）
   await page.waitForFunction(() => window.__spellbee && window.__spellbee.ready, null, {
     timeout: 15000
+  });
+
+  // GC 之後的基準線，跟結束時的數字相減才是「真的被留住的」
+  const heapBaseline = await page.evaluate(() => {
+    if (window.gc) {
+      window.gc();
+      window.gc();
+    }
+    return performance.memory ? performance.memory.usedJSHeapSize : 0;
   });
 
   const startedAt = Date.now();
@@ -109,15 +128,25 @@ for (let run = 0; run < runs; run += 1) {
     logEntries: window.__spellbee.log().entries.length
   }));
 
-  results.push({ seed, keys, ...final });
+  const heapAfter = await page.evaluate(() => {
+    if (window.gc) {
+      window.gc();
+      window.gc();
+    }
+    return performance.memory ? performance.memory.usedJSHeapSize : 0;
+  });
+  const retainedMB = heapBaseline ? (heapAfter - heapBaseline) / 1048576 : null;
+
+  results.push({ seed, keys, retainedMB, ...final });
 
   const st = final.state;
   console.log(
     `場 ${run + 1}/${runs} seed=${seed} ${st.status}` +
       `  殺 ${st.stats.wordsKilled} 漏 ${st.stats.wordsMissed}` +
       `  對 ${st.stats.correctLetters} 錯 ${st.stats.wrongLetters}` +
-      `  影格 p50 ${final.perf.p50}ms p95 ${final.perf.p95}ms 掉格 ${final.perf.dropped}` +
-      `  heap +${final.perf.heapGrowthMB ?? '—'}MB` +
+      `  每格工作 p50 ${final.perf.workP50}ms p95 ${final.perf.workP95}ms` +
+      `  間隔 p50 ${final.perf.p50}ms` +
+      `  heap 回收後留下 ${retainedMB === null ? '—' : retainedMB.toFixed(2)}MB` +
       `  錄影 ${final.logEntries} 動作`
   );
 }
@@ -153,10 +182,23 @@ check(
   results.every((r) => r.logEntries > 0),
   results.map((r) => r.logEntries).join(', ')
 );
+/*
+ * 判定看的是「每格工作量」而不是「影格間隔」。
+ *
+ * 無頭瀏覽器用軟體渲染，間隔本來就跑不到 60fps（實測約 24~26fps），
+ * 拿它當門檻只會量到瀏覽器的節流，不是程式的效能。
+ * 工作量才是「在真實機器上還有多少餘裕」，而且無頭環境量得準。
+ * 真機的實際 fps 我測不到，那要靠遊戲裡的 F3 畫面自己看。
+ */
 check(
-  '影格 p95 ≤ 20ms',
-  results.every((r) => r.perf.p95 <= 20),
-  results.map((r) => r.perf.p95).join(', ')
+  '每格工作量 p95 ≤ 4ms（60fps 預算 16.7ms 的四分之一）',
+  results.every((r) => r.perf.workP95 <= 4),
+  results.map((r) => r.perf.workP95).join(', ')
+);
+check(
+  'GC 之後留下的記憶體 ≤ 1MB（戰鬥中不應持續配置）',
+  results.every((r) => (r.retainedMB ?? 0) <= 1),
+  results.map((r) => (r.retainedMB === null ? '—' : r.retainedMB.toFixed(2))).join(', ')
 );
 
 console.log(`\n${failures === 0 ? '全部通過' : `有 ${failures} 項失敗`}`);

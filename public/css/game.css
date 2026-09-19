@@ -122,9 +122,11 @@ body.page-loading #loading-note {
 
 /* ── F3 除錯疊加層 ────────────────────────────────────── */
 
+/* 放左下角而不是左上角：左上角正好壓在血量與 HUD 上，
+   除錯時反而看不到最該看的東西 */
 .debug-overlay {
   position: fixed;
-  top: 0;
+  bottom: 2.6rem;
   left: 0;
   margin: 0.5rem;
   padding: 0.6rem 0.8rem;

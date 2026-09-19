@@ -29,7 +29,12 @@ export function createBattleScene(ctx) {
     constructor() {
       super({ key: 'battle' });
       this.clock = createClock();
-      this.lastFrameMs = 0;
+      // 上一影格畫出來的值，用來避免沒必要的 setText（見 render）
+      this.lastCombo = -1;
+      this.lastHoney = -1;
+      this.lastTyped = -1;
+      this.lastWordIndex = -2;
+      this.lastStatus = '';
     }
 
     create() {
@@ -40,13 +45,29 @@ export function createBattleScene(ctx) {
       this.bgMid = this.add.rectangle(0, height * 0.55, width, height * 0.45, 0x171c2e).setOrigin(0);
       this.ground = this.add.rectangle(0, height * 0.78, width, height * 0.22, 0x1e2540).setOrigin(0);
 
-      // ── 蜂巢（你的基地） ───────────────────────────────────
-      this.hive = this.add.polygon(0, 0, hexPoints(46), 0xf5b301).setOrigin(0.5);
+      /*
+       * 蜂巢與敵人先用 ellipse / rectangle 這種定位語意明確的基本圖形。
+       *
+       * 試過用 Polygon 畫出六角形與甲蟲外形，但 Phaser 的 Polygon 是以外框
+       * 左上角定位、setOrigin 對它無效，結果本體與裂痕標記總是錯開一段。
+       * 1.3 本來就要換成真正的 SVG 素材，沒必要為了中繼版本去猜引擎的行為——
+       * 改用原點可預測的圖形，一次消掉這整類問題。
+       */
       this.hiveGlow = this.add.circle(0, 0, 62, 0xf5b301, 0.12);
+      this.hive = this.add.ellipse(0, 0, 84, 84, 0xf5b301);
 
-      // ── 敵人：1.1 先用一個帶描邊的多邊形 ───────────────────
-      this.enemy = this.add.polygon(0, 0, beetlePoints(34), 0x2b3350).setStrokeStyle(3, 0xff5d5d);
-      this.enemyCrack = this.add.rectangle(0, 0, 4, 44, 0xff9f43).setOrigin(0.5).setAlpha(0);
+      /*
+       * 敵人放進 Container。
+       *
+       * Phaser 的 Polygon 是以外框的左上角定位的，setOrigin 對它沒有作用，
+       * 所以直接把本體與裂痕各自設座標時，兩者會錯開一段（實測就是這樣）。
+       * 包成 Container 之後只要移動容器，裡面的東西必然跟著走——
+       * 1.3 要往敵人身上加動畫與粒子時，這個結構也正好用得上。
+       */
+      this.enemy = this.add.container(0, 0);
+      const body = this.add.ellipse(0, 0, 68, 52, 0x2b3350).setStrokeStyle(3, 0xff5d5d);
+      this.enemyCrack = this.add.rectangle(0, 0, 5, 40, 0xff9f43).setAlpha(0);
+      this.enemy.add([body, this.enemyCrack]);
 
       // ── HUD ────────────────────────────────────────────────
       this.hpDots = [];
@@ -101,11 +122,11 @@ export function createBattleScene(ctx) {
       const height = this.scale.height;
 
       this.bgFar.setSize(width, height);
-      this.bgMid.setPosition(0, height * 0.55).setSize(width, height * 0.45);
-      this.ground.setPosition(0, height * 0.78).setSize(width, height * 0.22);
+      this.bgMid.setPosition(0, height * 0.52).setSize(width, height * 0.48);
+      this.ground.setPosition(0, height * 0.72).setSize(width, height * 0.28);
 
-      // 戰場：畫面下方 65%；HUD 與敵人隊列在上方
-      this.laneY = height * 0.62;
+      // 戰場：地面帶的稍微上方，讓角色站在地上而不是浮在半空
+      this.laneY = height * 0.68;
       this.hive.setPosition(width * LANE_LEFT, this.laneY);
       this.hiveGlow.setPosition(width * LANE_LEFT, this.laneY);
 
@@ -126,10 +147,13 @@ export function createBattleScene(ctx) {
     }
 
     update(time, delta) {
-      samplePerf(ctx.perf, delta);
+      const workStart = performance.now();
 
       const state = ctx.getState();
-      if (!state) return;
+      if (!state) {
+        samplePerf(ctx.perf, delta, 0);
+        return;
+      }
 
       /*
        * 先把按鍵產生的事件演掉，再跑邏輯步。
@@ -148,6 +172,10 @@ export function createBattleScene(ctx) {
         }
       }
       this.render(state);
+
+      // interval 是「實際跑到幾 fps」，work 是「這一格花了多少 CPU」。
+      // 無頭瀏覽器量得準的是後者，所以兩個都記。
+      samplePerf(ctx.perf, delta, performance.now() - workStart);
     }
 
     /** 把這一步產生的邏輯事件轉成演出與紀錄。1.4 之後這裡也會觸發音效。 */
@@ -180,25 +208,44 @@ export function createBattleScene(ctx) {
       const width = this.scale.width;
       const x = Phaser.Math.Linear(width * LANE_RIGHT, width * LANE_LEFT, state.progress);
       this.enemy.setPosition(x, this.laneY);
-      this.enemyCrack.setPosition(x, this.laneY);
 
       this.hpDots.forEach((dot, i) => dot.setFillStyle(i < state.hp ? 0xf5b301 : 0x334155));
 
       const ratio = state.target.length ? state.typed / state.target.length : 0;
       this.energyFill.setSize(Math.max(1, this.energyBarWidth * ratio), 16);
 
-      this.comboText.setText(state.combo > 1 ? `x${state.combo}` : '');
-      this.honeyText.setText(`🍯 ${state.honey}`);
+      /*
+       * 只有值真的變了才 setText。
+       *
+       * 每個影格組字串等於每秒配置一兩百個字串物件，GC 遲早會在某個
+       * 隨機時間點介入造成掉格——正是「戰鬥中不新建物件」要防的東西。
+       * 量測有抓到：修之前一場 12 個字 heap 成長 6.9MB。
+       */
+      if (state.combo !== this.lastCombo) {
+        this.lastCombo = state.combo;
+        this.comboText.setText(state.combo > 1 ? `x${state.combo}` : '');
+      }
+      if (state.honey !== this.lastHoney) {
+        this.lastHoney = state.honey;
+        this.honeyText.setText(`🍯 ${state.honey}`);
+      }
 
       if (state.status === 'running') {
-        const typedPart = state.target.slice(0, state.typed).toUpperCase();
-        const restPart = state.target.slice(state.typed);
-        this.wordText.setText(`${typedPart}${restPart}`);
-        this.scaffoldNote.setText(SCAFFOLD_NOTE);
-        this.statusText.setAlpha(0);
-      } else {
-        this.wordText.setText('');
-        // 只是隱藏，不是清空——重開一場時要能復原
+        if (state.wordIndex !== this.lastWordIndex || state.typed !== this.lastTyped) {
+          this.lastWordIndex = state.wordIndex;
+          this.lastTyped = state.typed;
+          const typedPart = state.target.slice(0, state.typed).toUpperCase();
+          this.wordText.setText(`${typedPart}${state.target.slice(state.typed)}`);
+        }
+        if (this.lastStatus !== 'running') {
+          this.lastStatus = 'running';
+          this.scaffoldNote.setText(SCAFFOLD_NOTE); // 重開一場要能復原
+          this.wordText.setAlpha(1);
+          this.statusText.setAlpha(0);
+        }
+      } else if (this.lastStatus !== state.status) {
+        this.lastStatus = state.status;
+        this.wordText.setAlpha(0);
         this.scaffoldNote.setText('');
         this.statusText
           .setText(state.status === 'won' ? '全部打完了！' : '蜂巢被攻破了')
@@ -208,17 +255,3 @@ export function createBattleScene(ctx) {
   })();
 }
 
-/* ── 幾何：1.3 會換成真正的 SVG 素材 ──────────────────────── */
-
-function hexPoints(r) {
-  const pts = [];
-  for (let i = 0; i < 6; i += 1) {
-    const a = (Math.PI / 3) * i - Math.PI / 6;
-    pts.push(r * Math.cos(a), r * Math.sin(a));
-  }
-  return pts;
-}
-
-function beetlePoints(r) {
-  return [-r, 0, -r * 0.5, -r * 0.7, r * 0.5, -r * 0.6, r, 0, r * 0.5, r * 0.6, -r * 0.5, r * 0.7];
-}

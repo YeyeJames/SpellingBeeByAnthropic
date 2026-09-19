@@ -12,6 +12,7 @@
  */
 
 import { snapshot, fingerprint, EV_NAME } from './core/battle.js';
+import { perfReport } from './perf.js';
 
 const EVENT_LOG_CAPACITY = 500;
 
@@ -62,9 +63,9 @@ export function installDebugApi(ctx) {
       return s ? fingerprint(s) : null;
     },
 
-    /** 影格統計：p50 / p95 / 最差影格 / 掉格次數。 */
+    /** 影格統計：p50 / p95 / 最差影格 / 掉格次數。回傳算好的報告，不是原始計數器。 */
     perf() {
-      return ctx.getPerf();
+      return perfReport(ctx.getPerf());
     },
 
     /** 最後 500 個事件（含邏輯事件與演出事件），用來對帳與查偶發問題。 */
