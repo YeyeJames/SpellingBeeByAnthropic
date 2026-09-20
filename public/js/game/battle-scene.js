@@ -47,6 +47,20 @@ const HIT_STOP_MS = 80;
  */
 const MISS_REVEAL_MS = 2200;
 const MISS_FADE_MS = 500;
+
+/*
+ * Combo 三階的橫幅。
+ *
+ * 效果如果只改數值、畫面不講，他只會覺得「這次好像比較好打」，
+ * 不會知道是自己連對五個換來的——而「我做對了才有的」正是獎勵的全部意義。
+ */
+const BONUS_BANNER_MS = 1600;
+const BONUS_FADE_MS = 400;
+const BONUS_LABELS = {
+  1: { text: '蜂群衝刺！敵人慢一半', color: '#67e8f9' },
+  2: { text: '蜜糖時間！下一個字時間加倍', color: '#fbbf24' },
+  3: { text: '狂蜂狀態！擊退 ×3、蜂蜜 ×2', color: '#fb923c' }
+};
 /* 敵人被擊中的擠壓與閃白時間 */
 const ENEMY_HIT_MS = 130;
 
@@ -218,6 +232,17 @@ export function createBattleScene(ctx) {
         .setAlpha(0);
       this.missRemainMs = 0;
 
+      /* Combo 三階觸發時的橫幅，以及效果還在生效時的常駐標示 */
+      this.bonusText = this.add
+        .text(0, 0, '', { fontFamily: 'system-ui, sans-serif', fontSize: '30px', color: '#67e8f9' })
+        .setOrigin(0.5)
+        .setAlpha(0);
+      this.bonusRemainMs = 0;
+      this.effectLabel = this.add
+        .text(0, 0, '', { fontFamily: 'system-ui, sans-serif', fontSize: '16px', color: '#67e8f9' })
+        .setOrigin(1, 0.5);
+      this.lastEffectLabel = null;
+
       this.statusText = this.add
         .text(0, 0, '', { fontFamily: 'system-ui, sans-serif', fontSize: '30px', color: '#f8fafc' })
         .setOrigin(0.5)
@@ -266,6 +291,7 @@ export function createBattleScene(ctx) {
 
       this.comboText.setPosition(width * 0.94, hudY);
       this.honeyText.setPosition(width * 0.94, hudY + 30);
+      this.effectLabel.setPosition(width * 0.94, hudY + 56);
 
       /*
        * 字級跟著畫面高度縮放。
@@ -276,6 +302,9 @@ export function createBattleScene(ctx) {
        * 小螢幕上小到看不清。
        */
       const ui = Math.max(0.62, Math.min(1.15, height / 720));
+      this.bonusText.setFontSize(Math.round(30 * ui));
+      this.effectLabel.setFontSize(Math.round(16 * ui));
+      this.bonusText.setPosition(width * 0.5, height * 0.2);
       this.wordText.setFontSize(Math.round(44 * ui));
       this.scaffoldNote.setFontSize(Math.round(13 * ui));
       this.missText.setFontSize(Math.round(40 * ui));
@@ -345,6 +374,7 @@ export function createBattleScene(ctx) {
         this.updateEnemyHit(delta);
         this.updateMissReveal(delta);
         this.updateWaitingLine(state, delta);
+        this.updateBonusBanner(state, delta);
       }
       this.render(state);
       ctx.syncHud(state);
@@ -418,6 +448,15 @@ export function createBattleScene(ctx) {
               ev.a === LISTEN_KIND.SLOW ? 'slow' : ev.a === LISTEN_KIND.SENTENCE ? 'sentence' : 'normal'
             );
             break;
+          case EV.COMBO_BONUS: {
+            const label = BONUS_LABELS[ev.a];
+            if (label) {
+              this.bonusText.setText(label.text).setColor(label.color);
+              this.bonusRemainMs = BONUS_BANNER_MS;
+              this.cameras.main.flash(120, 120, 220, 255, false);
+            }
+            break;
+          }
           case EV.WORD_START:
             this.effects.setCrackProgress(0);
             // 前面那隻進場了，整排往前踏一步（下面用動畫補回來）
@@ -477,11 +516,44 @@ export function createBattleScene(ctx) {
       }
     }
 
+    /**
+     * Combo 橫幅與「效果還在生效中」的常駐標示。
+     *
+     * 常駐標示不是裝飾：敵人突然變慢的時候，他要知道那是自己換來的，
+     * 而不是遊戲怪怪的。
+     */
+    updateBonusBanner(state, delta) {
+      if (this.bonusRemainMs > 0) {
+        this.bonusRemainMs -= delta;
+        if (this.bonusRemainMs <= 0) {
+          this.bonusRemainMs = 0;
+          this.bonusText.setAlpha(0);
+        } else {
+          this.bonusText.setAlpha(Math.min(1, this.bonusRemainMs / BONUS_FADE_MS));
+        }
+      }
+
+      // 只有在狀態真的改變時才動 DOM／文字，避免每格配置字串
+      let label = '';
+      if (state.dashMs > 0) label = '🐝 衝刺中';
+      else if (state.frenzyMs > 0) label = '🔥 狂蜂中';
+      else if (state.sweetActive) label = '🍯 蜜糖時間';
+      else if (state.sweetNext) label = '🍯 下個字加倍';
+      if (label !== this.lastEffectLabel) {
+        this.lastEffectLabel = label;
+        this.effectLabel.setText(label);
+      }
+    }
+
     /** 換一場時把提示收掉，否則上一場的字會留在新的一場上。 */
     clearMiss() {
       this.missRemainMs = 0;
       this.missText.setAlpha(0);
       this.missHint.setAlpha(0);
+      this.bonusRemainMs = 0;
+      this.bonusText.setAlpha(0);
+      this.lastEffectLabel = null;
+      this.effectLabel.setText('');
     }
 
     /** 敵人被擊中時的擠壓與閃白，自己算不用 tween。 */

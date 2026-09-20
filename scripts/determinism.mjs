@@ -21,6 +21,7 @@ import {
   snapshot
 } from '../public/js/game/core/battle.js';
 import { createRng } from '../public/js/game/core/rng.js';
+import { BALANCE } from '../public/js/game/core/balance.js';
 import { createRecorder, recordAction, replayLog } from '../public/js/game/core/recorder.js';
 import { createPlayerModel, pollPlayer, PLAYER_PRESETS } from '../public/js/game/core/player-model.js';
 import { semitoneForIndex, comboShift, freqFor } from '../public/js/game/core/scale.js';
@@ -223,6 +224,141 @@ console.log('\n6.5) 含空白／連字號的詞條');
     applyAction(state, { kind: 'letter', ch: ' ' });
     check('一般單字裡按空白算打錯', state.stats.wrongLetters === 1, String(state.stats.wrongLetters));
     check('打錯不會把已經打對的清掉', state.typed === 1, String(state.typed));
+  }
+}
+
+// ── 6.8 Combo 三階效果（Phase 2.2） ──────────────────────
+// 設計書的硬性原則：Combo 的獎勵一律是「更好打」，不是「不用打」。
+// 爽度可以用時間換，學習次數不能折抵——所以這裡也驗「要打的字母數沒有變少」。
+console.log('\n6.8) Combo 三階效果');
+{
+  const W = (n) => Array.from({ length: n }, (_, i) => ({ id: `c${i}`, english: 'cat' }));
+  const C = BALANCE.combo;
+
+  /** 連續打對 n 個字（每個都乾淨），回傳狀態。 */
+  const streak = (n, words = W(30)) => {
+    const state = createBattle({ words, seed: 1, difficulty: 'normal' });
+    for (let i = 0; i < n; i += 1) {
+      for (const ch of state.target) applyAction(state, { kind: 'letter', ch });
+    }
+    return state;
+  };
+
+  // ── 5：蜂群衝刺 ──
+  {
+    const before = streak(C.dashAt - 1);
+    check(`連對 ${C.dashAt - 1} 個還沒發動`, before.dashMs === 0, `${before.dashMs}ms`);
+
+    const state = streak(C.dashAt);
+    check(`連對 ${C.dashAt} 個發動蜂群衝刺`, state.dashMs === C.dashMs, `${state.dashMs}ms`);
+
+    // 減速一半：跑同樣的步數，推進量應該剛好是一半
+    const fast = createBattle({ words: W(5), seed: 1, difficulty: 'normal' });
+    stepBattle(fast);
+    const normalStep = fast.progress;
+    const slow = streak(C.dashAt);
+    const p0 = slow.progress;
+    stepBattle(slow);
+    check(
+      '衝刺期間敵人走一半的距離',
+      Math.abs((slow.progress - p0) - normalStep * C.dashSpeedFactor) < 1e-9,
+      `${((slow.progress - p0) / normalStep).toFixed(3)} 倍`
+    );
+  }
+
+  // ── 10：蜜糖時間 ──
+  {
+    const state = streak(C.sweetTimeAt);
+    check(`連對 ${C.sweetTimeAt} 個換到蜜糖時間`, state.sweetActive === true, JSON.stringify({ sweetActive: state.sweetActive }));
+    const plain = createBattle({ words: W(5), seed: 1, difficulty: 'normal' });
+    check(
+      '這個字的時間真的加倍',
+      Math.abs(state.crossMs - plain.crossMs * C.sweetTimeFactor) < 1e-9,
+      `${state.crossMs}ms vs 平常 ${plain.crossMs}ms`
+    );
+    check('要打的字母數沒有變少', state.target === 'cat', state.target);
+
+    // 只加倍一個字，下一個字回到正常
+    for (const ch of state.target) applyAction(state, { kind: 'letter', ch });
+    check('下一個字回到正常時間', Math.abs(state.crossMs - plain.crossMs) < 1e-9, `${state.crossMs}ms`);
+  }
+
+  // ── 15：狂蜂狀態 ──
+  {
+    const state = streak(C.frenzyAt);
+    check(`連對 ${C.frenzyAt} 個發動狂蜂`, state.frenzyMs === C.frenzyMs, `${state.frenzyMs}ms`);
+
+    /*
+     * 擊退三倍。
+     *
+     * 要先讓敵人走遠一點再量：擊退量（93ms）比一個邏輯步的推進（8.3ms）大得多，
+     * 敵人還在起點時兩邊都會被夾在 0，量出來的比例是 0 而不是 3。
+     */
+    const advanceTo = (st, target) => {
+      for (let i = 0; i < 4000 && st.progress < target && st.status === 'running'; i += 1) {
+        stepBattle(st);
+      }
+    };
+
+    const plain = createBattle({ words: W(5), seed: 1, difficulty: 'normal' });
+    advanceTo(plain, 0.2);
+    const pBefore = plain.progress;
+    applyAction(plain, { kind: 'letter', ch: 'c' });
+    const plainKnock = pBefore - plain.progress;
+
+    advanceTo(state, 0.2);
+    const fBefore = state.progress;
+    applyAction(state, { kind: 'letter', ch: 'c' });
+    const frenzyKnock = fBefore - state.progress;
+    check(
+      '狂蜂期間擊退三倍',
+      Math.abs(frenzyKnock / plainKnock - C.frenzyKnockbackFactor) < 1e-6,
+      `${(frenzyKnock / plainKnock).toFixed(3)} 倍`
+    );
+
+    // 蜂蜜兩倍
+    const h0 = state.honey;
+    applyAction(state, { kind: 'letter', ch: 'a' });
+    check(
+      '狂蜂期間蜂蜜兩倍',
+      state.honey - h0 === BALANCE.honey.perCorrectLetter * C.frenzyHoneyFactor,
+      `+${state.honey - h0}`
+    );
+  }
+
+  // ── 效果會過期 ──
+  {
+    const state = streak(C.dashAt);
+    const steps = Math.ceil(C.dashMs / BALANCE.logicStepMs) + 2;
+    for (let i = 0; i < steps && state.status === 'running'; i += 1) stepBattle(state);
+    check('衝刺會過期', state.dashMs === 0, `${state.dashMs}ms`);
+  }
+
+  /*
+   * 打錯就歸零。
+   *
+   * 設計書：「連續打對且不失誤時累積，打錯歸零。」程式是在打錯的「當下」
+   * 就歸零，不是等那個字打完才算——所以連到 4 再打錯，會直接掉回 0，
+   * 而不是停在 4。這裡把那個行為釘住。
+   */
+  {
+    const state = streak(C.dashAt - 1);
+    check('先連到 4', state.combo === C.dashAt - 1, `combo ${state.combo}`);
+    applyAction(state, { kind: 'letter', ch: 'z' }); // 打錯
+    check('打錯的當下連擊就歸零', state.combo === 0, `combo ${state.combo}`);
+    for (const ch of state.target) applyAction(state, { kind: 'letter', ch });
+    check('那個字打完也只從 1 重新算', state.combo === 0, `combo ${state.combo}`);
+    check('所以沒有發動衝刺', state.dashMs === 0, `${state.dashMs}ms`);
+  }
+
+  // ── 15 之後每 5 再觸發一次 ──
+  {
+    const state = streak(C.frenzyAt + C.frenzyRepeatEvery);
+    check(
+      `連到 ${C.frenzyAt + C.frenzyRepeatEvery} 再觸發一次狂蜂`,
+      state.frenzyMs === C.frenzyMs,
+      `${state.frenzyMs}ms`
+    );
   }
 }
 

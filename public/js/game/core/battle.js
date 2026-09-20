@@ -26,7 +26,9 @@ export const EV = {
   COMBO_UP: 8,
   COMBO_RESET: 9,
   LISTEN: 10,
-  BATTLE_END: 11
+  BATTLE_END: 11,
+  /* Combo 里程碑：a = 第幾階（1 衝刺 / 2 蜜糖 / 3 狂蜂） */
+  COMBO_BONUS: 12
 };
 
 export const EV_NAME = Object.fromEntries(Object.entries(EV).map(([k, v]) => [v, k]));
@@ -113,6 +115,15 @@ export function createBattle({
     progress: 0, // 敵人推進 0~1，到 1 就抵達蜂巢
     crossMs: 0,
 
+    /*
+     * Combo 效果的剩餘時間（毫秒）。全部用邏輯步扣，不看真實時間——
+     * 看真實時間的話重播就不會一致，模擬器也不可信。
+     */
+    dashMs: 0, // 蜂群衝刺：敵人減速
+    frenzyMs: 0, // 狂蜂狀態：擊退與蜂蜜加成
+    sweetNext: false, // 下一個字要不要套蜜糖時間
+    sweetActive: false, // 目前這個字是不是蜜糖時間（給畫面看）
+
     // 統計
     stats: {
       correctLetters: 0,
@@ -147,7 +158,51 @@ function startNextWord(state) {
   state.cleanWord = true;
   state.progress = 0;
   state.crossMs = crossMsFor(state.target.length, state.difficulty);
+  /*
+   * 蜜糖時間：下一個單字的時間加倍。
+   * 在這裡套用而不是在觸發當下，是因為觸發時當前那個字已經在跑了——
+   * 設計書寫的是「下一個單字」。
+   */
+  state.sweetActive = state.sweetNext;
+  if (state.sweetNext) {
+    state.crossMs *= BALANCE.combo.sweetTimeFactor;
+    state.sweetNext = false;
+  }
   emit(state, EV.WORD_START, wi);
+}
+
+/** 狂蜂狀態期間擊退三倍。 */
+function knockbackFactor(state) {
+  return state.frenzyMs > 0 ? BALANCE.combo.frenzyKnockbackFactor : 1;
+}
+
+/** 狂蜂狀態期間蜂蜜兩倍。 */
+function honeyFactor(state) {
+  return state.frenzyMs > 0 ? BALANCE.combo.frenzyHoneyFactor : 1;
+}
+
+/**
+ * Combo 到門檻時發動效果。
+ *
+ * 三個效果都只讓「這一局更好打」，沒有任何一個會減少要打的字母數——
+ * 爽度可以用時間換，學習次數不能折抵（見 balance.js 的說明）。
+ */
+function applyComboMilestone(state) {
+  const c = BALANCE.combo;
+  if (state.combo === c.dashAt) {
+    state.dashMs = c.dashMs;
+    emit(state, EV.COMBO_BONUS, 1, state.combo);
+    return;
+  }
+  if (state.combo === c.sweetTimeAt) {
+    state.sweetNext = true;
+    emit(state, EV.COMBO_BONUS, 2, state.combo);
+    return;
+  }
+  if (state.combo >= c.frenzyAt && (state.combo - c.frenzyAt) % c.frenzyRepeatEvery === 0) {
+    state.frenzyMs = c.frenzyMs;
+    emit(state, EV.COMBO_BONUS, 3, state.combo);
+  }
 }
 
 /** 把敵人往前推 ms 毫秒的距離（打錯、重聽的代價都走這裡）。 */
@@ -157,14 +212,17 @@ function pushEnemy(state, ms) {
 
 function killWord(state) {
   const len = state.target.length;
-  state.honey += BALANCE.honey.perKill;
-  if (len >= BALANCE.honey.longWordFrom) state.honey += BALANCE.honey.longWordBonus;
+  const hf = honeyFactor(state);
+  state.honey += BALANCE.honey.perKill * hf;
+  if (len >= BALANCE.honey.longWordFrom) state.honey += BALANCE.honey.longWordBonus * hf;
   state.stats.wordsKilled += 1;
 
   if (state.cleanWord) {
     state.combo += 1;
     if (state.combo > state.maxCombo) state.maxCombo = state.combo;
     emit(state, EV.COMBO_UP, state.combo);
+    // 里程碑要在 startNextWord 之前結算，蜜糖時間才套得到下一個字
+    applyComboMilestone(state);
   }
 
   emit(state, EV.WORD_KILLED, state.wordIndex, len);
@@ -205,7 +263,14 @@ export function stepBattle(state) {
 
   state.tick += 1;
   state.timeMs += BALANCE.logicStepMs;
-  state.progress += BALANCE.logicStepMs / state.crossMs;
+
+  // Combo 效果倒數
+  if (state.dashMs > 0) state.dashMs = Math.max(0, state.dashMs - BALANCE.logicStepMs);
+  if (state.frenzyMs > 0) state.frenzyMs = Math.max(0, state.frenzyMs - BALANCE.logicStepMs);
+
+  // 蜂群衝刺期間敵人走得慢一半
+  const speed = state.dashMs > 0 ? BALANCE.combo.dashSpeedFactor : 1;
+  state.progress += (BALANCE.logicStepMs * speed) / state.crossMs;
 
   if (state.progress >= 1) {
     state.progress = 1;
@@ -255,9 +320,9 @@ export function applyAction(state, action) {
       if (consumed > 0) {
         state.typed += consumed;
         state.stats.correctLetters += 1;
-        state.honey += BALANCE.honey.perCorrectLetter;
-        // 擊退：往回推，但不會推到畫面外
-        state.progress -= knockbackMsFor(state.difficulty) / state.crossMs;
+        state.honey += BALANCE.honey.perCorrectLetter * honeyFactor(state);
+        // 擊退：往回推，但不會推到畫面外。狂蜂狀態期間三倍
+        state.progress -= (knockbackMsFor(state.difficulty) * knockbackFactor(state)) / state.crossMs;
         if (state.progress < 0) state.progress = 0;
         emit(state, EV.LETTER_OK, state.typed, state.target.length);
 
@@ -342,6 +407,10 @@ export function fingerprint(state) {
   mix(state.wordIndex + 1);
   mix(state.typed);
   mix(state.cleanWord ? 1 : 0);
+  // Combo 效果會改變結果，所以也要進指紋，否則重播比對會放過它們
+  mixFloat(state.dashMs);
+  mixFloat(state.frenzyMs);
+  mix(state.sweetNext ? 1 : 0);
   mixFloat(state.progress);
   mixFloat(state.timeMs);
   mix(state.status.length);
@@ -371,6 +440,11 @@ export function snapshot(state) {
     target: state.target,
     typed: state.typed,
     remaining: state.queue.length - state.queueHead,
+    // Combo 效果的現況，給畫面與測試看
+    dashMs: Math.round(state.dashMs),
+    frenzyMs: Math.round(state.frenzyMs),
+    sweetNext: state.sweetNext,
+    sweetActive: state.sweetActive,
     stats: { ...state.stats },
     fingerprint: fingerprint(state)
   };

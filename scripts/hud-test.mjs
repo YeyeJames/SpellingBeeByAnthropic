@@ -257,6 +257,50 @@ console.log('\n6.5) 含空白的詞條要打得完');
   await context.close();
 }
 
+/* ── 6.8 Combo 三階的畫面 ───────────────────────────────── */
+/*
+ * 效果如果只改數值、畫面不講，他只會覺得「這次好像比較好打」，
+ * 不會知道是自己連對五個換來的——而「我做對了才有的」正是獎勵的意義。
+ */
+console.log('\n6.8) Combo 三階看得見');
+{
+  const { context, page } = await openCalibrated();
+  await page.goto(`${BASE}/game?group=w18&n=200&order=sequential&show=1&difficulty=easy`, {
+    waitUntil: 'domcontentloaded'
+  });
+  await page.waitForFunction(() => window.__spellbee && window.__spellbee.ready, null, { timeout: 15000 });
+
+  // 連對五個字
+  for (let i = 0; i < 5; i += 1) {
+    const t = await page.evaluate(() => window.__spellbee.state()?.target);
+    if (!t) break;
+    for (const ch of t) await page.keyboard.press(ch);
+    await page.waitForTimeout(60);
+  }
+  await page.waitForTimeout(150);
+
+  const shown = await page.evaluate(() => ({
+    combo: window.__spellbee.state().combo,
+    dashMs: window.__spellbee.state().dashMs,
+    banner: window.__spellbeeScene.bonusText.text,
+    bannerAlpha: window.__spellbeeScene.bonusText.alpha,
+    label: window.__spellbeeScene.effectLabel.text
+  }));
+  check('連擊到 5', shown.combo === 5, String(shown.combo));
+  check('效果真的發動了', shown.dashMs > 0, `${shown.dashMs}ms`);
+  check('橫幅說出是什麼效果', shown.banner.includes('蜂群衝刺'), shown.banner);
+  check('橫幅看得見', shown.bannerAlpha > 0.5, String(shown.bannerAlpha));
+  check('效果進行中有常駐標示', shown.label.includes('衝刺中'), shown.label || '（空的）');
+
+  // 效果結束後標示要收掉，不然他會以為還在加成
+  await page.waitForFunction(() => window.__spellbee.state().dashMs === 0, null, { timeout: 10000 });
+  await page.waitForTimeout(200);
+  const after = await page.evaluate(() => window.__spellbeeScene.effectLabel.text);
+  check('效果結束後標示收掉', after === '', after || '（空的）');
+
+  await context.close();
+}
+
 /* ── 7. 真人錄音 ────────────────────────────────────────── */
 /*
  * 孩子聽到某個字唸錯，自己到練習模式錄了一段。遊戲裡如果還是用機器語音唸，

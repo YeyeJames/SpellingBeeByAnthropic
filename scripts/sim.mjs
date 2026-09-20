@@ -17,7 +17,7 @@
 
 import { createRequire } from 'node:module';
 import { BALANCE } from '../public/js/game/core/balance.js';
-import { createBattle, applyAction, stepBattle, clearEvents } from '../public/js/game/core/battle.js';
+import { createBattle, applyAction, stepBattle, clearEvents, EV } from '../public/js/game/core/battle.js';
 import { createRng } from '../public/js/game/core/rng.js';
 import { createPlayerModel, pollPlayer, PLAYER_PRESETS } from '../public/js/game/core/player-model.js';
 
@@ -58,21 +58,36 @@ const WORDS = allWords()
   .filter((w) => w.typeable)
   .slice(0, WORD_COUNT);
 
-/** 跑一場，回傳結果。 */
+/**
+ * 跑一場，回傳結果。
+ *
+ * 順便數 Combo 三階各觸發幾次。做了一個孩子實際上看不到的效果等於沒做，
+ * 而「會不會觸發」不是用想的，是要數的。
+ */
 function runBattle({ seed, preset, difficulty }) {
   const state = createBattle({ words: WORDS, seed, difficulty, order: 'sequential' });
   const model = createPlayerModel(createRng((seed ^ 0x5bf03635) >>> 0), preset);
+  const bonuses = [0, 0, 0];
+
+  const countBonuses = () => {
+    for (let i = 0; i < state.evCount; i += 1) {
+      const ev = state.ev[i];
+      if (ev.type === EV.COMBO_BONUS) bonuses[ev.a - 1] += 1;
+    }
+  };
 
   const maxTicks = 120 * 60 * 20; // 20 分鐘的保險絲
   while (state.status === 'running' && state.tick < maxTicks) {
     const action = pollPlayer(model, state);
     if (action) applyAction(state, action);
+    countBonuses();
     clearEvents(state);
     if (state.status !== 'running') break;
     stepBattle(state);
+    countBonuses();
     clearEvents(state);
   }
-  return state;
+  return { state, bonuses };
 }
 
 function percentile(sorted, p) {
@@ -85,15 +100,23 @@ function simulate(preset, difficulty) {
   let killed = 0;
   let missed = 0;
   let wrong = 0;
+  let maxCombo = 0;
+  const comboTiers = [0, 0, 0]; // 三階各觸發幾次（全部場次加總）
+  const comboRuns = [0, 0, 0]; // 有幾場至少觸發過一次
   const durations = [];
 
   for (let i = 0; i < RUNS; i += 1) {
-    const state = runBattle({ seed: 10000 + i, preset, difficulty });
+    const { state, bonuses } = runBattle({ seed: 10000 + i, preset, difficulty });
     if (state.status !== 'won') lost += 1;
     killed += state.stats.wordsKilled;
     missed += state.stats.wordsMissed;
     wrong += state.stats.wrongLetters;
     durations.push(state.timeMs / 1000);
+    maxCombo += state.maxCombo;
+    for (let t = 0; t < 3; t += 1) {
+      comboTiers[t] += bonuses[t];
+      if (bonuses[t] > 0) comboRuns[t] += 1;
+    }
   }
   durations.sort((a, b) => a - b);
 
@@ -106,7 +129,11 @@ function simulate(preset, difficulty) {
     avgMissed: missed / RUNS,
     avgWrong: wrong / RUNS,
     medianSec: percentile(durations, 50),
-    p90Sec: percentile(durations, 90)
+    p90Sec: percentile(durations, 90),
+    avgMaxCombo: maxCombo / RUNS,
+    // 每階「有觸發過的場次比例」——他實際上看不看得到這些效果
+    comboSeen: comboRuns.map((n) => n / RUNS),
+    comboPerRun: comboTiers.map((n) => n / RUNS)
   };
 }
 
@@ -241,6 +268,23 @@ for (const [key, exp] of Object.entries(EXPECTED)) {
   console.log(
     `  [${ok ? 'PASS' : 'FAIL'}] ${key.padEnd(14)} 失敗率 ${(r.failRate * 100).toFixed(1)}%` +
       `（預期 ${(exp.min * 100).toFixed(0)}~${(exp.max * 100).toFixed(0)}%）　${exp.note}`
+  );
+}
+
+/*
+ * Combo 三階實際觸發的頻率。
+ *
+ * 這不是通過與否的判準（設計書沒有訂數字），但一定要印出來：
+ * 做了一個孩子看不到的效果等於沒做，而「會不會觸發」是要數的，不是用想的。
+ */
+console.log('\nCombo 三階觸發率（有觸發過的場次比例）');
+console.log('手速     難度      最高連擊  ⑤衝刺   ⑩蜜糖   ⑮狂蜂');
+console.log('─'.repeat(58));
+for (const r of results) {
+  console.log(
+    `${r.preset.padEnd(8)} ${r.difficulty.padEnd(9)} ` +
+      `${r.avgMaxCombo.toFixed(1).padStart(7)} ` +
+      r.comboSeen.map((v) => `${(v * 100).toFixed(0).padStart(6)}%`).join(' ')
   );
 }
 
