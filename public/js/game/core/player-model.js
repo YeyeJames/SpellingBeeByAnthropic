@@ -8,11 +8,20 @@
  * 跟亂數一樣，它吃一個可設種子的 rng，所以同一個種子會打出一模一樣的一場。
  */
 
-/** 三種預設手速，對應難度校準想分辨的那三段。 */
+/**
+ * 三種預設手速，對應難度校準想分辨的那三段。
+ *
+ * listenDelayMs 是「聽完才開始打」的那段空白，不能省。
+ *
+ * 一開始的模型是換字之後隔一個按鍵間隔就開始打，等於把時間公式裡
+ * 給聽力用的 3 秒當成白送的緩衝——模擬出來每個手速在每個難度都零失誤通關，
+ * 看起來像平衡很好，其實是模型把玩家算得太強了。
+ * 真實情況是 TTS 唸完一個字就要 0.7~1.2 秒，小孩還要反應一下才動手。
+ */
 export const PLAYER_PRESETS = {
-  slow: { msPerLetter: 900, jitterMs: 300, errorRate: 0.1 },
-  medium: { msPerLetter: 550, jitterMs: 180, errorRate: 0.06 },
-  fast: { msPerLetter: 320, jitterMs: 100, errorRate: 0.03 }
+  slow: { msPerLetter: 900, jitterMs: 300, errorRate: 0.1, listenDelayMs: 1600 },
+  medium: { msPerLetter: 550, jitterMs: 180, errorRate: 0.06, listenDelayMs: 1200 },
+  fast: { msPerLetter: 320, jitterMs: 100, errorRate: 0.03, listenDelayMs: 900 }
 };
 
 export function createPlayerModel(rng, preset = 'medium') {
@@ -26,11 +35,11 @@ export function createPlayerModel(rng, preset = 'medium') {
   };
 }
 
-function scheduleNext(model, nowMs) {
+function scheduleNext(model, nowMs, baseMs) {
   const { msPerLetter, jitterMs } = model.cfg;
-  // 對稱抖動，均值仍是 msPerLetter
+  // 對稱抖動，均值仍是 baseMs（預設就是每字母間隔）
   const jitter = (model.rng.next() * 2 - 1) * jitterMs;
-  model.nextKeyAtMs = nowMs + Math.max(60, msPerLetter + jitter);
+  model.nextKeyAtMs = nowMs + Math.max(60, (baseMs ?? msPerLetter) + jitter);
 }
 
 function wrongLetterFor(model, expected) {
@@ -49,10 +58,10 @@ function wrongLetterFor(model, expected) {
 export function pollPlayer(model, state) {
   if (state.status !== 'running') return null;
 
-  // 換了新的字：等一段「聽的時間」再開始打，不要一出現就狂敲
+  // 換了新的字：先花時間聽完，才開始打
   if (state.wordIndex !== model.lastWordIndex) {
     model.lastWordIndex = state.wordIndex;
-    scheduleNext(model, state.timeMs);
+    scheduleNext(model, state.timeMs, model.cfg.listenDelayMs);
     return null;
   }
 

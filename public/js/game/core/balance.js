@@ -25,20 +25,30 @@ export const BALANCE = {
   /*
    * 敵人橫越畫面的時間 = baseMs + perLetterMs × 字母數。
    *
-   * 時間跟著單字長度走，不是固定值：cat 給 4.8 秒、environment 給 9.6 秒。
-   * 用固定值的話短字太鬆、長字必死，小孩會學到「看到長字就放棄」。
+   * 時間跟著單字長度走，不是固定值。用固定值的話短字太鬆、長字必死，
+   * 小孩會學到「看到長字就放棄」。以 account（7 字母）為例，
+   * 三個難度分別是 11.0 / 6.7 / 4.0 秒。
+   *
+   * 這組數字不是憑感覺定的，是 scripts/sim.mjs 掃描 108 組候選值跑出來的
+   * （每組 9 種手速×難度組合、每格 120 場）。原本三個難度共用 3000ms 的
+   * baseMs，結果難度之間拉不開：快手速在三個難度都零失誤，因為光是那 3 秒
+   * 就足夠聽完並開始打。讓 baseMs 也跟著難度縮短之後才分得開。
+   *
+   * 目前的失敗率（每格 200 場）：
+   *   slow/easy 11.7%　medium/normal 20.0%　fast/hard 23.3%
+   *   slow/hard 100%（明顯不相稱，這正是 1.6 難度校準要解決的）
    */
   difficulty: {
-    easy: { baseMs: 3000, perLetterMs: 900 },
-    normal: { baseMs: 3000, perLetterMs: 600 },
-    hard: { baseMs: 3000, perLetterMs: 400 }
+    easy: { baseMs: 3600, perLetterMs: 1050 },
+    normal: { baseMs: 2400, perLetterMs: 620 },
+    hard: { baseMs: 1300, perLetterMs: 380 }
   },
   defaultDifficulty: 'normal',
 
-  // 打對一個字母把敵人推回去多少：該難度「一個字母份」的 20%。
+  // 打對一個字母把敵人推回去多少：該難度「一個字母份」的 15%。
   // 比例刻意壓低——擊退如果能完全抵銷逼近，時間限制就形同虛設，
   // 但完全沒有擊退又感覺不到「我打對了」。
-  knockbackRatioPerLetter: 0.2,
+  knockbackRatioPerLetter: 0.15,
 
   // 打錯一個字母，敵人前進相當於 1 秒的距離
   wrongLetterPenaltyMs: 1000,

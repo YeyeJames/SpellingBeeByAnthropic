@@ -28,6 +28,18 @@ const HIT_STOP_MS = 80;
 /* 敵人被擊中的擠壓與閃白時間 */
 const ENEMY_HIT_MS = 130;
 
+/*
+ * 危險區。
+ *
+ * 設計要求「壓力是看得見的：是敵人在逼近，不是一條抽象的進度條」。
+ * 但只有位置在動的話，眼睛很容易到最後一刻才注意到——尤其小孩的注意力
+ * 都在鍵盤上。所以過了這個比例之後，畫面本身要開始警告他。
+ */
+const DANGER_AT = 0.72;
+/* 敵人由遠而近的透視縮放：遠的時候小一點，逼近時脹大 */
+const ENEMY_SCALE_FAR = 0.82;
+const ENEMY_SCALE_NEAR = 1.2;
+
 const ENEMY_BASE_COLOR = 0x2b3350;
 const ENEMY_FLASH_COLOR = 0xffffff;
 
@@ -57,6 +69,7 @@ export function createBattleScene(ctx) {
       this.lastWordIndex = -2;
       this.lastStatus = '';
       this.lastShowWord = null;
+      this.lastDanger = null;
       // 特效用的計時器（毫秒，-1 代表沒在跑）
       this.enemyHitT = -1;
       this.hitStopUntil = 0;
@@ -80,6 +93,8 @@ export function createBattleScene(ctx) {
        */
       this.hiveGlow = this.add.circle(0, 0, 62, 0xf5b301, 0.12);
       this.hive = this.add.ellipse(0, 0, 84, 84, 0xf5b301);
+      // 危險線：敵人越過它就代表快到家了
+      this.dangerLine = this.add.rectangle(0, 0, 3, 120, 0xff5d5d, 0).setOrigin(0.5);
 
       // 敵人包成 Container：移動容器時裡面的裂痕必然跟著走
       this.enemy = this.add.container(0, 0);
@@ -153,6 +168,8 @@ export function createBattleScene(ctx) {
       this.hiveX = width * LANE_LEFT;
       this.hive.setPosition(this.hiveX, this.laneY);
       this.hiveGlow.setPosition(this.hiveX, this.laneY);
+      this.dangerX = Phaser.Math.Linear(width * LANE_RIGHT, width * LANE_LEFT, DANGER_AT);
+      this.dangerLine.setPosition(this.dangerX, this.laneY).setSize(3, height * 0.16);
 
       const hudY = height * 0.12;
       this.hpDots.forEach((dot, i) => dot.setPosition(width * 0.06 + i * 30, hudY));
@@ -321,6 +338,33 @@ export function createBattleScene(ctx) {
       const width = this.scale.width;
       const x = Phaser.Math.Linear(width * LANE_RIGHT, width * LANE_LEFT, state.progress);
       this.enemy.setPosition(x, this.laneY);
+
+      /*
+       * 由遠而近的透視放大。
+       *
+       * 位置變化在寬螢幕上其實不太明顯——930px 的跑道，逼近一秒也只移動幾十像素。
+       * 體積變大是更直覺的「它要到了」，而且縮放放在容器上，
+       * 不會跟本體的受擊擠壓打架（兩者相乘剛好）。
+       */
+      this.enemy.setScale(
+        Phaser.Math.Linear(ENEMY_SCALE_FAR, ENEMY_SCALE_NEAR, state.progress)
+      );
+
+      /*
+       * 越過危險線之後，畫面本身開始警告。
+       * 小孩的眼睛都在鍵盤上，只靠位置移動很容易到最後一刻才發現。
+       */
+      if (state.progress >= DANGER_AT) {
+        const k = (state.progress - DANGER_AT) / (1 - DANGER_AT);
+        // 越近閃得越快：用遊戲時間當相位，暫停時也會跟著停
+        const pulse = 0.35 + 0.35 * Math.sin(state.timeMs * (0.008 + k * 0.02));
+        this.dangerLine.setFillStyle(0xff5d5d, 0.25 + k * 0.45);
+        this.hiveGlow.setFillStyle(0xff5d5d, 0.1 + pulse * k * 0.35);
+      } else if (this.lastDanger !== false) {
+        this.dangerLine.setFillStyle(0xff5d5d, 0);
+        this.hiveGlow.setFillStyle(0xf5b301, 0.12);
+      }
+      this.lastDanger = state.progress >= DANGER_AT;
 
       this.hpDots.forEach((dot, i) => dot.setFillStyle(i < state.hp ? 0xf5b301 : 0x334155));
 

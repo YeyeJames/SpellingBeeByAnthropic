@@ -17,7 +17,9 @@
     "test": "node scripts/determinism.mjs",
     "test:input": "node scripts/input-test.mjs",
     "test:soak": "node scripts/soak-test.mjs",
-    "test:audio": "node scripts/audio-test.mjs"
+    "test:audio": "node scripts/audio-test.mjs",
+    "sim": "node scripts/sim.mjs",
+    "test:parity": "node scripts/parity-test.mjs"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
