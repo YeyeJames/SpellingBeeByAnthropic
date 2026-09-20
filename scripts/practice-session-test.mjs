@@ -41,7 +41,20 @@ const { ObjectId } = require('mongodb');
 
 const USER_ID = new ObjectId();
 const store = {
-  users: [{ _id: USER_ID, nickname: '測試', coins: 0, stats: { currentStreak: 0 } }],
+  users: [
+    {
+      _id: USER_ID,
+      nickname: '測試',
+      coins: 0,
+      stats: {
+        currentStreak: 0,
+        bestStreak: 0,
+        totalWordsPracticed: 0,
+        totalCorrect: 0,
+        totalIncorrect: 0
+      }
+    }
+  ],
   wordAudio: [],
   practiceSessions: [],
   wordProgress: []
@@ -55,6 +68,29 @@ function matches(doc, query) {
   });
 }
 
+/** 'stats.coins' 這種帶點的路徑要寫得進去，計分用的更新全是這種形狀。 */
+function setPath(doc, path, value) {
+  const parts = path.split('.');
+  let node = doc;
+  for (let i = 0; i < parts.length - 1; i += 1) {
+    if (typeof node[parts[i]] !== 'object' || node[parts[i]] === null) node[parts[i]] = {};
+    node = node[parts[i]];
+  }
+  node[parts[parts.length - 1]] = value;
+}
+
+function getPath(doc, path) {
+  return path.split('.').reduce((node, key) => (node == null ? undefined : node[key]), doc);
+}
+
+function applyUpdate(doc, update) {
+  for (const [path, value] of Object.entries(update.$set || {})) setPath(doc, path, value);
+  for (const [path, delta] of Object.entries(update.$inc || {})) {
+    setPath(doc, path, (Number(getPath(doc, path)) || 0) + delta);
+  }
+  return doc;
+}
+
 function fakeCollection(name) {
   const rows = store[name] || (store[name] = []);
   return {
@@ -65,7 +101,22 @@ function fakeCollection(name) {
       rows.push({ ...doc, _id });
       return { insertedId: _id };
     },
-    updateOne: async () => ({ matchedCount: 0 }),
+    /*
+     * $set / $inc 要真的生效，否則計分那條路徑等於沒測到——
+     * 「答對了但金幣沒加」正是這裡出錯時的症狀。
+     */
+    updateOne: async (query = {}, update = {}, opts = {}) => {
+      const hit = rows.find((d) => matches(d, query));
+      if (hit) {
+        applyUpdate(hit, update);
+        return { matchedCount: 1, modifiedCount: 1 };
+      }
+      if (opts.upsert) {
+        rows.push(applyUpdate({ ...query, _id: new ObjectId() }, update));
+        return { matchedCount: 0, upsertedCount: 1 };
+      }
+      return { matchedCount: 0 };
+    },
     deleteOne: async () => ({ deletedCount: 0 }),
     createIndex: async () => 'ok'
   };
@@ -240,7 +291,103 @@ console.log('\n7) 哪些字有真人錄音');
   srv2.close();
 }
 
-console.log('\n8) 舊的 part= 還能用');
+/* ── 7.8 答案判定 ───────────────────────────────────────── */
+/*
+ * 分隔符不算數。聽寫的時候他看不到單字，"alarm clock" 那裡到底有沒有空白
+ * 不是拼字能力的問題，是用猜的。遊戲那邊已經不強制，練習這邊如果還嚴格，
+ * 同一個孩子、同一個字會在遊戲裡算對、在練習裡算錯——而練習才是影響
+ * 金幣與統計的那一邊。
+ */
+console.log('\n8) 答案判定');
+{
+  const { isAnswerCorrect } = await import('../public/js/shared/answer-match.js');
+
+  const CASES = [
+    ['alarm clock', 'alarm clock', true, '照打'],
+    ['alarm clock', 'alarmclock', true, '沒打空白'],
+    ['alarm clock', 'ALARM CLOCK', true, '大寫'],
+    ['alarm clock', '  alarm clock  ', true, '前後有空白'],
+    ['alarm clock', 'alarm-clock', true, '打成連字號'],
+    ['high-pitched', 'highpitched', true, '沒打連字號'],
+    ['high-pitched', 'high pitched', true, '連字號打成空白'],
+    ['a couple of', 'acoupleof', true, '整串連在一起'],
+    ['alarm clock', 'alarmclok', false, '拼錯一個字母'],
+    ['alarm clock', 'alarm', false, '只打一半'],
+    ['cat', '', false, '什麼都沒打'],
+    ['cat', 'cats', false, '多一個字母']
+  ];
+
+  for (const [target, answer, expected, why] of CASES) {
+    const got = isAnswerCorrect(answer, target);
+    check(`${why}：「${answer}」→ ${expected ? '對' : '錯'}`, got === expected, `判成${got ? '對' : '錯'}`);
+  }
+
+  // 空題目不能因為什麼都沒打就被判對
+  check('題目是空的一律算錯', isAnswerCorrect('', '') === false);
+
+  /*
+   * 前端與伺服器必須用同一份規則。
+   * 兩邊各寫一次的話，症狀是畫面說答對了、金幣卻沒加——最難解釋的那種。
+   */
+  const fs = require('node:fs');
+  const clientSrc = fs.readFileSync('public/js/practice.js', 'utf8');
+  const serverSrc = fs.readFileSync('server/routes/practice.js', 'utf8');
+  check(
+    '前端用的是共用的判定規則',
+    clientSrc.includes("from './shared/answer-match.js'") && clientSrc.includes('isAnswerCorrect('),
+    ''
+  );
+  check(
+    '伺服器用的是同一個檔案',
+    serverSrc.includes('public/js/shared/answer-match.js') && serverSrc.includes('isAnswerCorrect('),
+    ''
+  );
+  check(
+    '兩邊都沒有自己再寫一份比對',
+    !clientSrc.includes('normalizeAnswer(userAnswer) ===') &&
+      !serverSrc.includes('normalizeAnswer(userAnswer) ==='),
+    ''
+  );
+}
+
+/* ── 8.5 真的送一次作答進去 ─────────────────────────────── */
+/*
+ * 上面驗的是判定規則本身。這一段走完整條路：POST /attempt → 伺服器重新判定
+ * → 記作答 → 加金幣。這也是唯一能證明「伺服器真的載得到那份共用規則」的方式，
+ * 路徑寫錯的話只有跑起來才會知道。
+ */
+console.log('\n9) 送一次作答');
+{
+  const attempt = (body) =>
+    fetch(`${BASE}/api/practice/attempt`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-test-user': USER_ID.toString() },
+      body: JSON.stringify(body)
+    }).then(async (r) => ({ status: r.status, body: await r.json() }));
+
+  // 沒打空白，伺服器也要判對——這正是這次要改的行為
+  const a = await attempt({ opId: 'op-1', wordId: 'w04-alarm-clock', userAnswer: 'alarmclock' });
+  check('伺服器判對（沒打空白）', a.status === 200 && a.body.correct === true, JSON.stringify(a.body).slice(0, 120));
+  check('有給金幣', a.body.coinsAwarded > 0, String(a.body.coinsAwarded));
+  check('回傳正確拼法給畫面揭曉', a.body.correctSpelling === 'alarm clock', a.body.correctSpelling);
+
+  const user = store.users[0];
+  check('金幣真的加到使用者身上', user.coins === a.body.coinsAwarded, `${user.coins}`);
+  check('連勝加一', user.stats.currentStreak === 1, String(user.stats.currentStreak));
+
+  // 同一個 opId 重送不能重複計分（背景佇列一定會重試）
+  const again = await attempt({ opId: 'op-1', wordId: 'w04-alarm-clock', userAnswer: 'alarmclock' });
+  check('重送同一筆不重複計分', again.body.duplicate === true && again.body.coinsAwarded === 0, JSON.stringify(again.body).slice(0, 80));
+  check('金幣沒有再加', store.users[0].coins === a.body.coinsAwarded, String(store.users[0].coins));
+
+  // 拼錯還是錯，一個字母都沒放水
+  const wrong = await attempt({ opId: 'op-2', wordId: 'w04-alarm-clock', userAnswer: 'alarmclok' });
+  check('拼錯判錯', wrong.body.correct === false, JSON.stringify(wrong.body).slice(0, 80));
+  check('拼錯不給金幣', wrong.body.coinsAwarded === 0, String(wrong.body.coinsAwarded));
+  check('連勝歸零', store.users[0].stats.currentStreak === 0, String(store.users[0].stats.currentStreak));
+}
+
+console.log('\n10) 舊的 part= 還能用');
 {
   const r = await startSession({ part: 1, order: 'sequential' });
   check('開得起來', r.status === 201, `${r.status} ${r.body.error || ''}`);

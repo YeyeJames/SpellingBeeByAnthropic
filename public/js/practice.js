@@ -7,6 +7,7 @@ import { loadPhaser } from './game/load-phaser.js';
 import { runPageInit } from './ui-status.js';
 import { initOutbox, enqueue, onApplied } from './outbox.js';
 import { readShared, writeShared, newId } from './local-store.js';
+import { isAnswerCorrect } from './shared/answer-match.js';
 
 const setupPanel = document.getElementById('setup-panel');
 const practicePanel = document.getElementById('practice-panel');
@@ -66,8 +67,6 @@ function warmUpGameEngine() {
  * 要練哪一組。清單由後端給（Part 1~4 是競賽單字，Week 1~10 是課本每週單字），
  * 這裡不自己寫死——以後加 Week 11 只要改資料。
  *
- * 練習模式不濾掉 "alarm clock" 這種含空白的詞條：那是打字遊戲的限制
- * （遊戲只收 a~z），練習是打在輸入框裡，而且課本考的就是整個詞條。
  */
 let groups = [];
 let selectedGroup = null;
@@ -245,10 +244,6 @@ function setToolsEnabled(enabled) {
   });
 }
 
-function normalizeAnswer(str) {
-  return (str || '').trim().toLowerCase();
-}
-
 /**
  * 在本地判定對錯並立即給畫面回饋，作答紀錄丟進背景佇列補送。
  *
@@ -265,7 +260,8 @@ function submitAnswer() {
   setToolsEnabled(false);
   stopSpeaking();
 
-  const correct = normalizeAnswer(userAnswer) === normalizeAnswer(word.english);
+  // 判定規則只有一份（shared/answer-match.js），伺服器用的是同一個檔案
+  const correct = isAnswerCorrect(userAnswer, word.english);
 
   // 用與伺服器相同的公式先算出金幣與連勝，讓畫面立刻有反應
   session.streak = correct ? session.streak + 1 : 0;

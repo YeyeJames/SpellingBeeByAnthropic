@@ -18,8 +18,22 @@ function shuffle(arr) {
   return copy;
 }
 
-function normalizeAnswer(str) {
-  return (str || '').trim().toLowerCase();
+/*
+ * 判定規則跟前端用同一個檔案。
+ *
+ * 前端會先在本地判定對錯給即時回饋，伺服器再自行重判一次（金幣與統計
+ * 以伺服器為準）。兩邊各寫一次的話遲早會不一致，而症狀是最難解釋的那種：
+ * 畫面說答對了，金幣卻沒加。所以規則只有一份，這裡動態載進來。
+ *
+ * 那個檔案是 ES module，CommonJS 只能用動態 import；載入結果快取起來，
+ * 不要每次作答都重新載。
+ */
+let answerMatchPromise = null;
+function answerMatch() {
+  if (!answerMatchPromise) {
+    answerMatchPromise = import('../../public/js/shared/answer-match.js');
+  }
+  return answerMatchPromise;
 }
 
 router.post('/session', async (req, res, next) => {
@@ -29,11 +43,6 @@ router.post('/session', async (req, res, next) => {
     const order = req.body.order === 'sequential' ? 'sequential' : 'random';
     const reviewOnly = !!req.body.reviewOnly;
 
-    /*
-     * 練習模式不濾掉含空白的詞條（"alarm clock"）。
-     * 那是打字遊戲的限制——遊戲只收 a~z；練習是打在輸入框裡，空白打得出來，
-     * 而且課本考的就是整個詞條。
-     */
     let candidates;
     let label;
     if (reviewOnly) {
@@ -99,7 +108,8 @@ router.post('/attempt', async (req, res, next) => {
     const word = await Word.getWordById(wordId);
     if (!word) return res.status(404).json({ error: '找不到這個單字' });
 
-    const correct = normalizeAnswer(userAnswer) === normalizeAnswer(word.english);
+    const { isAnswerCorrect } = await answerMatch();
+    const correct = isAnswerCorrect(userAnswer, word.english);
 
     // 先寫作答紀錄：萬一後續步驟失敗而前端重試，唯一索引會擋下重複計分
     try {
