@@ -18,6 +18,9 @@ import { installDebugApi } from './game/debug-api.js';
 import { createOverlay } from './game/overlay.js';
 import { createPerf, resetPerf } from './game/perf.js';
 import { createBattleScene } from './game/battle-scene.js';
+import { createSfx } from './game/sfx.js';
+import { createSoundBridge } from './game/sound-events.js';
+import { speakWord, speakSentence, stopSpeaking, listEnglishVoices } from './audio-player.js';
 
 const params = new URLSearchParams(location.search);
 
@@ -43,6 +46,8 @@ const ctx = {
   queue: createInputQueue(),
   // 測試用：人為讓遊戲有一段「不接受輸入」的空窗，驗證按鍵不會被吃掉
   blockedUntil: 0,
+  sfx: null,
+  soundBridge: null,
 
   getState: () => ctx.state,
   getLog: () => ctx.log,
@@ -55,6 +60,34 @@ const ctx = {
   getClockDropped: () => ctx.scene?.clock.droppedMs ?? 0,
   getEffectStats: () =>
     ctx.scene?.effects?.stats() ?? { stingers: 0, fragments: 0, splashes: 0, recycled: 0 },
+
+  /**
+   * 要不要把單字顯示在畫面上。
+   *
+   * 預設不顯示——這是聽寫遊戲，壓力應該來自敵人逼近而不是讀字。
+   * 但單字是唯一只存在於聲音裡的資訊，所以靜音、或這台裝置根本沒有
+   * 英文語音時就退回顯示文字，否則等於不能玩。?show=1 可以強制顯示
+   * （自動化測試靠它，無頭瀏覽器沒有安裝任何語音）。
+   */
+  shouldShowWord() {
+    if (params.get('show') === '1') return true;
+    if (ctx.sfx?.isMuted()) return true;
+    return !ctx.voicesAvailable;
+  },
+
+  /**
+   * 唸出目前這個字。沒有語音或靜音時什麼都不做——那兩種情況畫面會改成顯示文字。
+   * @param mode 'normal' | 'slow' | 'sentence'
+   */
+  speakCurrentWord(mode = 'normal') {
+    if (!ctx.voicesAvailable || ctx.sfx?.isMuted()) return;
+    const s = ctx.state;
+    if (!s || s.status !== 'running') return;
+    const word = ctx.words[s.wordIndex];
+    if (!word) return;
+    if (mode === 'sentence') speakSentence(word.exampleSentence || word.english);
+    else speakWord(word.english, { slow: mode === 'slow' });
+  },
 
   onSceneReady(scene) {
     ctx.scene = scene;
@@ -94,7 +127,7 @@ const ctx = {
     if (ctx.queue.size === 0) return 0;
     return drainInput(ctx.queue, (slot) => {
       if (!ctx.acceptingInput()) return false;
-      applyNow(slot, slot.t0);
+      applyNow(slot, slot.t0, true);
       return true;
     });
   },
@@ -125,10 +158,27 @@ const ctx = {
   }
 };
 
-function applyNow(action, t0) {
+/**
+ * 把動作套用到狀態，並立刻發聲。
+ *
+ * @param fromQueue 這個按鍵是頓挫期間排隊、現在才補上的嗎？
+ *
+ * 排隊補上的按鍵不列入延遲統計。它們被延後是設計好的行為（世界凍結時
+ * 不該把輸入打在看不見的畫面上），把那段等待算成「延遲」會讓數字看起來
+ * 像效能有問題，實際上量到的是頓挫本身的長度。它們另外計數，不會被藏起來。
+ */
+function applyNow(action, t0, fromQueue = false) {
   recordAction(ctx.log, ctx.state.tick, action);
   applyAction(ctx.state, action);
-  markApplied(ctx.latency, t0);
+  if (fromQueue) ctx.latency.deferred += 1;
+  else markApplied(ctx.latency, t0);
+  /*
+   * 聲音在這裡就發出去，不等下一個影格。
+   *
+   * 邏輯 120Hz、畫面 60Hz，等到影格開頭才發聲等於平白多吃半格到一格的延遲，
+   * 而聲音的預算只有 20ms——打擊音晚一點點，手感就散了。
+   */
+  ctx.soundBridge?.flush(ctx.state, fromQueue ? null : t0);
 }
 
 ctx.debug = installDebugApi(ctx);
@@ -149,6 +199,8 @@ function startBattle() {
   });
   ctx.paused = false;
   ctx.blockedUntil = 0;
+  stopSpeaking();
+  ctx.soundBridge?.reset();
   ctx.scene?.effects?.reset();
   clearInputQueue(ctx.queue);
   resetPerf(ctx.perf);
@@ -206,11 +258,35 @@ async function boot() {
     ctx.words = words.slice(0, limit);
     if (ctx.words.length === 0) throw new Error('單字庫是空的');
 
+    /*
+     * 語音清單在某些瀏覽器是非同步載入的，第一次讀會是空的。
+     * 等一小段再判斷，才不會誤以為這台裝置沒有語音而永遠顯示單字。
+     */
+    ctx.voicesAvailable = listEnglishVoices().length > 0;
+    if (!ctx.voicesAvailable && 'speechSynthesis' in window) {
+      setTimeout(() => {
+        ctx.voicesAvailable = listEnglishVoices().length > 0;
+      }, 600);
+    }
+
+    ctx.sfx = createSfx({ onPlayed: (name) => ctx.debug._record('sfx', { name }) });
+    ctx.soundBridge = createSoundBridge(ctx.sfx, ctx.debug);
+
     startBattle();
 
     const overlay = createOverlay(ctx);
     const input = createInput({
-      onAction: (action, t0) => ctx.sendAction(action, t0),
+      onAction: (action, t0) => {
+        // 瀏覽器要求先有使用者手勢才准發聲，第一個按鍵正好就是
+        ctx.sfx.unlock();
+        return ctx.sendAction(action, t0);
+      },
+      onToggleMute: () => {
+        const muted = ctx.sfx.setMuted(!ctx.sfx.isMuted());
+        if (muted) stopSpeaking();
+        document.getElementById('btn-mute')?.dispatchEvent(new Event('refresh'));
+        return muted;
+      },
       onPause: (info) => setPaused(info?.force ? true : !ctx.paused),
       onToggleOverlay: () => overlay.toggle(),
       onImeSuspected: () => {
@@ -232,6 +308,7 @@ async function boot() {
         tapEl.hidden = false;
         const start = () => {
           input.focusForTyping();
+          ctx.sfx.unlock(); // 這一下點擊同時也是解鎖音訊的使用者手勢
           tapEl.hidden = true;
         };
         tapEl.addEventListener('click', start);
@@ -250,6 +327,19 @@ async function boot() {
         });
       });
     }
+
+    const muteBtn = document.getElementById('btn-mute');
+    function refreshMuteBtn() {
+      if (muteBtn) muteBtn.textContent = ctx.sfx.isMuted() ? '🔇 已靜音' : '🔊 聲音';
+    }
+    refreshMuteBtn();
+    muteBtn?.addEventListener('refresh', refreshMuteBtn);
+    muteBtn?.addEventListener('click', () => {
+      ctx.sfx.unlock();
+      const muted = ctx.sfx.setMuted(!ctx.sfx.isMuted());
+      if (muted) stopSpeaking();
+      refreshMuteBtn();
+    });
 
     document.getElementById('btn-replay-file')?.addEventListener('click', downloadLog);
     document.getElementById('btn-restart')?.addEventListener('click', () => {

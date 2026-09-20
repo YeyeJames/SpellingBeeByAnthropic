@@ -35,6 +35,7 @@ export function createInput({
   onAction,
   onPause,
   onToggleOverlay,
+  onToggleMute,
   onImeSuspected,
   onImeCleared
 }) {
@@ -60,6 +61,16 @@ export function createInput({
 
     // 讓瀏覽器自己的組合鍵通過（重新整理、開發者工具等）
     if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+    /*
+     * 靜音用 F2 而不是 M——M 是要拿來拼字的，任何字母鍵都不能挪作他用。
+     * F3 是除錯疊加層，跟 Minecraft 一樣的位置。
+     */
+    if (e.key === 'F2') {
+      e.preventDefault();
+      onToggleMute?.();
+      return;
+    }
 
     if (e.key === 'F3') {
       e.preventDefault();

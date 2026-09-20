@@ -25,7 +25,9 @@ export function createLatency() {
     worst: 0,
     // 已經套用、但還沒被畫出來的那些按鍵的時間戳
     pending: new Float64Array(PENDING_CAPACITY),
-    pendingCount: 0
+    pendingCount: 0,
+    // 刻意延後套用的按鍵（頓挫期間排隊的那些）不列入統計，另外計數
+    deferred: 0
   };
 }
 
@@ -59,6 +61,7 @@ export function latencyReport(lat) {
   const arr = Array.prototype.slice.call(lat.samples, 0, lat.count).sort((a, b) => a - b);
   return {
     samples: lat.total,
+    deferred: lat.deferred,
     p50: Number(percentile(arr, 50).toFixed(2)),
     p95: Number(percentile(arr, 95).toFixed(2)),
     p99: Number(percentile(arr, 99).toFixed(2)),
@@ -72,4 +75,5 @@ export function resetLatency(lat) {
   lat.total = 0;
   lat.worst = 0;
   lat.pendingCount = 0;
+  lat.deferred = 0;
 }

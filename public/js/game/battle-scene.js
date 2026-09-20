@@ -14,11 +14,11 @@
 
 import { BALANCE } from './core/balance.js';
 import { createClock, advanceClock } from './core/clock.js';
-import { stepBattle, clearEvents, EV } from './core/battle.js';
+import { stepBattle, clearEvents, EV, EV_NAME, LISTEN_KIND } from './core/battle.js';
 import { samplePerf } from './perf.js';
 import { createEffects } from './effects.js';
 
-const SCAFFOLD_NOTE = '（臨時顯示：發音做好後會拿掉）';
+const SCAFFOLD_NOTE = '（靜音或裝置沒有語音時才顯示）';
 
 const LANE_LEFT = 0.18; // 蜂巢位置（畫面寬度的比例）
 const LANE_RIGHT = 0.92; // 入侵口
@@ -56,6 +56,7 @@ export function createBattleScene(ctx) {
       this.lastTyped = -1;
       this.lastWordIndex = -2;
       this.lastStatus = '';
+      this.lastShowWord = null;
       // 特效用的計時器（毫秒，-1 代表沒在跑）
       this.enemyHitT = -1;
       this.hitStopUntil = 0;
@@ -106,9 +107,12 @@ export function createBattleScene(ctx) {
         .setOrigin(1, 0.5);
 
       /*
-       * 臨時鷹架：還沒有發音（音效是 1.4），不把單字顯示出來就沒辦法玩。
-       * 1.4 接上發音之後這一行就會拿掉——設計上畫面是不顯示字母的，
-       * 壓力要來自敵人逼近，不是來自讀字。
+       * 單字文字：預設不顯示。
+       *
+       * 這是聽寫遊戲，壓力要來自敵人逼近而不是讀字，所以有語音可用時
+       * 只唸不寫。但「靜音也要能玩」也是硬性要求，而單字本身是唯一
+       * 只存在於聲音裡的資訊——所以靜音、或裝置根本沒有英文語音時，
+       * 就退回顯示文字。兩個要求在這裡是用同一個開關解決的。
        */
       this.wordText = this.add
         .text(0, 0, '', {
@@ -226,11 +230,15 @@ export function createBattleScene(ctx) {
       samplePerf(ctx.perf, delta, now - workStart);
     }
 
-    /** 把邏輯事件轉成演出與紀錄。1.4 之後這裡也會觸發音效。 */
+    /** 把邏輯事件轉成演出與紀錄。 */
     consumeEvents(state) {
+      // 先把還沒發聲的事件唸掉（按鍵造成的那些已經在套用當下發過了）
+      ctx.soundBridge?.flush(state, null);
+
       for (let i = 0; i < state.evCount; i += 1) {
         const ev = state.ev[i];
         ctx.debug._recordBattleEvent(ev);
+        ctx.debug._recordChannel(EV_NAME[ev.type] || `EV_${ev.type}`, 'vfx');
         switch (ev.type) {
           case EV.LETTER_OK: {
             const ex = this.enemy.x;
@@ -263,14 +271,22 @@ export function createBattleScene(ctx) {
             this.cameras.main.shake(180, 0.01);
             this.effects.setCrackProgress(0);
             break;
+          case EV.LISTEN:
+            // 玩家已經付出敵人前進的代價，這裡把單字再唸一次給他
+            ctx.speakCurrentWord(
+              ev.a === LISTEN_KIND.SLOW ? 'slow' : ev.a === LISTEN_KIND.SENTENCE ? 'sentence' : 'normal'
+            );
+            break;
           case EV.WORD_START:
             this.effects.setCrackProgress(0);
+            ctx.speakCurrentWord();
             break;
           default:
             break;
         }
       }
       clearEvents(state);
+      ctx.soundBridge?.reset();
     }
 
     /** 敵人被擊中時的擠壓與閃白，自己算不用 tween。 */
@@ -327,7 +343,13 @@ export function createBattleScene(ctx) {
       }
 
       if (state.status === 'running') {
-        if (state.wordIndex !== this.lastWordIndex || state.typed !== this.lastTyped) {
+        const show = ctx.shouldShowWord();
+        if (show !== this.lastShowWord) {
+          this.lastShowWord = show;
+          this.wordText.setAlpha(show ? 1 : 0);
+          this.scaffoldNote.setText(show ? SCAFFOLD_NOTE : '');
+        }
+        if (show && (state.wordIndex !== this.lastWordIndex || state.typed !== this.lastTyped)) {
           this.lastWordIndex = state.wordIndex;
           this.lastTyped = state.typed;
           const typedPart = state.target.slice(0, state.typed).toUpperCase();
@@ -335,8 +357,6 @@ export function createBattleScene(ctx) {
         }
         if (this.lastStatus !== 'running') {
           this.lastStatus = 'running';
-          this.scaffoldNote.setText(SCAFFOLD_NOTE); // 重開一場要能復原
-          this.wordText.setAlpha(1);
           this.statusText.setAlpha(0);
         }
       } else if (this.lastStatus !== state.status) {

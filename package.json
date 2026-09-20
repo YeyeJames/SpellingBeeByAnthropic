@@ -16,7 +16,8 @@
     "test:bot": "node scripts/bot.mjs",
     "test": "node scripts/determinism.mjs",
     "test:input": "node scripts/input-test.mjs",
-    "test:soak": "node scripts/soak-test.mjs"
+    "test:soak": "node scripts/soak-test.mjs",
+    "test:audio": "node scripts/audio-test.mjs"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

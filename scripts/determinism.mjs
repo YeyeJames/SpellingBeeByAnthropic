@@ -23,6 +23,7 @@ import {
 import { createRng } from '../public/js/game/core/rng.js';
 import { createRecorder, recordAction, replayLog } from '../public/js/game/core/recorder.js';
 import { createPlayerModel, pollPlayer, PLAYER_PRESETS } from '../public/js/game/core/player-model.js';
+import { semitoneForIndex, comboShift, freqFor } from '../public/js/game/core/scale.js';
 
 const require = createRequire(import.meta.url);
 const { wordsByPart } = require('../server/data/word-bank.js');
@@ -176,6 +177,27 @@ for (const preset of ['slow', 'medium', 'fast']) {
     return `${tag} ${state.stats.wordsKilled}殺/${state.stats.wordsMissed}漏`.padEnd(16, ' ');
   });
   console.log(`${preset.padEnd(8, ' ')}${cells.join('')}`);
+}
+
+// ── 8. 打擊音階 ───────────────────────────────────────────
+// 釘住一個設計主張：七個字母走完一段完整音階，第八個回到高八度。
+console.log('\n8) 打擊音階');
+{
+  const seq = [0, 1, 2, 3, 4, 5, 6, 7, 8, 14].map(semitoneForIndex);
+  check('前七個字母是大調音階', JSON.stringify(seq.slice(0, 7)) === JSON.stringify([0, 2, 4, 5, 7, 9, 11]), seq.slice(0, 7).join(','));
+  check('第 8 個字母回到高八度', seq[7] === 12, String(seq[7]));
+  check('第 15 個字母再高一個八度', seq[9] === 24, String(seq[9]));
+  check('音階單調遞增', seq.every((v, i) => i === 0 || v > seq[i - 1]), seq.join(','));
+  check(
+    '頻率對得上（第 8 個字母正好是兩倍）',
+    Math.abs(freqFor(seq[7]) / freqFor(seq[0]) - 2) < 1e-9,
+    (freqFor(seq[7]) / freqFor(seq[0])).toFixed(6)
+  );
+  check(
+    'Combo 門檻移調',
+    comboShift(0) === 0 && comboShift(5) === 2 && comboShift(10) === 4 && comboShift(15) === 7 && comboShift(99) === 7,
+    [0, 5, 10, 15, 99].map(comboShift).join(',')
+  );
 }
 
 console.log(`\n${failures === 0 ? '全部通過' : `有 ${failures} 項失敗`}`);

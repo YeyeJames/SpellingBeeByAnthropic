@@ -41,6 +41,15 @@ export function installDebugApi(ctx) {
     return out;
   }
 
+  /*
+   * 回饋頻道覆蓋率。
+   *
+   * 設計要求「所有聲音回饋都必須有對應的視覺回饋」，靜音時才玩得下去。
+   * 與其靠我記得，不如讓機器檢查：每個事件被演出時，聲音端與畫面端
+   * 各自登記一次，測試再去比對有沒有哪一邊缺席。
+   */
+  const channels = new Map();
+
   const api = {
     // 版本號：bot 與測試腳本可以據此確認接的是預期的介面
     version: 1,
@@ -72,6 +81,36 @@ export function installDebugApi(ctx) {
     /** keydown → 畫面畫出新狀態的延遲統計。手感的核心指標。 */
     latency() {
       return latencyReport(ctx.getLatency());
+    },
+
+    /** 每個事件在聲音端與畫面端各被演出幾次。靜音可玩性檢查用。 */
+    feedbackCoverage() {
+      const out = {};
+      channels.forEach((v, k) => {
+        out[k] = { ...v };
+      });
+      return out;
+    },
+
+    /** 音效延遲：keydown → 排進音訊佇列，外加裝置本身的輸出延遲。 */
+    audioLatency() {
+      return ctx.sfx ? ctx.sfx.latencyReport() : null;
+    },
+
+    isMuted() {
+      return !!ctx.sfx?.isMuted();
+    },
+
+    setMuted(v) {
+      return ctx.sfx?.setMuted(v);
+    },
+
+    masterGain() {
+      return ctx.sfx?.masterGain();
+    },
+
+    showsWord() {
+      return ctx.shouldShowWord();
     },
 
     /** 物件池使用量：常常回收代表池子開太小。 */
@@ -134,6 +173,15 @@ export function installDebugApi(ctx) {
         type,
         ...detail
       });
+    },
+
+    _recordChannel(evName, channel) {
+      let row = channels.get(evName);
+      if (!row) {
+        row = { sfx: 0, vfx: 0 };
+        channels.set(evName, row);
+      }
+      row[channel] += 1;
     },
 
     _recordBattleEvent(ev) {
