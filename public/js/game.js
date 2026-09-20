@@ -353,20 +353,15 @@ async function fetchWords() {
   const data = await res.json();
 
   /*
-   * 課本裡有 "alarm clock"、"a couple of" 這種含空白或連字號的詞條。
-   * 它們在單字表上要看得到，但不能當打字題目——遊戲只收 a~z，
-   * 孩子打到一半會發現那個空白按不出來。所以在這裡濾掉，
-   * 而不是在資料裡刪掉它們。
+   * 一組就是一組，不再濾掉任何字。
+   *
+   * 以前 "alarm clock" 這種含空白的詞條進不了遊戲（只收 a~z），於是同一組
+   * 在練習頁是 49 個字、在遊戲裡是 46 個。兩個數字對不起來很難解釋，
+   * 而且那幾個字他在遊戲裡永遠練不到。現在空白鍵就是一個字母，
+   * 見 core/charset.js。
    */
   const typeable = data.words.filter((w) => w.typeable !== false);
   if (typeable.length === 0) throw new Error(`這一組沒有可以打的字（${group || part}）`);
-  /*
-   * 濾掉幾個要講出來。
-   *
-   * 練習頁寫「Week 6・49 個單字」，遊戲卻只有 46 個——不說的話他會以為
-   * 有字不見了。差額是 "a couple of" 那種含空白的詞條。
-   */
-  ctx.skippedCount = data.words.length - typeable.length;
 
   /*
    * 畫面上要寫「Week 6」而不是「w06」。
@@ -540,14 +535,11 @@ async function boot() {
         return;
       }
       document.getElementById('pregame-group').textContent = ctx.groupLabel || '練習';
-      const countParts = [`總共 ${ctx.words.length} 個字`];
-      if (ctx.skippedCount > 0) {
-        countParts.push(`另外 ${ctx.skippedCount} 個有空白的詞只在練習模式出現`);
-      }
       // 自己錄的音要看得到，不然他不會知道遊戲裡到底有沒有用上
-      if (ctx.recordedCount > 0) countParts.push(`其中 ${ctx.recordedCount} 個唸的是你自己錄的聲音`);
       document.getElementById('pregame-count').textContent =
-        countParts.length > 1 ? `${countParts[0]}（${countParts.slice(1).join('、')}）` : countParts[0];
+        ctx.recordedCount > 0
+          ? `總共 ${ctx.words.length} 個字（其中 ${ctx.recordedCount} 個唸的是你自己錄的聲音）`
+          : `總共 ${ctx.words.length} 個字`;
       pregameEl.querySelectorAll('[data-order]').forEach((btn) => {
         // 把上次選的標起來：他會知道上一場是怎麼打的
         btn.classList.toggle('is-last', btn.dataset.order === storedOrder());

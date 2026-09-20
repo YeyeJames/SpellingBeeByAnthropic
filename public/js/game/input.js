@@ -15,6 +15,8 @@
  * 「把螢幕鍵盤叫出來」，實際的按鍵仍然由 window 的 keydown 收。
  */
 
+import { isTypeableChar } from './core/charset.js';
+
 const LISTEN_KEYS = {
   ArrowUp: 'replay',
   ArrowDown: 'slow',
@@ -115,12 +117,18 @@ export function createInput({
       return;
     }
 
+    /*
+     * 空白鍵也是一個字母。
+     *
+     * 課本有 "alarm clock"、"a couple of" 這種詞條，要打完就得按空白。
+     * preventDefault 在這裡特別重要——沒擋的話空白鍵會把整頁往下捲。
+     */
     if (e.key.length === 1) {
       const ch = e.key.toLowerCase();
-      if (ch >= 'a' && ch <= 'z') {
+      if (isTypeableChar(ch)) {
         e.preventDefault();
         lastKeyDownAt = t0;
-        // 收到正常的英文字母，代表輸入法已經切回來了
+        // 收到正常的字元，代表輸入法已經切回來了
         clearIme();
         onAction({ kind: 'letter', ch }, t0);
       }
@@ -139,7 +147,7 @@ export function createInput({
     const data = e.data;
     if (!data || data.length !== 1) return;
     const ch = data.toLowerCase();
-    if (ch < 'a' || ch > 'z') return;
+    if (!isTypeableChar(ch)) return;
 
     const t0 = performance.now();
     if (t0 - lastKeyDownAt < 100) return; // keydown 已經處理過同一次按鍵

@@ -5,7 +5,7 @@
  *   1. /api/wordbank?group=w06b 只回那一組的字
  *   2. 舊的 ?part= 還能用（單字庫頁面和既有連結靠它）
  *   3. 遊戲用 ?group= 開得起來，而且題目真的來自那一組
- *   4. 含空白／連字號的詞條不會被丟進遊戲（那種字打不出來）
+ *   4. 含空白／連字號的詞條也進得了遊戲（空白鍵就是一個字母）
  *   5. 不存在的組不會靜靜地開出一場空戰鬥，而是報錯
  *
  * 用法：node scripts/group-test.mjs
@@ -89,7 +89,7 @@ console.log('\n2) 遊戲用 ?group= 開起來');
     if (m.type() === 'error') consoleErrors.push(`console.error: ${m.text()}`);
   });
 
-  // Week 6② 是含最多「打不出來的詞條」的一組，拿它來測濾除最有意義
+  // Week 6② 是含最多「空白詞條」的一組，拿它來測最有意義
   await page.goto(`${BASE}/game?group=w06b&difficulty=normal&order=sequential&n=100`, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => window.__spellbee && window.__spellbee.ready, null, { timeout: 15000 });
 
@@ -102,8 +102,18 @@ console.log('\n2) 遊戲用 ?group= 開起來');
     };
   });
   check('題目都來自 w06b', info.groups.length === 1 && info.groups[0] === 'w06b', info.groups.join(','));
-  check('題目數量對得上（21 個能打的字）', info.count === 21, `${info.count} 字`);
-  check('沒有含空白或連字號的題目', info.withSpace.length === 0, info.withSpace.join('、'));
+  /*
+   * 整組就是整組，一個字都不少。
+   *
+   * 以前含空白的詞條會被濾掉，於是練習頁 24 個字、遊戲 21 個——兩個數字
+   * 對不起來，而且那幾個字他在遊戲裡永遠練不到。現在空白鍵就是一個字母。
+   */
+  check('整組都在，沒有被濾掉', info.count === 24, `${info.count} 字`);
+  check(
+    '含空白的詞條也進得了遊戲',
+    info.withSpace.length === 3,
+    info.withSpace.join('、') || '一個都沒有'
+  );
 
   console.log('\n3) 不存在的組要報錯，不要開一場空戰鬥');
   // 這一段是故意讓它失敗，所以之後的 console 錯誤是預期中的，不算數

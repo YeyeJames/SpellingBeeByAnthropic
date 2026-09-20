@@ -12,6 +12,7 @@
 
 import { BALANCE, crossMsFor, knockbackMsFor } from './balance.js';
 import { createRng, shuffleInPlace } from './rng.js';
+import { isTypeableChar, isSeparator } from './charset.js';
 
 /* 事件類型。用數字而不是字串，是為了讓事件緩衝區可以完全不配置記憶體。 */
 export const EV = {
@@ -227,10 +228,32 @@ export function applyAction(state, action) {
   switch (action.kind) {
     case 'letter': {
       const ch = String(action.ch || '').toLowerCase();
-      if (ch.length !== 1 || ch < 'a' || ch > 'z') return state;
+      // 空白與連字號也是正常字元——課本有 "alarm clock" 這種詞條，見 charset.js
+      if (!isTypeableChar(ch)) return state;
 
+      /*
+       * 打對了幾個字元。通常是 1，遇到「跳過分隔符」的情況會是 2。
+       *
+       * 正常遊玩時畫面上看不到單字（這是聽寫遊戲）。他聽到 "alarm clock"
+       * 很可能直接打 alarmclock——然後卡在第六個字元，而畫面不會告訴他
+       * 少了一個空白。那是最糟的一種卡關：看不出原因。
+       *
+       * 所以分隔符（空白、連字號）不強制：按了就算對，不按而直接打下一個
+       * 字母也算對。要打空白的人打得出來，沒想到的人不會被卡住。
+       * 拼字本身一個字母都沒有放水——放寬的只有「兩個字中間那一下」。
+       */
+      let consumed = 0;
       if (ch === state.target[state.typed]) {
-        state.typed += 1;
+        consumed = 1;
+      } else if (
+        isSeparator(state.target[state.typed]) &&
+        ch === state.target[state.typed + 1]
+      ) {
+        consumed = 2;
+      }
+
+      if (consumed > 0) {
+        state.typed += consumed;
         state.stats.correctLetters += 1;
         state.honey += BALANCE.honey.perCorrectLetter;
         // 擊退：往回推，但不會推到畫面外

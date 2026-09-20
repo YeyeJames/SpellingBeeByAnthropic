@@ -166,6 +166,66 @@ console.log('\n6) 不合法的輸入不能影響狀態');
   check('狀態沒被動到', fingerprint(state) === before);
 }
 
+// ── 6.5 含空白的詞條 ──────────────────────────────────────
+// 課本有 "alarm clock"、"high-pitched" 這種詞條。遊戲只收 a~z 的時候，
+// 它們只能被濾掉，於是練習頁與遊戲的字數對不起來，那幾個字也永遠練不到。
+console.log('\n6.5) 含空白／連字號的詞條');
+{
+  const PHRASE = [{ id: 'x1', english: 'alarm clock' }];
+
+  // 乖乖按空白
+  {
+    const state = createBattle({ words: PHRASE, seed: 1 });
+    for (const ch of 'alarm clock') applyAction(state, { kind: 'letter', ch });
+    check('按了空白：打得完', state.status === 'won', state.status);
+    check('按了空白：不算打錯', state.stats.wrongLetters === 0, String(state.stats.wrongLetters));
+  }
+
+  /*
+   * 不按空白也要過。
+   *
+   * 正常遊玩看不到單字（這是聽寫遊戲），他聽到 "alarm clock" 很可能
+   * 直接打 alarmclock——然後卡在第六個字元，而畫面不會告訴他少了空白。
+   * 那是最糟的一種卡關：看不出原因。
+   */
+  {
+    const state = createBattle({ words: PHRASE, seed: 1 });
+    for (const ch of 'alarmclock') applyAction(state, { kind: 'letter', ch });
+    check('沒按空白：一樣打得完', state.status === 'won', state.status);
+    check('沒按空白：不算打錯', state.stats.wrongLetters === 0, String(state.stats.wrongLetters));
+  }
+
+  // 連字號同理
+  {
+    const state = createBattle({ words: [{ id: 'x2', english: 'high-pitched' }], seed: 1 });
+    for (const ch of 'highpitched') applyAction(state, { kind: 'letter', ch });
+    check('連字號也可以跳過', state.status === 'won', state.status);
+  }
+
+  /*
+   * 放寬的只有分隔符，拼字本身一個字母都沒放水。
+   * 在空白的位置打一個不對的字母仍然算打錯，接著打對的還是照樣通過。
+   */
+  {
+    const state = createBattle({ words: PHRASE, seed: 1 });
+    for (const ch of 'alarm') applyAction(state, { kind: 'letter', ch });
+    applyAction(state, { kind: 'letter', ch: 'k' }); // 這裡該是空白或 c
+    check('在空白的位置打錯字母算打錯', state.stats.wrongLetters === 1, String(state.stats.wrongLetters));
+    check('打錯不會倒退已經打對的', state.typed === 5, String(state.typed));
+    for (const ch of 'clock') applyAction(state, { kind: 'letter', ch });
+    check('打錯之後接著打對仍然過得了', state.status === 'won', state.status);
+  }
+
+  // 空白鍵在不該出現的地方仍然是打錯
+  {
+    const state = createBattle({ words: [{ id: 'x3', english: 'cat' }], seed: 1 });
+    applyAction(state, { kind: 'letter', ch: 'c' });
+    applyAction(state, { kind: 'letter', ch: ' ' });
+    check('一般單字裡按空白算打錯', state.stats.wrongLetters === 1, String(state.stats.wrongLetters));
+    check('打錯不會把已經打對的清掉', state.typed === 1, String(state.typed));
+  }
+}
+
 // ── 7. 參考資料：手速 × 難度的結果對照 ────────────────────
 // 不列入通過與否，但可以看出時間公式合不合理：
 // 慢手速在標準難度會撐不住、在輕鬆難度要能過，這正是 1.6 難度校準存在的理由。

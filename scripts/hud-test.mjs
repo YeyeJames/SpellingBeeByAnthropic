@@ -58,13 +58,16 @@ console.log('1) 開場畫面');
   check('兩種出題順序都有', shown.orders.length === 2, shown.orders.join('、'));
 
   /*
-   * 練習頁寫「Week 6②・24 個單字」，遊戲只有 21 個。不解釋的話他會以為字不見了，
-   * 所以差額一定要講出來。
+   * 練習頁與遊戲的字數必須一模一樣。
+   *
+   * 以前含空白的詞條進不了遊戲，於是同一組在練習頁是 24 個字、遊戲是 21 個。
+   * 那個差額沒辦法跟小孩解釋，而且那幾個字他在遊戲裡永遠練不到。
    */
   await page.goto(`${BASE}/game?group=w06b&n=200`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#pregame:not([hidden])', { timeout: 15000 });
   const w06 = await page.evaluate(() => document.getElementById('pregame-count').textContent);
-  check('有字被濾掉時會說明差額', w06 === '總共 21 個字（另外 3 個有空白的詞只在練習模式出現）', w06);
+  const w06api = await fetch(`${BASE}/api/wordbank?group=w06b`).then((r) => r.json());
+  check('遊戲的字數等於整組的字數', w06 === `總共 ${w06api.words.length} 個字`, `${w06}（單字庫 ${w06api.words.length} 個）`);
 
   await page.goto(`${BASE}/game?group=w18&n=200`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#pregame:not([hidden])', { timeout: 15000 });
@@ -200,6 +203,57 @@ console.log('\n6) 練習頁 → 遊戲');
   }));
   check('選好的組有帶過去', carried.group === 'Week 18', carried.group);
   check('整組都帶過去，沒被砍成 20 個', carried.count === '總共 14 個字', carried.count);
+  await context.close();
+}
+
+/* ── 6.5 含空白的詞條要真的打得完 ───────────────────────── */
+/*
+ * 「整組都在」只證明那些字有被發到題目裡，不代表打得完。
+ * 空白鍵如果沒收，他會停在 "alarm" 後面按半天、以為遊戲壞了——
+ * 所以一定要真的把一個含空白的詞條從頭打到尾。
+ */
+console.log('\n6.5) 含空白的詞條要打得完');
+{
+  const { context, page } = await openCalibrated();
+  // Week 4 的 "alarm clock"
+  await page.goto(`${BASE}/game?group=w04&n=200&order=sequential&show=1&difficulty=easy`, {
+    waitUntil: 'domcontentloaded'
+  });
+  await page.waitForFunction(() => window.__spellbee && window.__spellbee.ready, null, { timeout: 15000 });
+
+  // 一路打到那個含空白的詞條
+  const PHRASE = 'alarm clock';
+  let reached = false;
+  for (let i = 0; i < 200; i += 1) {
+    const target = await page.evaluate(() => window.__spellbee.state()?.target);
+    if (!target) break;
+    if (target === PHRASE) {
+      reached = true;
+      break;
+    }
+    for (const ch of target) await page.keyboard.press(ch);
+    await page.waitForTimeout(40);
+  }
+  check(`出得到「${PHRASE}」這一題`, reached);
+
+  if (reached) {
+    const killedBefore = await page.evaluate(() => window.__spellbee.state().stats.wordsKilled);
+
+    // 一個字元一個字元打，中間那一下就是空白鍵
+    for (const ch of PHRASE) await page.keyboard.press(ch);
+    await page.waitForTimeout(300);
+
+    const after = await page.evaluate(() => ({
+      killed: window.__spellbee.state().stats.wordsKilled,
+      wrong: window.__spellbee.state().stats.wrongLetters
+    }));
+    check('空白鍵被當成正確的字元', after.wrong === 0, `打錯 ${after.wrong} 次`);
+    check('整個詞條打完、算一次擊殺', after.killed === killedBefore + 1, `${killedBefore} → ${after.killed}`);
+  }
+
+  // 空白鍵不該把整頁往下捲（預設行為沒擋掉的話畫面會跳）
+  const scrolled = await page.evaluate(() => window.scrollY);
+  check('空白鍵沒有把頁面捲走', scrolled === 0, String(scrolled));
   await context.close();
 }
 

@@ -139,8 +139,14 @@ const CONTEST_WORDS = [
 
 const PARTS = [1, 2, 3, 4];
 
-/** 只有純 a~z 的字打得出來。含空白或連字號的詞條不能當打字題目。 */
-const TYPEABLE = /^[a-z]+$/;
+/**
+ * 這個詞條打不打得出來。
+ *
+ * 空白與連字號都收（"alarm clock"、"high-pitched"）——遊戲的空白鍵就是
+ * 一個字母，見 public/js/game/core/charset.js。這裡留著這個旗標是為了擋住
+ * 以後不小心抄進數字或奇怪符號的詞條，那種字按不出來，會讓他卡在原地。
+ */
+const TYPEABLE = /^[a-z][a-z '-]*$/;
 
 /** 'alarm clock' → 'alarm-clock'，用來組 id。 */
 function slug(english) {
