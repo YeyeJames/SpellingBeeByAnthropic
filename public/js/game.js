@@ -227,9 +227,21 @@ function startBattle() {
   updateHud();
 }
 
+const DIFFICULTY_LABELS = { easy: '輕鬆', normal: '標準', hard: '挑戰' };
+
 function updateHud() {
   const el = document.getElementById('seed-label');
   if (el) el.textContent = `種子 ${ctx.seed}`;
+
+  /*
+   * 難度一定要顯示出來。
+   *
+   * 記住上次的選擇本身沒問題，但不顯示就會變成：同一台電腦換人玩時，
+   * 下一個人默默繼承上一個人的難度。爸爸測完換小孩玩，小孩就會拿到
+   * 為大人手速調的設定——模擬顯示那是 100% 失敗率，不是「比較難」。
+   */
+  const dl = document.getElementById('difficulty-label');
+  if (dl) dl.textContent = `難度 ${DIFFICULTY_LABELS[ctx.difficulty] || ctx.difficulty}`;
 }
 
 /** 下載目前這一場的錄影檔。小孩按「剛剛怪怪的」就是按這個。 */
@@ -355,6 +367,13 @@ async function boot() {
       const muted = ctx.sfx.setMuted(!ctx.sfx.isMuted());
       if (muted) stopSpeaking();
       refreshMuteBtn();
+    });
+
+    // 換人玩就按這個。網址帶 calibrate=1 重新進來，流程跟第一次一樣
+    document.getElementById('btn-recalibrate')?.addEventListener('click', () => {
+      const url = new URL(location.href);
+      url.searchParams.set('calibrate', '1');
+      location.href = url.toString();
     });
 
     document.getElementById('btn-replay-file')?.addEventListener('click', downloadLog);

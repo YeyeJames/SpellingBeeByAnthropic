@@ -14,6 +14,13 @@
   <div id="game-chrome">
     <a class="chrome-link" href="/practice.html">← 回練習</a>
     <span id="seed-label" class="chrome-seed"></span>
+    <!--
+      目前難度一定要看得見，而且要能一鍵重測。
+      同一台電腦會有不只一個人玩（爸爸測完換小孩），難度記住卻不顯示的話，
+      下一個人會直接繼承上一個人的設定——慢手速用到挑戰難度是 100% 失敗率。
+    -->
+    <span id="difficulty-label" class="chrome-difficulty"></span>
+    <button type="button" id="btn-recalibrate" class="chrome-btn">重測手速</button>
     <button type="button" id="btn-restart" class="chrome-btn">重開一場</button>
     <!-- 小孩覺得「剛剛怪怪的」就按這個，我拿到錄影檔就能完整重現 -->
     <button type="button" id="btn-replay-file" class="chrome-btn">剛剛怪怪的</button>

@@ -111,9 +111,43 @@ console.log('\n2) 建議之後仍然可以自己選別的');
     difficulty: window.__spellbee.difficulty().difficulty,
     calibrateHidden: document.getElementById('calibrate').hidden
   }));
-  console.log('\n3) 下次進來不再問');
+  console.log('\n3) 下次進來不再問，但要看得出來記住了什麼');
   check('沒有再跳校準', again.calibrateHidden === true);
   check('沿用上次的難度', again.difficulty === 'hard', again.difficulty);
+
+  /*
+   * 記住難度卻不顯示，會變成「同一台電腦換人玩時默默繼承上一個人的設定」。
+   * 爸爸測完換小孩玩，小孩就拿到為大人手速調的難度——那是 100% 失敗率。
+   * 所以畫面上一定要看得到，而且要能一鍵重測。
+   */
+  const shown = await page.evaluate(() => ({
+    label: document.getElementById('difficulty-label')?.textContent || '',
+    hasButton: !!document.getElementById('btn-recalibrate')
+  }));
+  check('畫面上看得到目前難度', shown.label.includes('挑戰'), shown.label);
+  check('有「重測手速」按鈕', shown.hasButton);
+
+  // 按下去要真的回到校準流程
+  await page.click('#btn-recalibrate');
+  const backToCalibrate = await page
+    .waitForSelector('#calibrate:not([hidden])', { timeout: 10000 })
+    .then(() => true)
+    .catch(() => false);
+  check('按「重測手速」會回到校準', backToCalibrate);
+
+  // 重測成一個不同的難度，確認真的覆蓋得掉
+  await typeCalibration(page, 900);
+  await page.waitForSelector('#calibrate-choice:not([hidden])', { timeout: 10000 });
+  await page.click('[data-difficulty="easy"]');
+  await page.waitForFunction(() => window.__spellbee && window.__spellbee.ready, null, {
+    timeout: 15000
+  });
+  const after = await page.evaluate(() => ({
+    difficulty: window.__spellbee.difficulty().difficulty,
+    label: document.getElementById('difficulty-label')?.textContent || ''
+  }));
+  check('重測後難度真的換掉', after.difficulty === 'easy', after.difficulty);
+  check('標籤跟著更新', after.label.includes('輕鬆'), after.label);
 
   /* ── 4. 可以重新校準 ── */
   console.log('\n4) ?calibrate=1 可以重新量');

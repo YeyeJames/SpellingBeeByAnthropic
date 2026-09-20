@@ -59,6 +59,12 @@ body {
   font-family: ui-monospace, monospace;
 }
 
+/* 難度要一眼看得到，所以比種子那類除錯資訊顯眼 */
+.chrome-difficulty {
+  color: #ffd166;
+  font-weight: 600;
+}
+
 .chrome-btn {
   background: #1e293b;
   color: #cbd5e1;

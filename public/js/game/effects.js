@@ -28,12 +28,14 @@ import { createRng } from './core/rng.js';
  * 所以要能同時容納兩次擊殺（耐久測試就是這樣抓到 28 太小的：一分鐘回收 102 次）。
  * 多開 20 顆圓形的成本可以忽略，池子太小造成粒子被中途抽掉反而看得出來。
  */
-const STINGER_COUNT = 10; // 110ms 存活，最快約 35ms 一發
+const STINGER_COUNT = 10; // 130ms 存活，最快約 35ms 一發
 const FRAGMENT_COUNT = 18; // 420ms 存活，最快約 35ms 一片
 const SPLASH_COUNT = 64; // 620ms 存活，一次擊殺 18 顆，要容得下連續三次
 const CRACK_COUNT = 14;
 
-const STINGER_MS = 110;
+const STINGER_MS = 130;
+const MUZZLE_MS = 110;
+const MUZZLE_COUNT = 8;
 const FRAGMENT_MS = 420;
 const SPLASH_MS = 620;
 
@@ -51,13 +53,34 @@ function easeOutCubic(t) {
 export function createEffects(scene, seed) {
   const rng = createRng((seed ^ 0x9e3779b9) >>> 0);
 
+  /*
+   * 蜂針改成「曳光」而不是飛行物。
+   *
+   * 原本是一個 38×6 的小方塊用 110ms 飛完 930px 的跑道。實機上的回報是
+   * 「只看到有東西從敵人彈回左邊的圓，不像有射出去」——也就是說射擊這一段
+   * 根本沒被看見，因果關係整個反過來了。
+   *
+   * 一格 60fps 只有約 7 格可看，每格位移 150px，沒有動態模糊的情況下
+   * 那就是一次閃爍。曳光的做法是整條路徑瞬間出現再淡掉：既看得見方向，
+   * 也不會像飛行物那樣把「打中」的感覺往後延——敵人是當下就該閃白的。
+   */
+  /*
+   * 曳光用 1×1 的方塊配 setScale 拉長，而不是 setSize。
+   *
+   * Phaser 的 Shape 是照內部 geom 產生圖形的，setSize 改得到寬高屬性
+   * 卻不一定重建那個 geom——實測就是整條線完全沒畫出來。
+   * 縮放是變換矩陣，一定生效，而且不必每格重建幾何。
+   */
   const stingers = createPool(STINGER_COUNT, () => ({
-    node: scene.add.rectangle(0, 0, 38, 6, COLOR_STINGER).setVisible(false),
+    node: scene.add.rectangle(0, 0, 1, 1, COLOR_STINGER).setOrigin(0, 0.5).setVisible(false),
     t: 0,
-    x0: 0,
-    y0: 0,
-    x1: 0,
-    y1: 0
+    len: 0
+  }));
+
+  // 蜂巢的發射閃光，讓「從這裡射出去」有個起點
+  const muzzles = createPool(MUZZLE_COUNT, () => ({
+    node: scene.add.circle(0, 0, 16, COLOR_STINGER).setVisible(false),
+    t: 0
   }));
 
   const fragments = createPool(FRAGMENT_COUNT, () => ({
@@ -101,7 +124,7 @@ export function createEffects(scene, seed) {
   }
 
   return {
-    pools: { stingers, fragments, splashes, cracks },
+    pools: { stingers, fragments, splashes, cracks, muzzles },
 
     /** 把裂痕掛進敵人容器，這樣敵人移動時裂痕會跟著走。 */
     attachCracksTo(container) {
@@ -121,15 +144,25 @@ export function createEffects(scene, seed) {
       }
     },
 
+    /** 從蜂巢往敵人打一道曳光，整條路徑瞬間出現再淡掉。 */
     fireStinger(x0, y0, x1, y1) {
+      const dx = x1 - x0;
+      const dy = y1 - y0;
+      const len = Math.hypot(dx, dy);
+
       const s = obtain(stingers);
       s.t = 0;
-      s.x0 = x0;
-      s.y0 = y0;
-      s.x1 = x1;
-      s.y1 = y1;
-      s.node.setPosition(x0, y0).setVisible(true).setAlpha(1);
-      s.node.setRotation(Math.atan2(y1 - y0, x1 - x0));
+      s.len = len;
+      s.node
+        .setPosition(x0, y0)
+        .setRotation(Math.atan2(dy, dx))
+        .setScale(len, 5)
+        .setVisible(true)
+        .setAlpha(0.95);
+
+      const m = obtain(muzzles);
+      m.t = 0;
+      m.node.setPosition(x0, y0).setVisible(true).setAlpha(0.9).setScale(0.6);
     },
 
     /** 一片字母碎片從敵人飛回蜂巢。 */
@@ -174,9 +207,23 @@ export function createEffects(scene, seed) {
           s.node.setVisible(false);
           continue;
         }
-        const e = easeOutCubic(k);
-        s.node.setPosition(s.x0 + (s.x1 - s.x0) * e, s.y0 + (s.y1 - s.y0) * e);
-        s.node.setAlpha(1 - k * k);
+        // 整條長度不變，用變細＋變淡收掉，看起來像一道殘留的軌跡
+        s.node.setAlpha(0.95 * (1 - k));
+        s.node.setScale(s.len, Math.max(1, 5 * (1 - k * 0.8)));
+      }
+
+      for (let i = 0; i < muzzles.size; i += 1) {
+        const m = muzzles.items[i];
+        if (!m.active) continue;
+        m.t += dtMs;
+        const k = m.t / MUZZLE_MS;
+        if (k >= 1) {
+          m.active = false;
+          m.node.setVisible(false);
+          continue;
+        }
+        m.node.setAlpha(0.9 * (1 - k));
+        m.node.setScale(0.6 + k * 0.9);
       }
 
       for (let i = 0; i < fragments.size; i += 1) {
@@ -221,8 +268,9 @@ export function createEffects(scene, seed) {
         stingers: activeCount(stingers),
         fragments: activeCount(fragments),
         splashes: activeCount(splashes),
-        recycled: stingers.recycled + fragments.recycled + splashes.recycled,
-        spawned: stingers.spawned + fragments.spawned + splashes.spawned,
+        recycled:
+          stingers.recycled + fragments.recycled + splashes.recycled + muzzles.recycled,
+        spawned: stingers.spawned + fragments.spawned + splashes.spawned + muzzles.spawned,
         recycledBy: {
           stingers: stingers.recycled,
           fragments: fragments.recycled,
@@ -232,6 +280,7 @@ export function createEffects(scene, seed) {
     },
 
     reset() {
+      releaseAll(muzzles);
       releaseAll(stingers);
       releaseAll(fragments);
       releaseAll(splashes);
