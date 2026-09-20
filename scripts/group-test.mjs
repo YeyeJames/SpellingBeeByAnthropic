@@ -26,8 +26,8 @@ function check(name, ok, detail = '') {
 console.log('1) /api/wordbank');
 {
   const all = await fetch(`${BASE}/api/wordbank`).then((r) => r.json());
-  check('沒帶參數時回全部', all.words.length > 400, `${all.words.length} 字`);
-  check('有回組別目錄', Array.isArray(all.groups) && all.groups.length >= 13, `${all.groups?.length} 組`);
+  check('沒帶參數時回全部', all.words.length > 700, `${all.words.length} 字`);
+  check('有回組別目錄', Array.isArray(all.groups) && all.groups.length >= 20, `${all.groups?.length} 組`);
   check(
     '每個字都屬於某一組',
     all.words.every((w) => typeof w.group === 'string' && w.group),
@@ -162,8 +162,14 @@ console.log('\n4) 練習頁選組');
     subs: [...document.querySelectorAll('#part-picker .part-btn .part-sub')].map((e) => e.textContent),
     heads: [...document.querySelectorAll('#part-picker .part-group-label')].map((e) => e.textContent)
   }));
-  check('十三組都列出來', picker.buttons.length === 13, picker.buttons.join('、'));
-  check('有 Part 也有 Week', picker.buttons.includes('Part 1') && picker.buttons.includes('Week 10'), picker.buttons.join('、'));
+  // 組數不寫死在測試裡：以後加 Week 19 只要改資料，這裡跟著後端走
+  const expectedGroups = await fetch(`${BASE}/api/wordbank/groups`).then((r) => r.json());
+  check(
+    `每一組都列出來（${expectedGroups.groups.length} 組）`,
+    picker.buttons.length === expectedGroups.groups.length,
+    picker.buttons.join('、')
+  );
+  check('有 Part 也有 Week', picker.buttons.includes('Part 1') && picker.buttons.includes('Week 18'), picker.buttons.join('、'));
   check('分成競賽與每週兩段', picker.heads.length === 2, picker.heads.join(' / '));
   check('每顆按鈕都寫著字數', picker.subs.every((s) => /^\d+ 個單字$/.test(s)), picker.subs.slice(0, 3).join('、'));
   check(
