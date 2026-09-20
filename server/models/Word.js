@@ -58,6 +58,12 @@ async function getAudio(id) {
   return audioCollection().findOne({ wordId: id });
 }
 
+/** 有真人錄音的單字 id。遊戲頁靠它決定哪些字不要用機器語音唸。 */
+async function listRecordedWordIds() {
+  const docs = await audioCollection().find({}).toArray();
+  return docs.filter((d) => d.gridfsFileId).map((d) => d.wordId);
+}
+
 async function setAudio(id, { gridfsFileId, mimeType, durationSec }) {
   await audioCollection().updateOne(
     { wordId: id },
@@ -78,6 +84,7 @@ module.exports = {
   listWordsByGroup,
   getWordById,
   getAudio,
+  listRecordedWordIds,
   setAudio,
   clearAudio,
   PARTS: wordBank.PARTS,

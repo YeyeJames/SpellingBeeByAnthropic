@@ -79,12 +79,40 @@ export function speakSentence(sentence) {
   return speak(sentence, NORMAL_RATE);
 }
 
+/*
+ * 正在播的那一段錄音。
+ *
+ * 必須留著參照才停得掉。遊戲裡打完一個字就換下一個，如果上一段錄音
+ * 還在播，兩個字會疊在一起——而這是聽寫遊戲，聽錯字就是打錯字。
+ * speechSynthesis 有 cancel()，<audio> 沒有，得自己管。
+ */
+let currentAudio = null;
+
+function stopRecordedAudio() {
+  if (!currentAudio) return;
+  try {
+    currentAudio.pause();
+    currentAudio.currentTime = 0;
+  } catch (err) {
+    /* 還沒開始播就被停掉，忽略 */
+  }
+  currentAudio = null;
+}
+
 function playRecordedAudio(url, rate) {
   return new Promise((resolve, reject) => {
+    stopRecordedAudio();
     const audio = new Audio(url);
+    currentAudio = audio;
     audio.playbackRate = rate;
-    audio.addEventListener('ended', () => resolve(true));
-    audio.addEventListener('error', () => reject(new Error('錄音播放失敗')));
+    audio.addEventListener('ended', () => {
+      if (currentAudio === audio) currentAudio = null;
+      resolve(true);
+    });
+    audio.addEventListener('error', () => {
+      if (currentAudio === audio) currentAudio = null;
+      reject(new Error('錄音播放失敗'));
+    });
     audio.play().catch(reject);
   });
 }
@@ -94,7 +122,11 @@ function playRecordedAudio(url, rate) {
  * word 需要包含 _id、english 與 audio.type。
  */
 export async function playWordAudio(word, { slow = false } = {}) {
-  const hasRecording = word.audio && word.audio.type === 'recorded' && word.audio.gridfsFileId;
+  /*
+   * 只看 type。遊戲頁只從 /api/words/recorded 拿得到「哪些字有錄音」，
+   * 拿不到 gridfsFileId——真要抓不到音檔，下面的 catch 會退回 TTS。
+   */
+  const hasRecording = word.audio && word.audio.type === 'recorded';
 
   if (hasRecording) {
     try {
@@ -130,4 +162,6 @@ export async function playCompetitionSequence(word) {
 
 export function stopSpeaking() {
   if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+  // 真人錄音也要停。只停 TTS 的話，換字時上一段錄音會繼續播下去
+  stopRecordedAudio();
 }

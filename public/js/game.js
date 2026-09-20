@@ -21,7 +21,12 @@ import { createBattleScene } from './game/battle-scene.js';
 import { createSfx } from './game/sfx.js';
 import { runCalibration } from './game/calibrate.js';
 import { createSoundBridge } from './game/sound-events.js';
-import { speakWord, speakSentence, stopSpeaking, listEnglishVoices } from './audio-player.js';
+import {
+  playWordAudio,
+  speakSentence,
+  stopSpeaking,
+  listEnglishVoices
+} from './audio-player.js';
 import { readShared, writeShared } from './local-store.js';
 
 const params = new URLSearchParams(location.search);
@@ -112,17 +117,33 @@ const ctx = {
   },
 
   /**
-   * 唸出目前這個字。沒有語音或靜音時什麼都不做——那兩種情況畫面會改成顯示文字。
+   * 唸出目前這個字。
+   *
+   * 有真人錄音就播錄音——孩子特地為唸錯的字錄了自己的聲音，
+   * 遊戲裡卻還用機器語音唸，那個錄音等於白錄。playWordAudio 會自己
+   * 處理「錄音抓不到就退回 TTS」。
+   *
+   * 靜音時什麼都不做（畫面會改成顯示文字）。沒有 TTS 語音但有錄音時
+   * 仍然要播：那個字聽得到，不該被當成整台裝置沒有聲音。
+   *
    * @param mode 'normal' | 'slow' | 'sentence'
    */
   speakCurrentWord(mode = 'normal') {
-    if (!ctx.voicesAvailable || ctx.sfx?.isMuted()) return;
+    if (ctx.sfx?.isMuted()) return;
     const s = ctx.state;
     if (!s || s.status !== 'running') return;
     const word = ctx.words[s.wordIndex];
     if (!word) return;
-    if (mode === 'sentence') speakSentence(word.exampleSentence || word.english);
-    else speakWord(word.english, { slow: mode === 'slow' });
+
+    const recorded = word.audio?.type === 'recorded';
+    if (!recorded && !ctx.voicesAvailable) return;
+
+    if (mode === 'sentence') {
+      // 例句沒有錄音，只有單字本身有
+      if (ctx.voicesAvailable) speakSentence(word.exampleSentence || word.english);
+      return;
+    }
+    playWordAudio(word, { slow: mode === 'slow' });
   },
 
   onSceneReady(scene) {
@@ -354,13 +375,42 @@ async function fetchWords() {
    */
   const ids = new Set(typeable.map((w) => w.group));
   if (ids.size === 1) {
-    const id = typeable[0].group;
-    const found = (data.groups || []).find((g) => g.id === id);
-    ctx.groupLabel = found ? found.label : id || '';
+    const found = (data.groups || []).find((g) => g.id === typeable[0].group);
+    ctx.groupLabel = found ? found.label : typeable[0].group || '';
   } else {
     ctx.groupLabel = '全部';
   }
-  return typeable;
+
+  /*
+   * 補上「哪些字有真人錄音」。
+   *
+   * 這支要登入、要資料庫，所以失敗是可以接受的——拿不到就全部用機器語音，
+   * 遊戲照玩。不能因為這一步讓整個遊戲開不起來：/api/wordbank 刻意設計成
+   * 不碰資料庫，就是為了資料庫掛掉時還能玩。
+   */
+  const recorded = await fetchRecordedIds();
+  ctx.recordedCount = 0;
+  return typeable.map((w) => {
+    const hasRecording = recorded.has(w.id);
+    if (hasRecording) ctx.recordedCount += 1;
+    return {
+      ...w,
+      _id: w.id, // playWordAudio 用 _id 組音檔網址
+      audio: { type: hasRecording ? 'recorded' : 'tts' }
+    };
+  });
+}
+
+/** 有真人錄音的單字 id。拿不到就回空集合，代表全部用機器語音。 */
+async function fetchRecordedIds() {
+  try {
+    const res = await fetch('/api/words/recorded', { credentials: 'same-origin' });
+    if (!res.ok) return new Set();
+    const data = await res.json();
+    return new Set(data.wordIds || []);
+  } catch (err) {
+    return new Set();
+  }
 }
 
 function setPaused(next) {
@@ -490,10 +540,14 @@ async function boot() {
         return;
       }
       document.getElementById('pregame-group').textContent = ctx.groupLabel || '練習';
+      const countParts = [`總共 ${ctx.words.length} 個字`];
+      if (ctx.skippedCount > 0) {
+        countParts.push(`另外 ${ctx.skippedCount} 個有空白的詞只在練習模式出現`);
+      }
+      // 自己錄的音要看得到，不然他不會知道遊戲裡到底有沒有用上
+      if (ctx.recordedCount > 0) countParts.push(`其中 ${ctx.recordedCount} 個唸的是你自己錄的聲音`);
       document.getElementById('pregame-count').textContent =
-        ctx.skippedCount > 0
-          ? `總共 ${ctx.words.length} 個字（另外 ${ctx.skippedCount} 個有空白的詞只在練習模式出現）`
-          : `總共 ${ctx.words.length} 個字`;
+        countParts.length > 1 ? `${countParts[0]}（${countParts.slice(1).join('、')}）` : countParts[0];
       pregameEl.querySelectorAll('[data-order]').forEach((btn) => {
         // 把上次選的標起來：他會知道上一場是怎麼打的
         btn.classList.toggle('is-last', btn.dataset.order === storedOrder());

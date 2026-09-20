@@ -158,9 +158,9 @@ console.log('\n2) group=w01 照順序');
 /* ── 4. 練習不濾掉含空白的詞條 ──────────────────────────── */
 console.log('\n4) 練習模式保留含空白的詞條');
 {
-  const r = await startSession({ group: 'w06', order: 'sequential' });
+  const r = await startSession({ group: 'w06b', order: 'sequential' });
   const words = r.body.words || [];
-  check('Week 6 是 49 個字（不是遊戲的 46）', words.length === 49, `${words.length} 個`);
+  check('Week 6② 是 24 個字（不是遊戲的 21）', words.length === 24, `${words.length} 個`);
   const spaced = words.filter((w) => /[^a-z]/.test(w.english)).map((w) => w.english);
   check('含空白的詞條都在', spaced.length === 3, spaced.join('、'));
 }
@@ -192,7 +192,55 @@ console.log('\n6) 不存在的組要擋下來');
   check('什麼都不給也要擋下來', noArg.status === 400, `${noArg.status} ${noArg.body.error || ''}`);
 }
 
-console.log('\n7) 舊的 part= 還能用');
+/* ── 7.5 錄音清單 ───────────────────────────────────────── */
+/*
+ * 遊戲靠這支知道哪些字要播孩子自己錄的聲音。沒有它，遊戲就永遠用機器語音，
+ * 而且不會有任何錯誤訊息——只有孩子知道「還是唸錯」。
+ */
+console.log('\n7) 哪些字有真人錄音');
+{
+  const wordsRouter = require('../server/routes/words.js');
+  const app2 = express();
+  app2.use(express.json());
+  app2.use((req, res, next) => {
+    req.session = req.get('x-test-user') ? { userId: req.get('x-test-user'), destroy: (cb) => cb() } : {};
+    next();
+  });
+  app2.use('/api/words', wordsRouter);
+  const srv2 = app2.listen(0);
+  const base2 = `http://127.0.0.1:${srv2.address().port}`;
+
+  const get = (path, auth = true) =>
+    fetch(`${base2}${path}`, { headers: auth ? { 'x-test-user': USER_ID.toString() } : {} });
+
+  const anon = await get('/api/words/recorded', false);
+  check('沒登入拿不到', anon.status === 401, String(anon.status));
+
+  const empty = await get('/api/words/recorded').then((r) => r.json());
+  check('還沒有人錄音時回空陣列', Array.isArray(empty.wordIds) && empty.wordIds.length === 0);
+
+  // 模擬孩子在練習模式錄了一個字
+  store.wordAudio.push({ wordId: 'w06-loose', gridfsFileId: 'fake-file-id', mimeType: 'audio/webm' });
+  // 只建了紀錄卻沒有檔案的，不算數——遊戲去抓會 404，不如一開始就別列
+  store.wordAudio.push({ wordId: 'w01-path', gridfsFileId: null });
+
+  const after = await get('/api/words/recorded').then((r) => r.json());
+  check('錄過的字會出現在清單裡', after.wordIds.includes('w06-loose'), after.wordIds.join(','));
+  check('沒有音檔的紀錄不列入', !after.wordIds.includes('w01-path'), after.wordIds.join(','));
+
+  /*
+   * 這一條是整件事的關鍵：孩子錄的是 w06-loose，而 Week 6 現在被切成
+   * w06a / w06b。如果切組時把 id 改成 w06b-loose，這個錄音就變成孤兒，
+   * 遊戲再也找不到它——而且不會有任何錯誤訊息。
+   */
+  const { getWordById } = require('../server/data/word-bank.js');
+  const w = getWordById('w06-loose');
+  check('切組之後這個 id 仍然查得到字', !!w, w ? `${w.english}（${w.group}）` : '查不到');
+
+  srv2.close();
+}
+
+console.log('\n8) 舊的 part= 還能用');
 {
   const r = await startSession({ part: 1, order: 'sequential' });
   check('開得起來', r.status === 201, `${r.status} ${r.body.error || ''}`);

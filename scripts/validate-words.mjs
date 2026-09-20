@@ -19,7 +19,7 @@
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { WORDS, GROUPS, listGroups, wordsByGroup, getWordById } = require('../server/data/word-bank.js');
+const { WORDS, GROUPS, MAX_GROUP_SIZE, listGroups, wordsByGroup, getWordById } = require('../server/data/word-bank.js');
 
 const MAX_SENTENCE_WORDS = 12;
 const MIN_TYPEABLE_PER_GROUP = 10;
@@ -89,6 +89,25 @@ function problem(where, msg) {
   console.log(`3) 欄位檢查：${bad === 0 ? '每個字都完整' : `${bad} 個字有問題`}`);
 }
 
+/* ── 6.5 切組不能動到 id ─────────────────────────────────
+   一組太大時會切成 Week 11①／Week 11②，但 id 仍然用週次組出來。
+   id 是「使用者進度」與「孩子的真人錄音」的對應鍵——改了不會有任何
+   錯誤訊息，只會讓錄音默默變成孤兒，下次播出來又是機器語音。 */
+{
+  let bad = 0;
+  for (const g of GROUPS) {
+    if (g.kind !== 'week') continue;
+    const week = g.id.replace(/[ab]$/, '');
+    for (const w of wordsByGroup(g.id)) {
+      if (!w.id.startsWith(`${week}-`)) {
+        bad += 1;
+        problem(w.id, `id 應該以 ${week}- 開頭（切組不能改 id）`);
+      }
+    }
+  }
+  console.log(`6) 切組後 id 仍然對應週次：${bad === 0 ? '沒問題' : `${bad} 個字的 id 跑掉了`}`);
+}
+
 /* ── 7. 每一組的規模 ─────────────────────────────────────── */
 {
   console.log('\n每一組');
@@ -101,6 +120,13 @@ function problem(where, msg) {
     if (g.count === 0) problem(g.label, '這一組是空的');
     if (g.typeableCount < MIN_TYPEABLE_PER_GROUP) {
       problem(g.label, `能打的字只有 ${g.typeableCount} 個，不夠打一場`);
+    }
+    /*
+     * 太大的組會讓他在中途放棄，而放棄的那一次會變成「這個東西很痛苦」
+     * 的記憶。超過就該對半切（見 word-bank.js 的 MAX_GROUP_SIZE）。
+     */
+    if (g.count > MAX_GROUP_SIZE) {
+      problem(g.label, `${g.count} 個字，一次練不完，應該對半切`);
     }
   }
   const total = GROUPS.reduce((a, g) => a + g.count, 0);

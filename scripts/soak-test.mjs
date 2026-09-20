@@ -41,6 +41,13 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 const consoleErrors = [];
 page.on('pageerror', (e) => consoleErrors.push(`pageerror: ${e.message}`));
 page.on('console', (m) => {
+  /*
+   * 「哪些字有真人錄音」那支要登入與資料庫，這台機器兩個都沒有，
+   * 所以它回 503、瀏覽器記一筆錯誤。這是設計好會發生而且已經處理掉的
+   * （拿不到就全部用機器語音），不算故障——但也不能整段忽略 503，
+   * 否則真的壞掉時測試會安靜地放行。只放行這一支。
+   */
+  if (m.type() === 'error' && (m.location()?.url || '').includes('/api/words/recorded')) return;
   if (m.type() === 'error') consoleErrors.push(`console.error: ${m.text()}`);
 });
 

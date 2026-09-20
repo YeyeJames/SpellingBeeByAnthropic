@@ -58,13 +58,13 @@ console.log('1) 開場畫面');
   check('兩種出題順序都有', shown.orders.length === 2, shown.orders.join('、'));
 
   /*
-   * 練習頁寫「Week 6・49 個單字」，遊戲只有 46 個。不解釋的話他會以為字不見了，
+   * 練習頁寫「Week 6②・24 個單字」，遊戲只有 21 個。不解釋的話他會以為字不見了，
    * 所以差額一定要講出來。
    */
-  await page.goto(`${BASE}/game?group=w06&n=200`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`${BASE}/game?group=w06b&n=200`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#pregame:not([hidden])', { timeout: 15000 });
   const w06 = await page.evaluate(() => document.getElementById('pregame-count').textContent);
-  check('有字被濾掉時會說明差額', w06 === '總共 46 個字（另外 3 個有空白的詞只在練習模式出現）', w06);
+  check('有字被濾掉時會說明差額', w06 === '總共 21 個字（另外 3 個有空白的詞只在練習模式出現）', w06);
 
   await page.goto(`${BASE}/game?group=w18&n=200`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#pregame:not([hidden])', { timeout: 15000 });
@@ -200,6 +200,73 @@ console.log('\n6) 練習頁 → 遊戲');
   }));
   check('選好的組有帶過去', carried.group === 'Week 18', carried.group);
   check('整組都帶過去，沒被砍成 20 個', carried.count === '總共 14 個字', carried.count);
+  await context.close();
+}
+
+/* ── 7. 真人錄音 ────────────────────────────────────────── */
+/*
+ * 孩子聽到某個字唸錯，自己到練習模式錄了一段。遊戲裡如果還是用機器語音唸，
+ * 那段錄音等於白錄——而且不會有任何錯誤訊息，只有他知道「還是不對」。
+ *
+ * 這台機器沒有資料庫，所以錄音清單與音檔都用攔截的方式給。
+ * 要驗的是遊戲有沒有去抓錄音，不是錄音怎麼存的（那有 practice-session-test）。
+ */
+console.log('\n7) 有錄音的字要播錄音，不要用機器語音');
+{
+  const { context, page } = await openCalibrated();
+
+  // 一段極短的靜音 wav，足夠讓 <audio> 真的播得起來
+  const WAV = Buffer.from(
+    'UklGRiQAAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YQAAAAA=',
+    'base64'
+  );
+  const audioRequests = [];
+
+  await page.route('**/api/words/recorded', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      // Week 18 的第一個字
+      body: JSON.stringify({ wordIds: ['w18-crack'] })
+    })
+  );
+  await page.route('**/api/words/*/audio', (r) => {
+    audioRequests.push(r.request().url());
+    r.fulfill({ status: 200, contentType: 'audio/wav', body: WAV });
+  });
+
+  await page.goto(`${BASE}/game?group=w18&n=200&order=sequential&show=1`, {
+    waitUntil: 'domcontentloaded'
+  });
+  await page.waitForFunction(() => window.__spellbee && window.__spellbee.ready, null, { timeout: 15000 });
+
+  const marked = await page.evaluate(() => {
+    const words = window.__spellbee.words();
+    return {
+      recordedCount: window.__spellbee.recordedCount(),
+      crack: words.find((w) => w.id === 'w18-crack')?.audio,
+      other: words.find((w) => w.id !== 'w18-crack')?.audio
+    };
+  });
+  check('有錄音的字被標成 recorded', marked.crack === 'recorded', String(marked.crack));
+  check('沒錄音的字還是用機器語音', marked.other === 'tts', String(marked.other));
+  check('數得出這一場有幾個字是自己錄的', marked.recordedCount === 1, String(marked.recordedCount));
+
+  // 按「再聽一次」，應該去抓那個字的錄音
+  await page.keyboard.press('ArrowUp');
+  await page.waitForTimeout(500);
+  check(
+    '真的去抓了錄音檔',
+    audioRequests.some((u) => u.includes('/api/words/w18-crack/audio')),
+    audioRequests.join(' | ') || '一次都沒抓'
+  );
+
+  console.log('\n8) 開場畫面要讓他知道錄音有用上');
+  await page.goto(`${BASE}/game?group=w18&n=200`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('#pregame:not([hidden])', { timeout: 15000 });
+  const note = await page.evaluate(() => document.getElementById('pregame-count').textContent);
+  check('寫出有幾個字是自己錄的', note.includes('其中 1 個唸的是你自己錄的聲音'), note);
+
   await context.close();
 }
 

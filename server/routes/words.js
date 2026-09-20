@@ -36,6 +36,25 @@ router.get('/', async (req, res, next) => {
   }
 });
 
+/*
+ * 哪些單字有真人錄音。
+ *
+ * 遊戲頁的單字是從 /api/wordbank 拿的（不碰資料庫、不必登入，這樣
+ * 資料庫掛掉時遊戲仍然打得開），那份資料裡沒有錄音資訊。少了這支，
+ * 遊戲就只會用機器語音唸——孩子特地錄的那個字等於白錄。
+ *
+ * 只回 id 清單，不回音檔本身：遊戲只需要知道「這個字要不要去抓錄音」。
+ *
+ * 必須排在 /:id 前面，否則會被當成 id 是 "recorded" 的單字。
+ */
+router.get('/recorded', async (req, res, next) => {
+  try {
+    res.json({ wordIds: await Word.listRecordedWordIds() });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/:id', async (req, res, next) => {
   try {
     const word = await Word.getWordById(req.params.id);

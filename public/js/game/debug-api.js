@@ -115,7 +115,17 @@ export function installDebugApi(ctx) {
 
     /** 這一場的題庫（已經濾掉含空白／連字號、打不出來的詞條）。 */
     words() {
-      return (ctx.words || []).map((w) => ({ id: w.id, group: w.group, english: w.english }));
+      return (ctx.words || []).map((w) => ({
+        id: w.id,
+        group: w.group,
+        english: w.english,
+        audio: w.audio?.type || 'tts'
+      }));
+    },
+
+    /** 這一場有幾個字會播孩子自己錄的聲音。 */
+    recordedCount() {
+      return ctx.recordedCount || 0;
     },
 
     /** 這一場的出題順序設定，以及實際排出來的題目序列。 */

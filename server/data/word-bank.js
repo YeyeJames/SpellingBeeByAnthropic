@@ -154,12 +154,45 @@ function decorate(word, group) {
 /* 競賽單字：group 由 part 推出來，id 維持原樣不動。 */
 const CONTEST = CONTEST_WORDS.map((w) => decorate(w, `p${w.part}`));
 
+/*
+ * 一組最多幾個字。
+ *
+ * 超過就對半切成上下兩半（Week 11 → Week 11①、Week 11②）。
+ * 理由是一次要練完六十一個字，對小學生是一坐四十分鐘——他會在中間放棄，
+ * 而放棄的那一次會變成「這個東西很痛苦」的記憶。切一半之後最大三十一個，
+ * 跟競賽單字一組二十五個是同一個量級。
+ *
+ * 不用「隨機抽二十個」：那樣每次練到的字不一樣，永遠不會有一組真的練完，
+ * 而「練到接近全對五六次就過關」正是靠固定的一組才成立。
+ */
+const MAX_GROUP_SIZE = 40;
+
+/*
+ * 切開之後 group 變了，但單字的 id 「不」變——id 仍然用週次組出來。
+ *
+ * id 是使用者進度與真人錄音的對應鍵。孩子已經為唸錯的字錄過自己的聲音，
+ * 改 id 會讓那些錄音全部變成孤兒，而且不會有任何錯誤訊息。
+ */
+function splitWeek(week) {
+  if (week.words.length <= MAX_GROUP_SIZE) {
+    return [{ id: week.id, label: week.label, words: week.words }];
+  }
+  const half = Math.ceil(week.words.length / 2);
+  return [
+    { id: `${week.id}a`, label: `${week.label}①`, words: week.words.slice(0, half) },
+    { id: `${week.id}b`, label: `${week.label}②`, words: week.words.slice(half) }
+  ];
+}
+
+const WEEK_GROUPS = WEEKS.flatMap(splitWeek);
+
 /* 週單字：從三元組展開成正式格式。 */
-const WEEKLY = WEEKS.flatMap((week) =>
-  week.words.map(([english, chinese, exampleSentence]) =>
+const WEEKLY = WEEK_GROUPS.flatMap((g) =>
+  g.words.map(([english, chinese, exampleSentence]) =>
     decorate(
-      { id: `${week.id}-${slug(english)}`, part: null, english, chinese, exampleSentence },
-      week.id
+      // id 用週次（w11），不是切開後的組（w11a）——見上面為什麼
+      { id: `${g.id.replace(/[ab]$/, '')}-${slug(english)}`, part: null, english, chinese, exampleSentence },
+      g.id
     )
   )
 );
@@ -172,7 +205,7 @@ const WORDS = [...CONTEST, ...WEEKLY];
  */
 const GROUPS = [
   ...PARTS.map((part) => ({ id: `p${part}`, label: `Part ${part}`, kind: 'contest', part })),
-  ...WEEKS.map((week) => ({ id: week.id, label: week.label, kind: 'week', part: null }))
+  ...WEEK_GROUPS.map((g) => ({ id: g.id, label: g.label, kind: 'week', part: null }))
 ].map((g) => {
   const words = WORDS.filter((w) => w.group === g.id);
   return { ...g, count: words.length, typeableCount: words.filter((w) => w.typeable).length };
@@ -190,7 +223,15 @@ function wordsByPart(part) {
 }
 
 function wordsByGroup(groupId) {
-  return BY_GROUP.get(String(groupId)) || [];
+  const id = String(groupId);
+  const exact = BY_GROUP.get(id);
+  if (exact) return exact;
+  /*
+   * 切開之前存在過的組（w06）現在變成 w06a / w06b。
+   * 孩子的瀏覽器歷史或既有連結還指著舊的 id，直接報錯就是「昨天還能開，
+   * 今天壞了」。對到上半組，畫面標題會誠實寫 Week 6①，他看得出來拿到哪一半。
+   */
+  return BY_GROUP.get(`${id}a`) || [];
 }
 
 function listGroups() {
@@ -206,6 +247,7 @@ module.exports = {
   CONTEST_WORDS: CONTEST,
   PARTS,
   GROUPS,
+  MAX_GROUP_SIZE,
   allWords,
   wordsByPart,
   wordsByGroup,

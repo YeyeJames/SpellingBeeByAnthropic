@@ -2,7 +2,7 @@
  * 分組測試——把「一次練一組」這件事從資料一路驗到遊戲畫面。
  *
  * 要證明的事：
- *   1. /api/wordbank?group=w06 只回那一組的字
+ *   1. /api/wordbank?group=w06b 只回那一組的字
  *   2. 舊的 ?part= 還能用（單字庫頁面和既有連結靠它）
  *   3. 遊戲用 ?group= 開得起來，而且題目真的來自那一組
  *   4. 含空白／連字號的詞條不會被丟進遊戲（那種字打不出來）
@@ -34,8 +34,8 @@ console.log('1) /api/wordbank');
     all.words.find((w) => !w.group)?.id || ''
   );
 
-  const w06 = await fetch(`${BASE}/api/wordbank?group=w06`).then((r) => r.json());
-  check('?group=w06 只回那一組', w06.words.every((w) => w.group === 'w06'), `${w06.words.length} 字`);
+  const w06 = await fetch(`${BASE}/api/wordbank?group=w06b`).then((r) => r.json());
+  check('?group=w06b 只回那一組', w06.words.every((w) => w.group === 'w06b'), `${w06.words.length} 字`);
 
   const p1 = await fetch(`${BASE}/api/wordbank?part=1`).then((r) => r.json());
   check('?part=1 仍然可用（舊連結）', p1.words.length === 25 && p1.words.every((w) => w.part === 1), `${p1.words.length} 字`);
@@ -79,11 +79,18 @@ console.log('\n2) 遊戲用 ?group= 開起來');
   const page = await context.newPage();
   page.on('pageerror', (e) => consoleErrors.push(`pageerror: ${e.message}`));
   page.on('console', (m) => {
+    /*
+     * 「哪些字有真人錄音」那支要登入與資料庫，這台機器兩個都沒有，
+     * 所以它回 503、瀏覽器記一筆錯誤。這是設計好會發生而且已經處理掉的
+     * （拿不到就全部用機器語音），不算故障——但也不能整段忽略 503，
+     * 否則真的壞掉時測試會安靜地放行。只放行這一支。
+     */
+    if (m.type() === 'error' && (m.location()?.url || '').includes('/api/words/recorded')) return;
     if (m.type() === 'error') consoleErrors.push(`console.error: ${m.text()}`);
   });
 
-  // w06 是含最多「打不出來的詞條」的一組，拿它來測濾除最有意義
-  await page.goto(`${BASE}/game?group=w06&difficulty=normal&order=sequential&n=100`, { waitUntil: 'domcontentloaded' });
+  // Week 6② 是含最多「打不出來的詞條」的一組，拿它來測濾除最有意義
+  await page.goto(`${BASE}/game?group=w06b&difficulty=normal&order=sequential&n=100`, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => window.__spellbee && window.__spellbee.ready, null, { timeout: 15000 });
 
   const info = await page.evaluate(() => {
@@ -94,8 +101,8 @@ console.log('\n2) 遊戲用 ?group= 開起來');
       withSpace: words.filter((w) => /[^a-z]/.test(w.english)).map((w) => w.english)
     };
   });
-  check('題目都來自 w06', info.groups.length === 1 && info.groups[0] === 'w06', info.groups.join(','));
-  check('題目數量對得上（46 個能打的字）', info.count === 46, `${info.count} 字`);
+  check('題目都來自 w06b', info.groups.length === 1 && info.groups[0] === 'w06b', info.groups.join(','));
+  check('題目數量對得上（21 個能打的字）', info.count === 21, `${info.count} 字`);
   check('沒有含空白或連字號的題目', info.withSpace.length === 0, info.withSpace.join('、'));
 
   console.log('\n3) 不存在的組要報錯，不要開一場空戰鬥');
@@ -173,19 +180,19 @@ console.log('\n4) 練習頁選組');
   check('分成競賽與每週兩段', picker.heads.length === 2, picker.heads.join(' / '));
   check('每顆按鈕都寫著字數', picker.subs.every((s) => /^\d+ 個單字$/.test(s)), picker.subs.slice(0, 3).join('、'));
   check(
-    'Week 6 顯示 49 個字（練習不濾掉含空白的詞條）',
-    picker.subs[picker.buttons.indexOf('Week 6')] === '49 個單字',
-    picker.subs[picker.buttons.indexOf('Week 6')]
+    'Week 6② 顯示 24 個字（練習不濾掉含空白的詞條）',
+    picker.subs[picker.buttons.indexOf('Week 6②')] === '24 個單字',
+    picker.subs[picker.buttons.indexOf('Week 6②')]
   );
 
   // 選了要記得，下次進來才不用再選一次
-  await page.click('#part-picker .part-btn:has(.part-title:text-is("Week 6"))');
+  await page.click('#part-picker .part-btn:has(.part-title:text-is("Week 6②"))');
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('sb:v2:shared:lastGroup')));
-  check('選過的組會記住', saved === 'w06', String(saved));
+  check('選過的組會記住', saved === 'w06b', String(saved));
   const selected = await page.evaluate(
     () => document.querySelector('#part-picker .part-btn.selected .part-title')?.textContent
   );
-  check('選中的那一顆看得出來', selected === 'Week 6', String(selected));
+  check('選中的那一顆看得出來', selected === 'Week 6②', String(selected));
 
   check('沒有未捕捉的例外', pageErrors.length === 0, pageErrors.slice(0, 2).join(' | '));
   await context.close();
