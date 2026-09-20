@@ -218,16 +218,32 @@ export function createBattleScene(ctx) {
       this.comboText.setPosition(width * 0.94, hudY);
       this.honeyText.setPosition(width * 0.94, hudY + 30);
 
+      /*
+       * 字級跟著畫面高度縮放。
+       *
+       * 位置是高度的比例、字級卻是固定像素的話，畫面一矮就會疊在一起——
+       * iPad 橫向把螢幕鍵盤叫出來只剩 430px 高，題目、漏字提示與結束訊息
+       * 三段文字剛好撞在一起。上下限是為了避免大螢幕上大得誇張、
+       * 小螢幕上小到看不清。
+       */
+      const ui = Math.max(0.62, Math.min(1.15, height / 720));
+      this.wordText.setFontSize(Math.round(44 * ui));
+      this.scaffoldNote.setFontSize(Math.round(13 * ui));
+      this.missText.setFontSize(Math.round(40 * ui));
+      this.missHint.setFontSize(Math.round(18 * ui));
+      this.statusText.setFontSize(Math.round(30 * ui));
+
       this.wordText.setPosition(width * 0.5, height * 0.3);
-      this.scaffoldNote.setPosition(width * 0.5, height * 0.3 + 40);
+      this.scaffoldNote.setPosition(width * 0.5, height * 0.3 + 40 * ui);
       /*
        * 放在題目下面、戰場上面：看得到，又不會擋住正在走過來的敵人。
        * 也要跟 statusText（0.5）錯開——最後一條命是被這個字打掉的時候，
        * 「蜂巢被攻破了」與正確拼法會同時出現。
        */
       this.missText.setPosition(width * 0.5, height * 0.4);
-      this.missHint.setPosition(width * 0.5, height * 0.4 + 34);
-      this.statusText.setPosition(width * 0.5, height * 0.5);
+      this.missHint.setPosition(width * 0.5, height * 0.4 + 34 * ui);
+      // 0.52 而不是 0.5：螢幕鍵盤彈出後的矮畫面上，跟上面那行要留得開
+      this.statusText.setPosition(width * 0.5, height * 0.52);
     }
 
     update(time, delta) {
