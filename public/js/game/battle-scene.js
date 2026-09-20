@@ -25,6 +25,19 @@ const LANE_RIGHT = 0.92; // 入侵口
 
 /* 擊殺頓挫：短暫凍結世界，讓「打掉了」這件事有重量。 */
 const HIT_STOP_MS = 80;
+
+/*
+ * 漏字時把正確拼法亮出來。
+ *
+ * 沒打完就是不知道怎麼拼。這時候如果只是扣一滴血、換下一個字，他什麼也沒學到，
+ * 而且會一直在同一個字上重複失敗（漏掉的字會排回隊伍尾端，本場之內還會再遇到）。
+ * 所以一定要讓他看見那個字長什麼樣子。
+ *
+ * 不凍結畫面：凍結的同時得把輸入擋掉，而擋下來的按鍵解凍後會打在「下一個字」上，
+ * 平白多出幾次打錯。下一個敵人走完全程至少好幾秒，兩秒的提示來得及看完。
+ */
+const MISS_REVEAL_MS = 2200;
+const MISS_FADE_MS = 500;
 /* 敵人被擊中的擠壓與閃白時間 */
 const ENEMY_HIT_MS = 130;
 
@@ -144,6 +157,28 @@ export function createBattleScene(ctx) {
         })
         .setOrigin(0.5);
 
+      /*
+       * 漏字時亮出正確拼法。用紅色，跟平常的單字顯示分得開——
+       * 他要一眼看出「這是我剛剛沒打完的那個字」，不是新的題目。
+       */
+      this.missText = this.add
+        .text(0, 0, '', {
+          fontFamily: 'ui-monospace, monospace',
+          fontSize: '40px',
+          color: '#fca5a5'
+        })
+        .setOrigin(0.5)
+        .setAlpha(0);
+      this.missHint = this.add
+        .text(0, 0, '', {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '18px',
+          color: '#f87171'
+        })
+        .setOrigin(0.5)
+        .setAlpha(0);
+      this.missRemainMs = 0;
+
       this.statusText = this.add
         .text(0, 0, '', { fontFamily: 'system-ui, sans-serif', fontSize: '30px', color: '#f8fafc' })
         .setOrigin(0.5)
@@ -185,6 +220,13 @@ export function createBattleScene(ctx) {
 
       this.wordText.setPosition(width * 0.5, height * 0.3);
       this.scaffoldNote.setPosition(width * 0.5, height * 0.3 + 40);
+      /*
+       * 放在題目下面、戰場上面：看得到，又不會擋住正在走過來的敵人。
+       * 也要跟 statusText（0.5）錯開——最後一條命是被這個字打掉的時候，
+       * 「蜂巢被攻破了」與正確拼法會同時出現。
+       */
+      this.missText.setPosition(width * 0.5, height * 0.4);
+      this.missHint.setPosition(width * 0.5, height * 0.4 + 34);
       this.statusText.setPosition(width * 0.5, height * 0.5);
     }
 
@@ -236,6 +278,7 @@ export function createBattleScene(ctx) {
       if (!ctx.isPaused()) {
         this.effects.update(delta);
         this.updateEnemyHit(delta);
+        this.updateMissReveal(delta);
       }
       this.render(state);
       ctx.syncHud(state);
@@ -285,10 +328,24 @@ export function createBattleScene(ctx) {
             this.enemyHitT = -1;
             this.enemyBody.setScale(1, 1);
             break;
-          case EV.WORD_MISSED:
+          case EV.WORD_MISSED: {
             this.cameras.main.shake(180, 0.01);
             this.effects.setCrackProgress(0);
+            /*
+             * 沒打完就是不知道怎麼拼——這時候一定要讓他看見那個字。
+             * 不然他只會被扣一滴血，然後在同一個字上再失敗一次
+             * （漏掉的字會排回隊伍尾端，本場之內還會再遇到）。
+             */
+            const missed = state.words[ev.a];
+            if (missed) {
+              this.missText.setText(missed.english || '');
+              this.missHint.setText(
+                missed.chinese ? `正確拼法・${missed.chinese}` : '正確拼法'
+              );
+              this.missRemainMs = MISS_REVEAL_MS;
+            }
             break;
+          }
           case EV.LISTEN:
             // 玩家已經付出敵人前進的代價，這裡把單字再唸一次給他
             ctx.speakCurrentWord(
@@ -305,6 +362,33 @@ export function createBattleScene(ctx) {
       }
       clearEvents(state);
       ctx.soundBridge?.reset();
+    }
+
+    /**
+     * 正確拼法的提示：撐兩秒再淡出。
+     *
+     * 用累加 delta 而不是 performance.now()，暫停時提示才不會自己走完——
+     * 他按 Esc 去問「這個字怎麼唸」，回來提示還在。
+     */
+    updateMissReveal(delta) {
+      if (this.missRemainMs <= 0) return;
+      this.missRemainMs -= delta;
+      if (this.missRemainMs <= 0) {
+        this.missRemainMs = 0;
+        this.missText.setAlpha(0);
+        this.missHint.setAlpha(0);
+        return;
+      }
+      const alpha = Math.min(1, this.missRemainMs / MISS_FADE_MS);
+      this.missText.setAlpha(alpha);
+      this.missHint.setAlpha(alpha);
+    }
+
+    /** 換一場時把提示收掉，否則上一場的字會留在新的一場上。 */
+    clearMiss() {
+      this.missRemainMs = 0;
+      this.missText.setAlpha(0);
+      this.missHint.setAlpha(0);
     }
 
     /** 敵人被擊中時的擠壓與閃白，自己算不用 tween。 */

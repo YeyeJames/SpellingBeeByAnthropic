@@ -128,6 +128,18 @@ export function installDebugApi(ctx) {
       return ctx.recordedCount || 0;
     },
 
+    /** 漏字時亮出來的正確拼法。沒在顯示時 visible 是 false。 */
+    missReveal() {
+      const s = ctx.scene;
+      if (!s) return { visible: false, word: '', hint: '' };
+      return {
+        visible: s.missRemainMs > 0,
+        remainMs: Math.round(s.missRemainMs || 0),
+        word: s.missText?.text || '',
+        hint: s.missHint?.text || ''
+      };
+    },
+
     /** 這一場的出題順序設定，以及實際排出來的題目序列。 */
     order() {
       return ctx.order;

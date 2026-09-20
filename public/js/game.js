@@ -259,6 +259,7 @@ function startBattle() {
   stopSpeaking();
   ctx.soundBridge?.reset();
   ctx.scene?.effects?.reset();
+  ctx.scene?.clearMiss?.();
   clearInputQueue(ctx.queue);
   resetPerf(ctx.perf);
   resetLatency(ctx.latency);
