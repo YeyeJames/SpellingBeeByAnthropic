@@ -333,6 +333,22 @@ reviewBtn.addEventListener('click', () => {
   sound.playClick();
   startPractice({ reviewOnly: true });
 });
+
+/*
+ * 去遊戲，並且把選好的那一組帶過去。
+ *
+ * 遊戲頁有「← 回練習」，這邊本來卻沒有路回去，等於只能單向走。
+ * n 要給一個比最大一組還大的數字：遊戲預設只取 20 個字，不給的話
+ * 一組 61 字會被默默砍成 20——畫面寫「總共 20 個字」，跟這一頁對不起來。
+ */
+document.getElementById('go-game-btn')?.addEventListener('click', () => {
+  if (!selectedGroup) {
+    setupError.textContent = '請先選擇要玩哪一組';
+    return;
+  }
+  sound.playClick();
+  location.href = `/game?group=${encodeURIComponent(selectedGroup)}&n=200`;
+});
 submitBtn.addEventListener('click', () => {
   sound.playClick();
   submitAnswer();

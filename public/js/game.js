@@ -34,6 +34,20 @@ function initialSeed() {
 }
 
 const DIFFICULTY_KEY = 'gameDifficulty';
+const ORDER_KEY = 'gameOrder';
+
+/**
+ * 出題順序。
+ *
+ * 網址指定就用網址的，而且跳過開場畫面——自動化測試靠這個，
+ * 規則跟難度一樣。沒指定就記住上次選的，當作開場畫面的預設。
+ */
+function storedOrder() {
+  const fromUrl = params.get('order');
+  if (fromUrl === 'random' || fromUrl === 'sequential') return fromUrl;
+  const saved = readShared(ORDER_KEY);
+  return saved === 'random' || saved === 'sequential' ? saved : null;
+}
 
 /**
  * 這次要用哪個難度。
@@ -55,7 +69,8 @@ const ctx = {
   log: null,
   seed: initialSeed(),
   difficulty: storedDifficulty() || 'normal',
-  order: params.get('order') === 'random' ? 'random' : 'sequential',
+  order: storedOrder() || 'sequential',
+  groupLabel: '',
   paused: false,
   scene: null,
   phaserGame: null,
@@ -78,6 +93,9 @@ const ctx = {
   getClockDropped: () => ctx.scene?.clock.droppedMs ?? 0,
   getEffectStats: () =>
     ctx.scene?.effects?.stats() ?? { stingers: 0, fragments: 0, splashes: 0, recycled: 0 },
+
+  /** 每一格由畫面端呼叫，把進度寫回上方那一條。 */
+  syncHud: (state) => syncHud(state),
 
   /**
    * 要不要把單字顯示在畫面上。
@@ -228,10 +246,49 @@ function startBattle() {
 }
 
 const DIFFICULTY_LABELS = { easy: '輕鬆', normal: '標準', hard: '挑戰' };
+const ORDER_LABELS = { sequential: '照順序', random: '打亂' };
+
+/*
+ * 進度列的快取。
+ *
+ * 這兩個數字每一格都要對一次，但幾乎每一格都沒變。不比對就直接寫 textContent
+ * 的話，等於每秒配置六十次字串——之前量過，那種每格配置正是造成 GC 頓挫的原因。
+ */
+let lastKilled = -1;
+let lastMissed = -1;
+
+/** 每一格由 battle-scene 呼叫。只有數字真的變了才動 DOM。 */
+function syncHud(state) {
+  if (!state) return;
+  const { wordsKilled, wordsMissed } = state.stats;
+  if (wordsKilled === lastKilled && wordsMissed === lastMissed) return;
+  lastKilled = wordsKilled;
+  lastMissed = wordsMissed;
+
+  const el = document.getElementById('progress-label');
+  if (!el) return;
+  const total = ctx.words.length;
+  el.textContent = wordsMissed > 0
+    ? `打完 ${wordsKilled} / ${total}（漏 ${wordsMissed}）`
+    : `打完 ${wordsKilled} / ${total}`;
+}
 
 function updateHud() {
   const el = document.getElementById('seed-label');
   if (el) el.textContent = `種子 ${ctx.seed}`;
+
+  // 現在練的是哪一組。沒有這個，畫面上就只剩一個一個冒出來的字
+  const gl = document.getElementById('group-label');
+  if (gl) {
+    gl.textContent = ctx.groupLabel
+      ? `${ctx.groupLabel}・${ctx.words.length} 字・${ORDER_LABELS[ctx.order]}`
+      : '';
+  }
+
+  // 強制重畫進度（換一場時計數歸零，但快取還停在上一場的數字）
+  lastKilled = -1;
+  lastMissed = -1;
+  syncHud(ctx.state);
 
   /*
    * 難度一定要顯示出來。
@@ -282,6 +339,27 @@ async function fetchWords() {
    */
   const typeable = data.words.filter((w) => w.typeable !== false);
   if (typeable.length === 0) throw new Error(`這一組沒有可以打的字（${group || part}）`);
+  /*
+   * 濾掉幾個要講出來。
+   *
+   * 練習頁寫「Week 6・49 個單字」，遊戲卻只有 46 個——不說的話他會以為
+   * 有字不見了。差額是 "a couple of" 那種含空白的詞條。
+   */
+  ctx.skippedCount = data.words.length - typeable.length;
+
+  /*
+   * 畫面上要寫「Week 6」而不是「w06」。
+   * ?part=all 會橫跨很多組（測試在用），那就誠實寫「全部」，
+   * 不要挑第一個字的組別當標題——那會是錯的。
+   */
+  const ids = new Set(typeable.map((w) => w.group));
+  if (ids.size === 1) {
+    const id = typeable[0].group;
+    const found = (data.groups || []).find((g) => g.id === id);
+    ctx.groupLabel = found ? found.label : id || '';
+  } else {
+    ctx.groupLabel = '全部';
+  }
   return typeable;
 }
 
@@ -391,10 +469,44 @@ async function boot() {
     });
 
     document.getElementById('btn-replay-file')?.addEventListener('click', downloadLog);
+    // 重開一場也走開場畫面：換一場正是他會想換出題順序的時候
     document.getElementById('btn-restart')?.addEventListener('click', () => {
-      ctx.restart();
-      input.focusForTyping();
+      showPregame(() => {
+        ctx.restart();
+        input.focusForTyping();
+      });
     });
+
+    /*
+     * 開場畫面：先講清楚這一場是什麼，再讓他選出題順序。
+     *
+     * 網址指定 order 就整個跳過（所有自動化測試靠這個，規則跟難度一樣）。
+     * 兩顆按鈕本身就是開始鍵——再多一個「確定」對小孩只是多一次點擊。
+     */
+    const pregameEl = document.getElementById('pregame');
+    function showPregame(onChosen) {
+      if (params.get('order') || !pregameEl) {
+        onChosen();
+        return;
+      }
+      document.getElementById('pregame-group').textContent = ctx.groupLabel || '練習';
+      document.getElementById('pregame-count').textContent =
+        ctx.skippedCount > 0
+          ? `總共 ${ctx.words.length} 個字（另外 ${ctx.skippedCount} 個有空白的詞只在練習模式出現）`
+          : `總共 ${ctx.words.length} 個字`;
+      pregameEl.querySelectorAll('[data-order]').forEach((btn) => {
+        // 把上次選的標起來：他會知道上一場是怎麼打的
+        btn.classList.toggle('is-last', btn.dataset.order === storedOrder());
+        btn.onclick = () => {
+          ctx.order = btn.dataset.order;
+          writeShared(ORDER_KEY, ctx.order);
+          pregameEl.hidden = true;
+          ctx.sfx.unlock(); // 這一下點擊就是瀏覽器要的使用者手勢
+          onChosen();
+        };
+      });
+      pregameEl.hidden = false;
+    }
 
     /*
      * 先決定難度再開場。
@@ -430,11 +542,12 @@ async function boot() {
           }
           // 校準時他已經按過鍵了，音訊可以解鎖
           ctx.sfx.unlock();
-          begin();
+          showPregame(begin);
         }
       });
     } else {
-      begin();
+      document.body.classList.remove('page-loading');
+      showPregame(begin);
     }
   } catch (err) {
     document.body.classList.remove('page-loading');

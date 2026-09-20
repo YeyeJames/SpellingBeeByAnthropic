@@ -62,7 +62,7 @@ console.log('1) 手速 → 建議難度');
     const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
     const page = await context.newPage();
     watch(page);
-    await page.goto(`${BASE}/game?n=8&part=all`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${BASE}/game?n=8&part=all&order=sequential`, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('#calibrate:not([hidden])', { timeout: 10000 });
 
     await typeCalibration(page, c.ms);
@@ -85,7 +85,7 @@ console.log('\n2) 建議之後仍然可以自己選別的');
   const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
   const page = await context.newPage();
   watch(page);
-  await page.goto(`${BASE}/game?n=8&part=all`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`${BASE}/game?n=8&part=all&order=sequential`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#calibrate:not([hidden])', { timeout: 10000 });
   await typeCalibration(page, 900); // 會建議 easy
   await page.waitForSelector('#calibrate-choice:not([hidden])', { timeout: 10000 });
@@ -103,7 +103,7 @@ console.log('\n2) 建議之後仍然可以自己選別的');
   check('校準畫面已收起', await page.evaluate(() => document.getElementById('calibrate').hidden));
 
   /* ── 3. 記住選擇 ── */
-  await page.goto(`${BASE}/game?n=8&part=all`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`${BASE}/game?n=8&part=all&order=sequential`, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => window.__spellbee && window.__spellbee.ready, null, {
     timeout: 15000
   });
@@ -151,7 +151,7 @@ console.log('\n2) 建議之後仍然可以自己選別的');
 
   /* ── 4. 可以重新校準 ── */
   console.log('\n4) ?calibrate=1 可以重新量');
-  await page.goto(`${BASE}/game?n=8&part=all&calibrate=1`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`${BASE}/game?n=8&part=all&order=sequential&calibrate=1`, { waitUntil: 'domcontentloaded' });
   const reAppeared = await page
     .waitForSelector('#calibrate:not([hidden])', { timeout: 10000 })
     .then(() => true)
@@ -166,7 +166,7 @@ console.log('\n5) 網址指定難度時不跳校準（自動化測試靠這個�
   const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
   const page = await context.newPage();
   watch(page);
-  await page.goto(`${BASE}/game?n=8&part=all&difficulty=normal`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`${BASE}/game?n=8&part=all&order=sequential&difficulty=normal`, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => window.__spellbee && window.__spellbee.ready, null, {
     timeout: 15000
   });

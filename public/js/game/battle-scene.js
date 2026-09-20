@@ -238,6 +238,7 @@ export function createBattleScene(ctx) {
         this.updateEnemyHit(delta);
       }
       this.render(state);
+      ctx.syncHud(state);
 
       const now = performance.now();
       // 新狀態已經畫出來了，結算這一格的按鍵延遲

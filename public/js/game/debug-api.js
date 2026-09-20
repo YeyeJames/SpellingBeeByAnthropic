@@ -118,6 +118,16 @@ export function installDebugApi(ctx) {
       return (ctx.words || []).map((w) => ({ id: w.id, group: w.group, english: w.english }));
     },
 
+    /** 這一場的出題順序設定，以及實際排出來的題目序列。 */
+    order() {
+      return ctx.order;
+    },
+
+    queueOrder() {
+      const s = ctx.getState();
+      return s ? s.queue.slice() : [];
+    },
+
     /** 這次用的難度，以及（如果剛校準過）量到的手速。 */
     difficulty() {
       return { difficulty: ctx.difficulty, calibration: ctx.calibration || null };

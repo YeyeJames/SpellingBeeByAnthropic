@@ -39,7 +39,7 @@ page.on('console', (m) => {
   if (m.type() === 'error') consoleErrors.push(`console.error: ${m.text()}`);
 });
 
-await page.goto(`${BASE}/game?seed=4242&part=all&n=100&difficulty=easy&show=1`, {
+await page.goto(`${BASE}/game?seed=4242&part=all&n=100&difficulty=easy&order=sequential&show=1`, {
   waitUntil: 'domcontentloaded'
 });
 await page.waitForFunction(() => window.__spellbee && window.__spellbee.ready, null, {

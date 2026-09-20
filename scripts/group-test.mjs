@@ -83,7 +83,7 @@ console.log('\n2) 遊戲用 ?group= 開起來');
   });
 
   // w06 是含最多「打不出來的詞條」的一組，拿它來測濾除最有意義
-  await page.goto(`${BASE}/game?group=w06&difficulty=normal&n=100`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`${BASE}/game?group=w06&difficulty=normal&order=sequential&n=100`, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => window.__spellbee && window.__spellbee.ready, null, { timeout: 15000 });
 
   const info = await page.evaluate(() => {
@@ -102,7 +102,7 @@ console.log('\n2) 遊戲用 ?group= 開起來');
   // 這一段是故意讓它失敗，所以之後的 console 錯誤是預期中的，不算數
   check('到這裡為止沒有非預期的錯誤', consoleErrors.length === 0, consoleErrors.slice(0, 3).join(' | '));
   consoleErrors.length = 0;
-  await page.goto(`${BASE}/game?group=w99&difficulty=normal`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`${BASE}/game?group=w99&difficulty=normal&order=sequential`, { waitUntil: 'domcontentloaded' });
   const errText = await page
     .waitForFunction(
       () => {

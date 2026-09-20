@@ -50,7 +50,7 @@ page.on('pageerror', (e) => consoleErrors.push(`pageerror: ${e.message}`));
  * 刻意用不同的手速與失誤率，讓錄影檔涵蓋打對、打錯、退格、重聽、漏字。
  */
 async function playInBrowser({ seed, words, difficulty, msPerLetter, errorRate, useExtras }) {
-  await page.goto(`${BASE}/game?seed=${seed}&part=all&n=${words}&difficulty=${difficulty}&show=1`, {
+  await page.goto(`${BASE}/game?seed=${seed}&part=all&n=${words}&difficulty=${difficulty}&order=sequential&show=1`, {
     waitUntil: 'domcontentloaded'
   });
   await page.waitForFunction(() => window.__spellbee && window.__spellbee.ready, null, {

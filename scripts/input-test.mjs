@@ -39,7 +39,7 @@ async function newGamePage(contextOpts = {}) {
    * 輕鬆難度 + 全部 100 個字（約 700 個字母）。
    * 一場打得完 500 次按鍵，就不必中途重開——重開會把延遲統計歸零。
    */
-  await page.goto(`${BASE}/game?seed=4242&part=all&n=100&difficulty=easy`, {
+  await page.goto(`${BASE}/game?seed=4242&part=all&n=100&difficulty=easy&order=sequential`, {
     waitUntil: 'domcontentloaded'
   });
   await page.waitForFunction(() => window.__spellbee && window.__spellbee.ready, null, {

@@ -13,6 +13,13 @@
 
   <div id="game-chrome">
     <a class="chrome-link" href="/practice.html">← 回練習</a>
+    <!--
+      現在練的是哪一組、總共幾個字、打完幾個。
+      沒有這個就只剩一顆一顆冒出來的字，看不出「這一關還有多長」——
+      而那正是他願意再打一場的理由。
+    -->
+    <span id="group-label" class="chrome-group"></span>
+    <span id="progress-label" class="chrome-progress"></span>
     <span id="seed-label" class="chrome-seed"></span>
     <!--
       目前難度一定要看得見，而且要能一鍵重測。
@@ -65,6 +72,21 @@
       <button type="button" class="btn-difficulty" data-difficulty="easy">輕鬆</button>
       <button type="button" class="btn-difficulty" data-difficulty="normal">標準</button>
       <button type="button" class="btn-difficulty" data-difficulty="hard">挑戰</button>
+    </div>
+  </div>
+
+  <!--
+    開場畫面：先告訴他這一場是什麼，再讓他決定出題順序。
+    兩顆按鈕本身就是「開始」——多一個確認鍵對小孩只是多一次點擊。
+    網址帶 order= 時整個跳過（自動化測試靠這個，跟難度的規則一樣）。
+  -->
+  <div id="pregame" hidden>
+    <strong id="pregame-group"></strong>
+    <p id="pregame-count"></p>
+    <p class="pregame-hint">要照課本順序，還是打亂？</p>
+    <div id="pregame-order">
+      <button type="button" class="btn-order" data-order="sequential">照順序</button>
+      <button type="button" class="btn-order" data-order="random">打亂</button>
     </div>
   </div>
 

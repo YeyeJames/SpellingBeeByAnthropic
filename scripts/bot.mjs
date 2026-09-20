@@ -72,7 +72,7 @@ const results = [];
 
 for (let run = 0; run < runs; run += 1) {
   const seed = 1000 + run;
-  await page.goto(`${BASE}/game?seed=${seed}&n=${wordCount}&difficulty=${difficulty}`, {
+  await page.goto(`${BASE}/game?seed=${seed}&n=${wordCount}&difficulty=${difficulty}&order=sequential`, {
     waitUntil: 'domcontentloaded'
   });
 

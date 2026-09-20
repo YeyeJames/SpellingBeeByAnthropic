@@ -45,7 +45,7 @@ page.on('console', (m) => {
 });
 
 // 全部 100 個字、輕鬆難度：要能連續打三分鐘不中斷
-await page.goto(`${BASE}/game?seed=777&part=all&n=100&difficulty=easy`, {
+await page.goto(`${BASE}/game?seed=777&part=all&n=100&difficulty=easy&order=sequential`, {
   waitUntil: 'domcontentloaded'
 });
 await page.waitForFunction(() => window.__spellbee && window.__spellbee.ready, null, {
