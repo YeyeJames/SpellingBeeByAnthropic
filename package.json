@@ -24,7 +24,8 @@
     "test:words": "node scripts/validate-words.mjs",
     "test:group": "node scripts/group-test.mjs",
     "test:hud": "node scripts/hud-test.mjs",
-    "test:all": "node scripts/validate-words.mjs && node scripts/determinism.mjs && node scripts/input-test.mjs && node scripts/audio-test.mjs && node scripts/calibrate-test.mjs && node scripts/group-test.mjs && node scripts/hud-test.mjs && node scripts/parity-test.mjs && node scripts/sim.mjs"
+    "test:practice": "node scripts/practice-session-test.mjs",
+    "test:all": "node scripts/validate-words.mjs && node scripts/practice-session-test.mjs && node scripts/determinism.mjs && node scripts/input-test.mjs && node scripts/audio-test.mjs && node scripts/calibrate-test.mjs && node scripts/group-test.mjs && node scripts/hud-test.mjs && node scripts/parity-test.mjs && node scripts/sim.mjs"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
