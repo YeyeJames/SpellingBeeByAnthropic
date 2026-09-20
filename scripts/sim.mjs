@@ -53,7 +53,10 @@ const EXPECTED = {
   'fast/easy': { min: 0.0, max: 0.05, note: '游刃有餘' }
 };
 
-const WORDS = allWords().slice(0, WORD_COUNT);
+// 只用打得出來的字：含空白或連字號的詞條（"alarm clock"）永遠打不完，會讓模擬卡住
+const WORDS = allWords()
+  .filter((w) => w.typeable)
+  .slice(0, WORD_COUNT);
 
 /** 跑一場，回傳結果。 */
 function runBattle({ seed, preset, difficulty }) {

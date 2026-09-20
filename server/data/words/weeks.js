@@ -1,0 +1,458 @@
+/**
+ * Grade 3A Intensive Course 每週單字（Week 1~10）。
+ *
+ * 來源是課本的 Word List。原本每一週分成 Phonics / Spelling / Reading Plus
+ * 好幾個區塊，這裡一律合併成「一週一組」——練習的時候是照週次複習的，
+ * 區塊是課本的編排方式，不是孩子記憶的方式。
+ *
+ * Week 8 在課本上是空的，所以這裡也沒有，不是漏掉。
+ *
+ * 資料用三元組 [英文, 中文, 例句] 而不是物件，是為了讓這份檔案維持可讀：
+ * 三百多筆資料如果每筆都寫成完整物件，人眼根本看不出哪裡少了一欄。
+ * 展開成正式格式是 word-bank.js 的工作。
+ *
+ * 例句的規矩（有驗證腳本在管，見 scripts/validate-words.mjs）：
+ *   - 一定要包含那個單字本身
+ *   - 十二個英文字以內，用小學生看得懂的句子
+ *   - 句尾要有標點
+ */
+
+const WEEKS = [
+  {
+    id: 'w01',
+    label: 'Week 1',
+    words: [
+      // Spelling — Lesson 1
+      ['path', '小路；路徑', 'We walked along the path to the park.'],
+      ['shot', '投擲；射擊', 'He shot the ball into the basket.'],
+      ['lamp', '檯燈', 'Please turn on the lamp to read.'],
+      ['clock', '時鐘', 'The clock on the wall says three.'],
+      ['tramp', '重步行走', 'We heard him tramp up the stairs.'],
+      ['sock', '襪子', 'I cannot find my other sock.'],
+      ['crash', '撞擊；碰撞聲', 'The toy car hit the wall with a crash.'],
+      ['plant', '植物；種植', 'We plant flowers in the garden every spring.'],
+      ['rot', '腐爛', 'Old apples will rot inside the box.'],
+      ['math', '數學', 'Math is my favorite subject at school.'],
+      ['crop', '農作物', 'The farmer grew a big crop of corn.'],
+      ['trash', '垃圾', 'Please put the trash in the bin.'],
+      ['stamp', '郵票；蓋章', 'I put a stamp on the letter.'],
+      ['flock', '一群（鳥或羊）', 'A flock of birds flew over us.'],
+      ['hatbox', '帽盒', 'She keeps her hat in a hatbox.'],
+      ['brand', '品牌', 'This brand of shoes is very popular.'],
+      ['flapjack', '煎餅', 'Mom made a warm flapjack for breakfast.'],
+      ['stocking', '長襪', 'He hung a stocking by the fireplace.'],
+      ['candy', '糖果', 'I ate one candy after dinner.'],
+      ['lobby', '大廳', 'We waited in the hotel lobby.'],
+      // Reading Plus — Office Surprise
+      ['ads', '廣告', 'The magazine is full of colorful ads.'],
+      ['button', '按鈕；鈕扣', 'Press the button to open the door.'],
+      ['device', '裝置', 'This small device can record sound.'],
+      ['dollar', '美元', 'The little book costs one dollar.'],
+      ['metal', '金屬', 'The box is made of strong metal.'],
+      ['minutes', '分鐘', 'We waited ten minutes for the bus.'],
+      ['notice', '注意到；通知', 'Did you notice the new sign?'],
+      ['office', '辦公室', 'My dad works in a busy office.'],
+      ['robot', '機器人', 'The robot can carry heavy boxes.'],
+      ['silver', '銀色；銀', 'She wore a shiny silver ring.'],
+      ['storeroom', '儲藏室', 'The mops are kept in the storeroom.'],
+      ['wander', '閒逛；漫步', 'Do not wander far from the group.'],
+      // Reading Plus — The Ride Home
+      ['admit', '承認', 'I admit that I forgot my homework.'],
+      ['dusty', '滿是灰塵的', 'The old books were very dusty.'],
+      ['excited', '興奮的', 'She was excited about the school trip.'],
+      ['grab', '抓住', 'Grab your coat before we leave.'],
+      ['grumbled', '抱怨（過去式）', 'He grumbled about the long line.'],
+      ['piece', '一塊；一片', 'May I have a piece of cake?'],
+      ['proudly', '驕傲地', 'She proudly showed us her drawing.'],
+      ['slammed', '用力關上（過去式）', 'The wind slammed the door shut.']
+    ]
+  },
+
+  {
+    id: 'w02',
+    label: 'Week 2',
+    words: [
+      // Phonics — Initial and Final Consonants
+      ['best', '最好的', 'This is the best day of the week.'],
+      ['chin', '下巴', 'He rested his chin on his hand.'],
+      ['fir', '冷杉', 'A tall fir tree grows near our house.'],
+      ['garage', '車庫', 'Dad parked the car in the garage.'],
+      ['kitten', '小貓', 'The kitten slept in a warm basket.'],
+      ['night', '夜晚', 'The stars are bright at night.'],
+      ['song', '歌曲', 'We sang a happy song together.'],
+      ['talking', '說話', 'Stop talking during the test.'],
+      ['then', '然後', 'We ate lunch and then went home.'],
+      ['tub', '浴缸', 'The baby splashed in the tub.'],
+      ['wet', '濕的', 'My shoes got wet in the rain.'],
+      ['join', '加入', 'Would you like to join our team?'],
+      ['might', '可能', 'It might rain this afternoon.'],
+      // Spelling — Lesson 2
+      ['deck', '甲板', 'We stood on the deck of the ship.'],
+      ['blush', '臉紅', 'Her cheeks blush when she feels shy.'],
+      ['risk', '風險；冒險', 'Do not risk crossing the busy road.'],
+      ['fence', '籬笆', 'A white fence goes around the yard.'],
+      ['head', '頭', 'He wore a blue hat on his head.'],
+      ['grip', '握住；抓力', 'Keep a tight grip on the rope.'],
+      ['crust', '麵包皮；外殼', 'I like the crust of the bread.'],
+      ['pick', '挑選；摘', 'Pick the ripest apple from the tree.'],
+      ['spent', '花費（過去式）', 'I spent my money on a book.'],
+      ['film', '影片；底片', 'We watched a funny film last night.'],
+      ['dead', '死的；枯萎的', 'The plant is dead without water.'],
+      ['dusk', '黃昏', 'The birds return home at dusk.'],
+      ['tent', '帳篷', 'We slept in a tent by the lake.'],
+      ['bread', '麵包', 'She baked bread for breakfast.'],
+      ['thump', '重擊聲', 'The box fell with a loud thump.'],
+      ['thread', '線', 'Mom used red thread to fix my shirt.'],
+      ['stitch', '縫；針腳', 'One stitch will close the small hole.'],
+      ['scrub', '刷洗', 'Please scrub the dirty pot.'],
+      ['sweater', '毛衣', 'Wear a sweater because it is cold.'],
+      ['finish', '完成', 'Finish your homework before dinner.'],
+      // Reading Plus — Robot Commands
+      ['battery', '電池', 'The toy needs a new battery.'],
+      ['driveway', '車道', 'Dad washed the car in the driveway.'],
+      ['frantic', '慌亂的', 'She was frantic when her dog ran away.'],
+      ['halt', '停止', 'The guard told the car to halt.'],
+      ['lantern', '燈籠；提燈', 'We carried a lantern into the cave.'],
+      ['neighbor', '鄰居', 'Our neighbor gave us fresh eggs.'],
+      ['oil', '油', 'The machine needs a drop of oil.'],
+      ['press', '按壓', 'Press this key to start the game.'],
+      ['project', '專題；計畫', 'Our science project won first prize.'],
+      ['quit', '放棄；停止', 'Do not quit before you try again.'],
+      ['remove', '移除；脫下', 'Please remove your shoes at the door.'],
+      ['rosebush', '玫瑰叢', 'A rosebush grows beside the gate.'],
+      ['test', '測驗', 'We have a math test on Friday.'],
+      ['wire', '電線', 'Do not touch the broken wire.'],
+      // Reading Plus — A Special Helper
+      ['believe', '相信', 'I believe you can do it.'],
+      ['chores', '家事', 'I finish my chores before I play.'],
+      ['dash', '衝刺', 'He made a quick dash to the bus.'],
+      ['demonstrated', '示範（過去式）', 'The teacher demonstrated the new game.'],
+      ['empty', '空的', 'The cookie box is empty now.'],
+      ['land', '土地；降落', 'The plane will land in ten minutes.'],
+      ['luckiest', '最幸運的', 'She is the luckiest girl in class.'],
+      ['moan', '呻吟', 'He gave a soft moan when he fell.'],
+      ['order', '命令；順序', 'Put the cards in the right order.'],
+      ['pour', '倒', 'Pour the milk into the glass.'],
+      ['stuffed', '塞滿的', 'My school bag is stuffed with books.'],
+      ['wastebasket', '垃圾桶', 'Throw the paper in the wastebasket.']
+    ]
+  },
+
+  {
+    id: 'w03',
+    label: 'Week 3',
+    words: [
+      // Phonics — Short Vowels
+      ['back', '背部；回去', 'Put the book back on the shelf.'],
+      ['chimney', '煙囪', 'Smoke rose from the old chimney.'],
+      ['brush', '刷子；刷', 'Brush your teeth before bed.'],
+      ['city', '城市', 'We took a train to the city.'],
+      ['last', '最後的；持續', 'This is the last cookie.'],
+      ['let', '讓', 'Let me help you carry that.'],
+      ['mud', '泥巴', 'My boots are covered in mud.'],
+      ['penny', '一分錢', 'I found a penny on the ground.'],
+      ['pig', '豬', 'The pig rolled in the mud.'],
+      ['soft', '柔軟的', 'The kitten has very soft fur.'],
+      ['spend', '花費', 'Do not spend all your money.'],
+      ['trot', '小跑步', 'The pony began to trot slowly.'],
+      ['went', '去（過去式）', 'We went to the zoo yesterday.'],
+      ['wish', '希望；願望', 'I wish for a sunny day.'],
+      ['lend', '借出', 'Can you lend me your pencil?'],
+      // Spelling — Lesson 3
+      ['cone', '圓錐；甜筒', 'I ate an ice cream cone.'],
+      ['blaze', '火焰；熊熊燃燒', 'The campfire began to blaze brightly.'],
+      ['spoke', '說（過去式）', 'She spoke softly to the baby.'],
+      ['fail', '失敗', 'Do not give up if you fail once.'],
+      ['goal', '目標；進球', 'He scored the winning goal.'],
+      ['froze', '結冰（過去式）', 'The small pond froze last night.'],
+      ['play', '玩；播放', 'We play outside after school.'],
+      ['away', '離開；遠離', 'The cat ran away from the dog.'],
+      ['flame', '火焰', 'A small flame lit the candle.'],
+      ['vote', '投票', 'We will vote for a class leader.'],
+      ['spade', '鏟子', 'He dug the hole with a spade.'],
+      ['stain', '污漬', 'There is a juice stain on my shirt.'],
+      ['chose', '選擇（過去式）', 'She chose the blue crayon.'],
+      ['coal', '煤', 'The old train burned coal.'],
+      ['mail', '郵件', 'The mail comes every morning.'],
+      ['change', '改變；零錢', 'Please change your wet socks.'],
+      ['afraid', '害怕的', 'Do not be afraid of the dark.'],
+      ['throat', '喉嚨', 'My throat hurts when I swallow.'],
+      ['crayon', '蠟筆', 'She drew a sun with a yellow crayon.'],
+      ['close', '關上；接近的', 'Please close the window.'],
+      // Reading Plus — What's Your Name?
+      ['bumping', '碰撞', 'Stop bumping into the table.'],
+      ['feelings', '感受', 'Kind words protect other people feelings.'],
+      ['machine', '機器', 'This machine washes our clothes.'],
+      ['scatter', '散開', 'The birds scatter when we run.'],
+      ['terrific', '極好的', 'You did a terrific job today.'],
+      ['whispered', '低聲說（過去式）', 'She whispered a secret to me.'],
+      ['wink', '眨眼', 'He gave me a friendly wink.'],
+      // Reading Plus — A New Friend
+      ['behind', '在……後面', 'The ball rolled behind the door.'],
+      ['chasing', '追逐', 'The puppy is chasing its own tail.'],
+      ['guess', '猜', 'Can you guess my favorite color?'],
+      ['intentionally', '故意地', 'He did not break it intentionally.'],
+      ['neighborhood', '社區', 'Our neighborhood has a small park.'],
+      ['nod', '點頭', 'She gave a quick nod to agree.'],
+      ['replied', '回答（過去式）', 'He replied with a big smile.'],
+      ['startle', '使驚嚇', 'Loud noises startle the cat.']
+    ]
+  },
+
+  {
+    id: 'w04',
+    label: 'Week 4',
+    words: [
+      // Phonics — Long Vowels
+      ['brave', '勇敢的', 'The brave girl helped the lost boy.'],
+      ['came', '來（過去式）', 'My cousin came to visit us.'],
+      ['cute', '可愛的', 'The little puppy looks very cute.'],
+      ['hate', '討厭', 'I hate to be late for school.'],
+      ['outside', '外面', 'The children played outside all day.'],
+      ['skate', '溜冰', 'We skate on the ice in winter.'],
+      ['name', '名字', 'Please write your name here.'],
+      ['pale', '蒼白的', 'He looked pale after the long run.'],
+      ['robe', '長袍；浴袍', 'She wore a warm robe at home.'],
+      ['same', '相同的', 'We have the same lunch box.'],
+      ['shake', '搖動', 'Shake the bottle before you drink.'],
+      ['smile', '微笑', 'Her smile made everyone happy.'],
+      ['time', '時間', 'What time does the movie start?'],
+      ['white', '白色的', 'Fresh snow is white and soft.'],
+      ['woke', '醒來（過去式）', 'I woke up early this morning.'],
+      // Reading Plus — Too Much Trash
+      ['alarm clock', '鬧鐘', 'My alarm clock rings at seven.'],
+      ['angrily', '生氣地', 'He angrily threw down his bag.'],
+      ['belong', '屬於', 'These books belong to the library.'],
+      ['curb', '路緣', 'Wait on the curb before crossing.'],
+      ['drag', '拖；拉', 'Do not drag the heavy box.'],
+      ['examined', '檢查（過去式）', 'The doctor examined my sore arm.'],
+      ['fault', '錯；過失', 'The broken cup was not your fault.'],
+      ['halt', '停止', 'The bus came to a sudden halt.'],
+      ['ordinary', '普通的', 'It was just an ordinary school day.'],
+      ['refused', '拒絕（過去式）', 'He refused to share his toys.'],
+      ['return', '歸還；返回', 'Please return the book tomorrow.']
+    ]
+  },
+
+  {
+    id: 'w05',
+    label: 'Week 5',
+    words: [
+      // Phonics — OLD, IND
+      ['blind', '失明的', 'The blind man walks with a cane.'],
+      ['bold', '大膽的', 'It was a bold plan.'],
+      ['finding', '尋找；發現', 'Finding my keys took ten minutes.'],
+      ['fold', '摺疊', 'Please fold your clothes neatly.'],
+      ['folder', '資料夾', 'My drawings are in a red folder.'],
+      ['grind', '磨碎', 'This machine can grind the beans.'],
+      ['holder', '支架；持有者', 'Put the pen in the holder.'],
+      ['kind', '親切的；種類', 'She is kind to everyone.'],
+      ['kindest', '最親切的', 'He is the kindest boy in class.'],
+      ['mind', '心智；介意', 'Do you mind if I sit here?'],
+      ['oldest', '最年長的', 'She is the oldest in the family.'],
+      ['sold', '賣（過去式）', 'We sold lemonade on Saturday.'],
+      ['told', '告訴（過去式）', 'He told us a funny story.'],
+      // Spelling — Lesson 4
+      ['high', '高的', 'The kite flew very high.'],
+      ['deal', '交易；處理', 'We made a fair deal.'],
+      ['clean', '乾淨的；清理', 'Keep your desk clean.'],
+      ['please', '請；取悅', 'Please pass me the salt.'],
+      ['fright', '驚嚇', 'The loud bang gave me a fright.'],
+      ['smile', '微笑', 'He wore a bright smile.'],
+      ['street', '街道', 'Look both ways before crossing the street.'],
+      ['line', '線；隊伍', 'Draw a straight line here.'],
+      ['pipe', '管子', 'Water flows through the pipe.'],
+      ['wise', '有智慧的', 'My grandma is very wise.'],
+      ['keep', '保持；保存', 'Keep the door closed.'],
+      ['glide', '滑行', 'The birds glide over the lake.'],
+      ['beast', '野獸', 'The beast in the story was kind.'],
+      ['sigh', '嘆氣', 'She let out a tired sigh.'],
+      ['neat', '整潔的', 'Your handwriting is very neat.'],
+      ['easy', '容易的', 'This puzzle is easy for me.'],
+      ['creek', '小溪', 'We caught frogs in the creek.'],
+      ['streetlight', '路燈', 'The streetlight turned on at dusk.'],
+      ['stream', '小河；流動', 'A clear stream runs past the farm.'],
+      ['between', '在……之間', 'Sit between your two friends.'],
+      // Reading Plus — Where Is My Shirt?
+      ['blouses', '女用襯衫', 'Her blouses hang in the closet.'],
+      ['bragged', '吹噓（過去式）', 'He bragged about his new bike.'],
+      ['drawer', '抽屜', 'My socks are in the top drawer.'],
+      ['expect', '期待；預期', 'We expect rain this evening.'],
+      ['fancy', '花俏的', 'She wore a fancy party dress.'],
+      ['frown', '皺眉', 'Do not frown because it will be fine.'],
+      ['mixed up', '弄混；搞混', 'I mixed up the two names.'],
+      ['outfit', '一套服裝', 'She picked a warm outfit.'],
+      ['stomped', '跺腳（過去式）', 'He stomped through the puddles.'],
+      ['twinkle', '閃爍', 'The stars twinkle at night.']
+    ]
+  },
+  {
+    id: 'w06',
+    label: 'Week 6',
+    words: [
+      // Spelling — Lesson 5
+      ['bake', '烘焙', 'We bake cookies every Sunday.'],
+      ['cone', '圓錐；甜筒', 'I ate an ice cream cone.'],
+      ['hide', '躲藏', 'The cat likes to hide under the bed.'],
+      ['hope', '希望', 'I hope you feel better soon.'],
+      ['hung', '掛（過去式）', 'He hung his coat by the door.'],
+      ['kind', '親切的；種類', 'She is kind to everyone.'],
+      ['line', '線；隊伍', 'We stood in a long line.'],
+      ['plan', '計畫', 'We made a plan for the trip.'],
+      ['send', '寄送', 'I will send you a postcard.'],
+      ['tell', '告訴', 'Please tell me the truth.'],
+      ['ten', '十', 'There are ten pencils in the box.'],
+      ['tune', '曲調', 'He whistled a happy tune.'],
+      // Phonics — oo / ew / ue
+      ['dune', '沙丘', 'We climbed a tall sand dune.'],
+      ['flew', '飛（過去式）', 'The bird flew over the roof.'],
+      ['noon', '中午', 'We eat lunch at noon.'],
+      ['dew', '露水', 'Morning dew covered the grass.'],
+      ['booth', '亭子；隔間', 'We sat in a corner booth.'],
+      ['chew', '咀嚼', 'Chew your food slowly.'],
+      ['stew', '燉菜', 'Mom made beef stew for dinner.'],
+      ['shoot', '射擊；發芽', 'Do not shoot the water gun indoors.'],
+      ['choose', '選擇', 'You may choose one toy.'],
+      ['new', '新的', 'He got a new bike today.'],
+      ['root', '根', 'The tree root broke the sidewalk.'],
+      ['grew', '長大（過去式）', 'The puppy grew very fast.'],
+      ['flute', '長笛', 'She plays the flute in the band.'],
+      ['loose', '鬆的', 'My front tooth is loose.'],
+      ['scoop', '一勺；舀', 'I want one scoop of ice cream.'],
+      ['due', '到期的', 'The book is due on Friday.'],
+      ['duty', '責任', 'It is my duty to feed the dog.'],
+      ['caboose', '守車（火車末節）', 'The caboose is the last train car.'],
+      ['true', '真實的', 'Every word of the story is true.'],
+      ['shampoo', '洗髮精', 'Put shampoo on your wet hair.'],
+      // Reading Plus — The Big Push
+      ['dizzy', '頭暈的', 'Spinning made me feel dizzy.'],
+      ['gently', '輕輕地', 'He gently closed the door.'],
+      ['instantly', '立刻', 'The dog instantly ran to me.'],
+      ['instead of', '而不是', 'We walked instead of riding.'],
+      ['jerk', '猛拉；急動', 'The bus stopped with a jerk.'],
+      ['pitch', '投球；音高', 'He threw a fast pitch.'],
+      ['remember', '記得', 'Remember to bring your lunch.'],
+      ['sandwiches', '三明治（複數）', 'We packed two sandwiches for the hike.'],
+      ['trembled', '顫抖（過去式）', 'Her hands trembled in the cold.'],
+      ['worried', '擔心的', 'He looked worried about the test.'],
+      // Reading Plus — A Bright Idea
+      ['a couple of', '幾個；兩三個', 'I need a couple of clean towels.'],
+      ['accidentally', '意外地', 'I accidentally dropped the glass.'],
+      ['hate', '討厭', 'I hate being late for school.'],
+      ['lit up', '點亮', 'The candles lit up the dark room.'],
+      ['shovel', '鏟子', 'He used a shovel to dig.'],
+      ['shyly', '害羞地', 'She shyly waved at the class.'],
+      ['worry', '擔心', 'Do not worry about the rain.']
+    ]
+  },
+  {
+    id: 'w07',
+    label: 'Week 7',
+    words: [
+      // Phonics — 軟音 c / g
+      ['bridge', '橋', 'We walked across the old bridge.'],
+      ['card', '卡片', 'I made a birthday card for him.'],
+      ['circus', '馬戲團', 'The circus came to our town.'],
+      ['cook', '烹飪；廚師', 'Dad will cook dinner tonight.'],
+      ['cup', '杯子', 'Pour the milk into a cup.'],
+      ['cute', '可愛的', 'That puppy is very cute.'],
+      ['game', '遊戲', 'We played a card game.'],
+      ['garden', '花園', 'Flowers grow in our garden.'],
+      ['gentle', '溫和的', 'Be gentle with the baby.'],
+      ['page', '頁', 'Turn to page ten.'],
+      ['rice', '米飯', 'We eat rice with dinner.'],
+      ['stage', '舞台', 'She sang on the school stage.'],
+      ['slice', '一片；切片', 'May I have a slice of cake?'],
+      ['edge', '邊緣', 'Do not sit on the edge.'],
+      ['contest', '比賽', 'He won the spelling contest.'],
+      ['bracelet', '手鍊', 'She wore a silver bracelet.'],
+      ['center', '中心', 'Put the vase in the center.'],
+      ['place', '地方；放置', 'This is my favorite place.'],
+      ['case', '箱子；案例', 'Keep your glasses in the case.'],
+      ['celery', '芹菜', 'I dipped celery in peanut butter.'],
+      ['guess', '猜', 'Can you guess my age?'],
+      // Reading Plus — The Lost Suitcase
+      ['apologized', '道歉（過去式）', 'He apologized for being rude.'],
+      ['crawl', '爬行', 'The baby can crawl very fast.'],
+      ['gasped', '倒抽一口氣（過去式）', 'She gasped at the surprise.'],
+      ['grumble', '抱怨', 'Do not grumble about the chores.'],
+      ['offer', '提供；提議', 'They offer free water here.'],
+      ['pile', '一堆', 'A pile of books sat on the desk.'],
+      ['pointed', '指（過去式）；尖的', 'He pointed at the big map.'],
+      ['ruined', '毀壞（過去式）', 'Rain ruined our picnic.'],
+      ['suitcase', '行李箱', 'I packed my suitcase last night.'],
+      ['worst', '最糟的', 'That was the worst storm all year.'],
+      // Reading Plus — Sounds in the Night
+      ['high-pitched', '高音的；尖銳的', 'The whistle made a high-pitched sound.'],
+      ['whistling', '吹口哨', 'The wind was whistling outside.'],
+      ['excitedly', '興奮地', 'He excitedly opened the gift.'],
+      ['traded places', '交換位置', 'We traded places at the table.'],
+      ['dock', '碼頭', 'The boat is tied to the dock.']
+    ]
+  },
+  {
+    id: 'w09',
+    label: 'Week 9',
+    words: [
+      // Phonics — oi / oy
+      ['oil', '油', 'Add a little oil to the pan.'],
+      ['boil', '煮沸', 'Boil the water for the noodles.'],
+      ['boy', '男孩', 'The boy ran to the bus stop.'],
+      ['coil', '線圈；盤繞', 'The snake lay in a tight coil.'],
+      ['royal', '皇家的', 'We saw the royal palace.'],
+      ['join', '加入', 'Come join our team.'],
+      ['point', '點；指', 'Do not point at people.'],
+      ['spoil', '寵壞；變壞', 'Milk will spoil in the heat.'],
+      ['broil', '燒烤', 'Broil the fish for five minutes.'],
+      ['noise', '噪音', 'What was that loud noise?'],
+      ['voice', '聲音；嗓音', 'She has a lovely singing voice.'],
+      ['soil', '土壤', 'Plant the seeds in soft soil.'],
+      ['enjoy', '享受', 'I enjoy reading before bed.'],
+      ['coin', '硬幣', 'He found a shiny coin.'],
+      ['loyal', '忠誠的', 'Dogs are loyal friends.'],
+      ['choice', '選擇', 'You made a good choice.'],
+      ['noisy', '吵鬧的', 'The classroom was very noisy.'],
+      ['oyster', '牡蠣', 'We found an oyster shell.'],
+      ['destroy', '摧毀', 'Storms can destroy small boats.'],
+      ['poison', '毒藥', 'Some berries contain poison.'],
+      // Reading Plus — The Quiet Trick
+      ['snapped', '啪地折斷（過去式）', 'The dry branch snapped in half.'],
+      ['innocently', '天真地', 'He innocently asked what happened.'],
+      ['appears', '出現；看起來', 'The moon appears after sunset.'],
+      ['mess', '混亂；髒亂', 'Please clean up this mess.'],
+      ['lemonade', '檸檬水', 'We sold lemonade on our street.'],
+      ['dumb', '笨的；啞的', 'That was a dumb mistake.'],
+      ['actions', '行動（複數）', 'Your actions speak louder than words.']
+    ]
+  },
+  {
+    id: 'w10',
+    label: 'Week 10',
+    words: [
+      // Phonics — 子音群
+      ['blue', '藍色', 'The sky is bright blue today.'],
+      ['bread', '麵包', 'We bought fresh bread this morning.'],
+      ['crash', '撞擊；碰撞聲', 'The plates fell with a crash.'],
+      ['flag', '旗子', 'The flag waved in the wind.'],
+      ['grape', '葡萄', 'I ate one sweet grape.'],
+      ['sled', '雪橇', 'We rode a sled down the hill.'],
+      ['smile', '微笑', 'Her smile made me happy.'],
+      ['square', '正方形；廣場', 'Draw a square on the paper.'],
+      ['stamp', '郵票；蓋章', 'She collects stamps from every stamp book.'],
+      ['stir', '攪拌', 'Stir the soup slowly.'],
+      ['swim', '游泳', 'We swim at the pool on Saturdays.'],
+      ['trail', '小徑；足跡', 'The trail leads to the lake.'],
+      ['twelve', '十二', 'There are twelve eggs in the box.'],
+      ['squeeze', '擠壓', 'Squeeze the lemon into the glass.'],
+      ['sweater', '毛衣', 'Wear a warm sweater outside.'],
+      ['twenty', '二十', 'I counted twenty birds.'],
+      ['snap', '啪地折斷；快照', 'The thin stick will snap easily.'],
+      ['scarf', '圍巾', 'He wrapped a red scarf around his neck.'],
+      ['scold', '責罵', 'Mom will scold us for being loud.'],
+      ['glide', '滑行', 'Skaters glide across the ice.'],
+      ['breeze', '微風', 'A cool breeze blew through the window.']
+    ]
+  }
+];
+
+module.exports = { WEEKS };

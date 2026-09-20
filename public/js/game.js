@@ -260,15 +260,29 @@ async function fetchWords() {
    * 這個端點不需要登入、也不碰資料庫（單字庫是寫死的靜態資料），
    * 所以遊戲頁在資料庫掛掉時仍然打得開，自動化測試也不必先登入。
    *
-   * ?part=all 拿全部 100 個字。測試要連打數百個字母時用得到——
+   * ?group=w01 指定一組（Part 1~4 是 p1~p4，每週單字是 w01~w10）。
+   * ?part=all 拿全部。測試要連打數百個字母時用得到——
    * 一場打得完就不必中途重開，統計才不會被重置切斷。
    */
+  const group = params.get('group');
   const part = params.get('part') || '1';
-  const query = part === 'all' ? '' : `?part=${encodeURIComponent(part)}`;
+  let query = '';
+  if (group) query = `?group=${encodeURIComponent(group)}`;
+  else if (part !== 'all') query = `?part=${encodeURIComponent(part)}`;
+
   const res = await fetch(`/api/wordbank${query}`);
   if (!res.ok) throw new Error(`拿不到單字庫（${res.status}）`);
   const data = await res.json();
-  return data.words;
+
+  /*
+   * 課本裡有 "alarm clock"、"a couple of" 這種含空白或連字號的詞條。
+   * 它們在單字表上要看得到，但不能當打字題目——遊戲只收 a~z，
+   * 孩子打到一半會發現那個空白按不出來。所以在這裡濾掉，
+   * 而不是在資料裡刪掉它們。
+   */
+  const typeable = data.words.filter((w) => w.typeable !== false);
+  if (typeable.length === 0) throw new Error(`這一組沒有可以打的字（${group || part}）`);
+  return typeable;
 }
 
 function setPaused(next) {

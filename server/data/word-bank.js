@@ -1,14 +1,33 @@
 /**
- * Spelling Bee Grade 3A 競賽單字庫（100 字，Part 1~4 各 25 字）。
+ * 單字庫。兩種來源合在一起：
+ *
+ *   1. Spelling Bee Grade 3A 競賽單字（100 字，Part 1~4 各 25 字）——寫在下面
+ *   2. 課本每週單字（Week 1~10）——寫在 words/weeks.js
  *
  * 這份清單是寫死在程式碼裡的，不存資料庫、也不從網頁新增。
- * 要增修單字就直接改這個檔案再重新部署——競賽範圍是固定的，
+ * 要增修單字就直接改檔案再重新部署——範圍是固定的，
  * 這樣比開一個新增介面單純，也不會被誤刪或改錯。
  *
+ * ── 「組」是什麼 ────────────────────────────────────────────
+ * 練習的單位是「一組」：Part 1 是一組、Week 1 是一組。孩子一次練一組，
+ * 練到接近全對五六次就算過關。所以遊戲、進度、關卡通通以 group 為單位，
+ * part 只是競賽單字沿用下來的舊欄位（週單字沒有 part）。
+ *
+ * ── id 不能改 ──────────────────────────────────────────────
  * id 一旦定下就不要更動：使用者的答題進度是靠它對應的，改了會讓進度對不上。
+ * 競賽單字的 id 是 p1-account 這種形式（已經上線在用，不動它）；
+ * 週單字的 id 是 w01-path 這種形式，由 group id + 英文單字組出來。
+ *
+ * ── typeable ───────────────────────────────────────────────
+ * 打字遊戲只收 a~z。課本裡有 "alarm clock"、"high-pitched"、"a couple of"
+ * 這種含空白或連字號的詞條——它們在單字表上要看得到，但不能拿去當打字題目，
+ * 否則孩子會打到一半發現按不出那個空白。所以每個字都標一個 typeable，
+ * 由遊戲自己決定要不要濾掉，而不是在資料裡偷偷刪掉它們。
  */
 
-const WORDS = [
+const { WEEKS } = require('./words/weeks');
+
+const CONTEST_WORDS = [
   // ── Part 1 ──────────────────────────────────────────────
   { id: 'p1-account', part: 1, english: 'account', chinese: '帳戶；說明', exampleSentence: 'I opened a bank account to save my money.' },
   { id: 'p1-addition', part: 1, english: 'addition', chinese: '加法；增加', exampleSentence: 'We learned addition in math class today.' },
@@ -120,7 +139,47 @@ const WORDS = [
 
 const PARTS = [1, 2, 3, 4];
 
+/** 只有純 a~z 的字打得出來。含空白或連字號的詞條不能當打字題目。 */
+const TYPEABLE = /^[a-z]+$/;
+
+/** 'alarm clock' → 'alarm-clock'，用來組 id。 */
+function slug(english) {
+  return english.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+function decorate(word, group) {
+  return { ...word, group, typeable: TYPEABLE.test(word.english) };
+}
+
+/* 競賽單字：group 由 part 推出來，id 維持原樣不動。 */
+const CONTEST = CONTEST_WORDS.map((w) => decorate(w, `p${w.part}`));
+
+/* 週單字：從三元組展開成正式格式。 */
+const WEEKLY = WEEKS.flatMap((week) =>
+  week.words.map(([english, chinese, exampleSentence]) =>
+    decorate(
+      { id: `${week.id}-${slug(english)}`, part: null, english, chinese, exampleSentence },
+      week.id
+    )
+  )
+);
+
+const WORDS = [...CONTEST, ...WEEKLY];
+
+/**
+ * 組的目錄。前端的分頁、遊戲的關卡選擇都讀這一份，
+ * 不要在別的地方再寫一次 Part 1~4 / Week 1~10 的清單。
+ */
+const GROUPS = [
+  ...PARTS.map((part) => ({ id: `p${part}`, label: `Part ${part}`, kind: 'contest', part })),
+  ...WEEKS.map((week) => ({ id: week.id, label: week.label, kind: 'week', part: null }))
+].map((g) => {
+  const words = WORDS.filter((w) => w.group === g.id);
+  return { ...g, count: words.length, typeableCount: words.filter((w) => w.typeable).length };
+});
+
 const BY_ID = new Map(WORDS.map((w) => [w.id, w]));
+const BY_GROUP = new Map(GROUPS.map((g) => [g.id, WORDS.filter((w) => w.group === g.id)]));
 
 function allWords() {
   return WORDS;
@@ -130,8 +189,26 @@ function wordsByPart(part) {
   return WORDS.filter((w) => w.part === Number(part));
 }
 
+function wordsByGroup(groupId) {
+  return BY_GROUP.get(String(groupId)) || [];
+}
+
+function listGroups() {
+  return GROUPS;
+}
+
 function getWordById(id) {
   return BY_ID.get(id) || null;
 }
 
-module.exports = { WORDS, PARTS, allWords, wordsByPart, getWordById };
+module.exports = {
+  WORDS,
+  CONTEST_WORDS: CONTEST,
+  PARTS,
+  GROUPS,
+  allWords,
+  wordsByPart,
+  wordsByGroup,
+  listGroups,
+  getWordById
+};

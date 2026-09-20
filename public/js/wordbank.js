@@ -10,8 +10,10 @@ import { readShared, writeShared } from './local-store.js';
 /**
  * 單字庫是唯讀的：內容寫死在 server/data/word-bank.js，
  * 這一頁只用來瀏覽、聽發音，以及替單字錄真人發音。
+ *
+ * 分頁的單位是「組」（Part 1~4 與 Week 1~10），清單由後端給，
+ * 這裡不自己寫死——以後加 Week 11 只要改資料，這一頁不用動。
  */
-const PARTS = [1, 2, 3, 4];
 
 const wordListEl = document.getElementById('word-list');
 const listErrorEl = document.getElementById('list-error');
@@ -28,7 +30,8 @@ const btnRemoveAudio = document.getElementById('btn-remove-audio');
 const btnSaveRecord = document.getElementById('btn-save-record');
 
 let allWords = [];
-let activePart = null; // null = 全部
+let allGroups = [];
+let activeGroup = null; // null = 全部
 let recordingWord = null;
 let pendingAudioBlob = null;
 let pendingAudioMime = null;
@@ -52,14 +55,15 @@ function escapeHtml(str) {
 
 function renderPartTabs() {
   partTabs.innerHTML = '';
-  [null, ...PARTS].forEach((part) => {
+  [null, ...allGroups].forEach((group) => {
+    const id = group === null ? null : group.id;
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = part === activePart ? 'wb-part-tab active' : 'wb-part-tab';
-    btn.textContent = part === null ? '全部' : `Part ${part}`;
+    btn.className = id === activeGroup ? 'wb-part-tab active' : 'wb-part-tab';
+    btn.textContent = group === null ? '全部' : group.label;
     btn.addEventListener('click', () => {
-      activePart = part;
-      writeShared('wbPart', part);
+      activeGroup = id;
+      writeShared('wbGroup', id);
       renderPartTabs();
       renderFiltered();
     });
@@ -67,10 +71,15 @@ function renderPartTabs() {
   });
 }
 
+function groupLabel(id) {
+  const g = allGroups.find((x) => x.id === id);
+  return g ? g.label : id || '';
+}
+
 function filterLocally() {
   const search = searchInput.value.trim().toLowerCase();
   return allWords.filter((w) => {
-    if (activePart !== null && w.part !== activePart) return false;
+    if (activeGroup !== null && w.group !== activeGroup) return false;
     if (!search) return true;
     return (
       (w.english || '').toLowerCase().includes(search) ||
@@ -97,7 +106,7 @@ function renderWords(words) {
     card.innerHTML = `
       <div class="wc-top">
         <span class="wc-english">${escapeHtml(word.english)}</span>
-        <span class="wc-part">Part ${word.part}</span>
+        <span class="wc-part">${escapeHtml(groupLabel(word.group))}</span>
       </div>
       <div class="wc-chinese">${escapeHtml(word.chinese)}</div>
       ${word.exampleSentence ? `<div class="wc-sentence">${escapeHtml(word.exampleSentence)}</div>` : ''}
@@ -113,9 +122,12 @@ function renderWords(words) {
 }
 
 function refreshWords() {
-  return api.get('/words').then(({ words }) => {
+  return api.get('/words').then(({ words, groups }) => {
     allWords = words;
+    allGroups = groups || [];
     writeShared('words', words);
+    writeShared('wbGroups', allGroups);
+    renderPartTabs();
     renderFiltered();
   });
 }
@@ -124,8 +136,16 @@ function refreshWords() {
 async function loadWords() {
   listErrorEl.textContent = '';
   const cached = readShared('words');
-  if (cached) {
+  const cachedGroups = readShared('wbGroups');
+  /*
+   * 舊版快取的單字沒有 group 欄位。直接拿來畫會變成整頁都篩不到東西，
+   * 而且使用者完全看不出是快取的問題——所以認不得就當作沒有快取。
+   */
+  const usable = Array.isArray(cached) && cached.length > 0 && cached[0].group && cachedGroups;
+  if (usable) {
     allWords = cached;
+    allGroups = cachedGroups;
+    renderPartTabs();
     renderFiltered();
     refreshWords().catch(() => {});
     return;
@@ -238,8 +258,8 @@ runPageInit(async () => {
   const user = await requireLogin();
   if (!user) return;
   initOutbox(user._id);
-  const savedPart = readShared('wbPart');
-  activePart = savedPart === undefined ? null : savedPart;
+  const savedGroup = readShared('wbGroup');
+  activeGroup = savedGroup === undefined || savedGroup === '' ? null : savedGroup;
   renderPartTabs();
   await Promise.all([mountNav(user, 'wordbank'), loadWords()]);
 });

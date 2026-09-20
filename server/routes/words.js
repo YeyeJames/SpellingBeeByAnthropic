@@ -25,9 +25,12 @@ router.use(requireAuth);
 
 router.get('/', async (req, res, next) => {
   try {
-    const { part } = req.query;
-    const words = part ? await Word.listWordsByPart(part) : await Word.listWords();
-    res.json({ words, parts: Word.PARTS });
+    const { part, group } = req.query;
+    let words;
+    if (group) words = await Word.listWordsByGroup(group);
+    else if (part) words = await Word.listWordsByPart(part);
+    else words = await Word.listWords();
+    res.json({ words, parts: Word.PARTS, groups: Word.listGroups() });
   } catch (err) {
     next(err);
   }

@@ -111,11 +111,24 @@ function main() {
    *   - 資料庫掛掉時遊戲頁仍然打得開
    *   - 自動化測試不必先登入就能跑，測試環境因此不需要 MongoDB
    */
-  app.get('/api/wordbank', (req, res) => {
-    const { part } = req.query;
-    const words = part ? wordBank.wordsByPart(part) : wordBank.allWords();
+  /*
+   * 只要組別目錄，不要四百多個字。
+   * 練習頁的「選一組」只需要這個，沒必要為了畫幾顆按鈕就載入整個單字庫。
+   */
+  app.get('/api/wordbank/groups', (req, res) => {
     res.set('Cache-Control', 'public, max-age=300');
-    res.json({ words, parts: wordBank.PARTS });
+    res.json({ groups: wordBank.listGroups() });
+  });
+
+  app.get('/api/wordbank', (req, res) => {
+    const { part, group } = req.query;
+    // group 是現在的單位（Part 1、Week 1 都是一組）；part 是競賽單字留下來的舊參數
+    let words;
+    if (group) words = wordBank.wordsByGroup(group);
+    else if (part) words = wordBank.wordsByPart(part);
+    else words = wordBank.allWords();
+    res.set('Cache-Control', 'public, max-age=300');
+    res.json({ words, parts: wordBank.PARTS, groups: wordBank.listGroups() });
   });
 
   // 這道關卡必須擋在 session 中介層「之前」。

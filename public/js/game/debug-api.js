@@ -113,6 +113,11 @@ export function installDebugApi(ctx) {
       return ctx.shouldShowWord();
     },
 
+    /** 這一場的題庫（已經濾掉含空白／連字號、打不出來的詞條）。 */
+    words() {
+      return (ctx.words || []).map((w) => ({ id: w.id, group: w.group, english: w.english }));
+    },
+
     /** 這次用的難度，以及（如果剛校準過）量到的手速。 */
     difficulty() {
       return { difficulty: ctx.difficulty, calibration: ctx.calibration || null };

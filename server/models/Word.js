@@ -42,6 +42,11 @@ async function listWordsByPart(part) {
   return wordBank.wordsByPart(part).map((w) => withAudio(w, audios.get(w.id)));
 }
 
+async function listWordsByGroup(groupId) {
+  const audios = await audioMap();
+  return wordBank.wordsByGroup(groupId).map((w) => withAudio(w, audios.get(w.id)));
+}
+
 async function getWordById(id) {
   const word = wordBank.getWordById(id);
   if (!word) return null;
@@ -70,9 +75,11 @@ async function clearAudio(id) {
 module.exports = {
   listWords,
   listWordsByPart,
+  listWordsByGroup,
   getWordById,
   getAudio,
   setAudio,
   clearAudio,
-  PARTS: wordBank.PARTS
+  PARTS: wordBank.PARTS,
+  listGroups: wordBank.listGroups
 };

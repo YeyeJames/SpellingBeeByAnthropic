@@ -62,23 +62,68 @@ function warmUpGameEngine() {
   idle(() => loadPhaser().catch(() => {}));
 }
 
-const PARTS = [1, 2, 3, 4];
-let selectedPart = null;
+/*
+ * 要練哪一組。清單由後端給（Part 1~4 是競賽單字，Week 1~10 是課本每週單字），
+ * 這裡不自己寫死——以後加 Week 11 只要改資料。
+ *
+ * 練習模式不濾掉 "alarm clock" 這種含空白的詞條：那是打字遊戲的限制
+ * （遊戲只收 a~z），練習是打在輸入框裡，而且課本考的就是整個詞條。
+ */
+let groups = [];
+let selectedGroup = null;
 
 function renderPartPicker() {
   partPicker.innerHTML = '';
-  PARTS.forEach((part) => {
+  if (!groups.length) {
+    partPicker.innerHTML = '<p class="muted">載入單字組別中⋯</p>';
+    return;
+  }
+  const KIND_LABELS = { contest: '競賽單字', week: '課本每週單字' };
+  let lastKind = null;
+
+  groups.forEach((group) => {
+    if (group.kind !== lastKind) {
+      lastKind = group.kind;
+      const head = document.createElement('div');
+      head.className = 'part-group-label';
+      head.textContent = KIND_LABELS[group.kind] || '';
+      partPicker.appendChild(head);
+    }
+
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = part === selectedPart ? 'part-btn selected' : 'part-btn';
-    btn.innerHTML = `<span class="part-title">Part ${part}</span><span class="part-sub">25 個單字</span>`;
+    btn.className = group.id === selectedGroup ? 'part-btn selected' : 'part-btn';
+    btn.innerHTML =
+      `<span class="part-title">${group.label}</span>` +
+      `<span class="part-sub">${group.count} 個單字</span>`;
     btn.addEventListener('click', () => {
-      selectedPart = part;
-      writeShared('lastPart', part);
+      selectedGroup = group.id;
+      writeShared('lastGroup', group.id);
       renderPartPicker();
     });
     partPicker.appendChild(btn);
   });
+}
+
+async function loadGroups() {
+  // 先用上次的清單畫出來，更新丟到背景——這一頁常常是離線開的
+  const cached = readShared('groups');
+  if (Array.isArray(cached) && cached.length) {
+    groups = cached;
+    renderPartPicker();
+  }
+  try {
+    const res = await fetch('/api/wordbank/groups');
+    if (!res.ok) throw new Error(String(res.status));
+    const data = await res.json();
+    groups = data.groups || [];
+    writeShared('groups', groups);
+  } catch (err) {
+    if (!groups.length) setupError.textContent = '拿不到單字組別，請檢查網路後重新整理';
+  }
+  // 記住的那一組如果已經不存在（例如資料改過），就當作沒有選
+  if (selectedGroup && !groups.some((g) => g.id === selectedGroup)) selectedGroup = null;
+  renderPartPicker();
 }
 
 function selectedOrder() {
@@ -109,8 +154,8 @@ function showPanel(panel) {
 async function startPractice({ reviewOnly = false } = {}) {
   setupError.textContent = '';
 
-  if (!reviewOnly && !selectedPart) {
-    setupError.textContent = '請先選擇要練習哪一個 Part';
+  if (!reviewOnly && !selectedGroup) {
+    setupError.textContent = '請先選擇要練習哪一組';
     return;
   }
 
@@ -122,7 +167,7 @@ async function startPractice({ reviewOnly = false } = {}) {
   let data;
   try {
     data = await api.post('/practice/session', {
-      part: selectedPart,
+      group: selectedGroup,
       order: selectedOrder(),
       reviewOnly
     });
@@ -336,10 +381,13 @@ runPageInit(async () => {
   if (!user) return;
   currentUser = user;
   initOutbox(user._id);
-  // 三件事互不相依，平行處理，避免畫面元素一個接一個冒出來
-  selectedPart = readShared('lastPart') || null;
-  renderPartPicker();
+  // 幾件事互不相依，平行處理，避免畫面元素一個接一個冒出來
+  selectedGroup = readShared('lastGroup') || null;
   restoreSetupPrefs();
-  await Promise.all([mountNav(user, 'practice'), refreshReviewButton({ background: true })]);
+  await Promise.all([
+    loadGroups(),
+    mountNav(user, 'practice'),
+    refreshReviewButton({ background: true })
+  ]);
   warmUpGameEngine();
 });

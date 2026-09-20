@@ -37,10 +37,27 @@
 }
 
 /* Part 選擇：做成大方塊，小朋友在手機上好按 */
+/*
+ * 十幾組（Part 1~4 加上每週單字）排成兩欄會拉得很長，
+ * 讓它照寬度自己決定欄數，電腦上一眼看得完。
+ */
 .part-picker {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
   gap: 0.6rem;
+}
+
+/* 分隔「競賽單字」與「課本每週單字」，橫跨整排 */
+.part-group-label {
+  grid-column: 1 / -1;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin-top: 0.3rem;
+}
+
+.part-group-label:first-child {
+  margin-top: 0;
 }
 
 .part-btn {

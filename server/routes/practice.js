@@ -25,33 +25,45 @@ function normalizeAnswer(str) {
 router.post('/session', async (req, res, next) => {
   try {
     const part = Number(req.body.part);
+    const group = req.body.group ? String(req.body.group) : null;
     const order = req.body.order === 'sequential' ? 'sequential' : 'random';
     const reviewOnly = !!req.body.reviewOnly;
 
+    /*
+     * 練習模式不濾掉含空白的詞條（"alarm clock"）。
+     * 那是打字遊戲的限制——遊戲只收 a~z；練習是打在輸入框裡，空白打得出來，
+     * 而且課本考的就是整個詞條。
+     */
     let candidates;
+    let label;
     if (reviewOnly) {
-      // 複習模式跨 Part，把所有到期的單字都撈進來
+      // 複習模式跨組，把所有到期的單字都撈進來
       const dueProgress = await WordProgress.getReviewQueue(req.user._id);
       const dueIds = new Set(dueProgress.map((p) => p.wordId));
       candidates = (await Word.listWords()).filter((w) => dueIds.has(w._id));
       if (!candidates.length) {
         return res.status(400).json({ error: '目前沒有需要複習的單字，太棒了！' });
       }
+      label = 'review';
+    } else if (group) {
+      candidates = await Word.listWordsByGroup(group);
+      if (!candidates.length) {
+        return res.status(400).json({ error: '找不到這一組單字' });
+      }
+      label = group;
     } else {
+      // part 是舊參數，保留給既有的連結與紀錄
       if (!Word.PARTS.includes(part)) {
-        return res.status(400).json({ error: '請選擇要練習的 Part' });
+        return res.status(400).json({ error: '請選擇要練習哪一組' });
       }
       candidates = await Word.listWordsByPart(part);
+      label = `part${part}`;
     }
 
     // 順序模式照單字表原本的排列，隨機模式才打亂
     const selected = order === 'sequential' ? candidates : shuffle(candidates);
 
-    await PracticeSession.createSession(
-      req.user._id,
-      reviewOnly ? 'review' : `part${part}`,
-      selected.map((w) => w._id)
-    );
+    await PracticeSession.createSession(req.user._id, label, selected.map((w) => w._id));
 
     res.status(201).json({ words: selected });
   } catch (err) {
