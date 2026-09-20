@@ -21,7 +21,16 @@ import { createEffects } from './effects.js';
 const SCAFFOLD_NOTE = '（靜音或裝置沒有語音時才顯示）';
 
 const LANE_LEFT = 0.18; // 蜂巢位置（畫面寬度的比例）
-const LANE_RIGHT = 0.92; // 入侵口
+/*
+ * 入侵口。從 0.92 往左移，右邊那一截留給排隊的敵人站。
+ *
+ * 0.76 是量出來的：設計要求畫面上同時看得到 3~5 隻，而站位是
+ * 入侵口再往右每隔一個間隔排一隻。留 0.82 的話，1440 寬的螢幕上
+ * 有兩隻會排到畫面外，只剩三隻——壓力就少了一半。
+ *
+ * 這只影響畫面上走的距離，不影響時間：推進是時間算的，不是像素算的。
+ */
+const LANE_RIGHT = 0.76;
 
 /* 擊殺頓挫：短暫凍結世界，讓「打掉了」這件事有重量。 */
 const HIT_STOP_MS = 80;
@@ -55,6 +64,9 @@ const ENEMY_SCALE_NEAR = 1.2;
 
 const ENEMY_BASE_COLOR = 0x2b3350;
 const ENEMY_FLASH_COLOR = 0xffffff;
+/* 排隊中的敵人：比當前目標暗，才不會搶走注意力 */
+const ENEMY_QUEUE_COLOR = 0x222a44;
+const ENEMY_QUEUE_STROKE = 0x7f3d3d;
 
 function lerp(a, b, t) {
   return a + (b - a) * t;
@@ -108,6 +120,33 @@ export function createBattleScene(ctx) {
       this.hive = this.add.ellipse(0, 0, 84, 84, 0xf5b301);
       // 危險線：敵人越過它就代表快到家了
       this.dangerLine = this.add.rectangle(0, 0, 3, 120, 0xff5d5d, 0).setOrigin(0.5);
+
+      /*
+       * 排隊中的敵人。
+       *
+       * 設計書要求畫面上同時看得到 3~5 隻，但**只有最前面那隻是當前目標**——
+       * 聽寫一次只能聽一個字。所以這些純粹是畫面：戰鬥邏輯完全沒變，
+       * 仍然只有一隻在推進。這件事很重要，因為現在的時間公式與失敗率
+       * 是模擬器掃出來的，動到邏輯就得整組重跑。
+       *
+       * 它們的作用是壓力：看得到後面還有四隻，跟看不到，緊張感差很多。
+       *
+       * 在 this.enemy 之前建立，這樣排隊的會畫在當前目標後面。
+       */
+      this.WAITING_SLOTS = 4;
+      this.waiting = [];
+      for (let i = 0; i < this.WAITING_SLOTS; i += 1) {
+        const container = this.add.container(0, 0);
+        const body = this.add
+          .ellipse(0, 0, 68, 52, ENEMY_QUEUE_COLOR)
+          .setStrokeStyle(3, ENEMY_QUEUE_STROKE);
+        container.add(body);
+        // 越後面越小越淡：讀起來像「排在遠處」，不會跟當前目標搶注意力
+        container.setScale(0.74 - i * 0.05).setAlpha(0.5 - i * 0.07).setVisible(false);
+        this.waiting.push({ container, x: 0 });
+      }
+      /* 隊伍往前踏一步的動畫進度：1 = 剛換字，0 = 已經就定位 */
+      this.waitShift = 0;
 
       // 敵人包成 Container：移動容器時裡面的裂痕必然跟著走
       this.enemy = this.add.container(0, 0);
@@ -203,6 +242,16 @@ export function createBattleScene(ctx) {
       this.hiveX = width * LANE_LEFT;
       this.hive.setPosition(this.hiveX, this.laneY);
       this.hiveGlow.setPosition(this.hiveX, this.laneY);
+      /*
+       * 排隊站位：入侵口再往右，一隻接一隻。
+       * 最後一隻會有一部分在畫面外，那是刻意的——讀起來像「後面還有」。
+       */
+      this.waitGap = Math.min(74, width * 0.052);
+      this.waitSlotX = this.waitSlotX || new Array(this.WAITING_SLOTS);
+      for (let i = 0; i < this.WAITING_SLOTS; i += 1) {
+        this.waitSlotX[i] = width * LANE_RIGHT + this.waitGap * (i + 1);
+      }
+
       this.dangerX = Phaser.Math.Linear(width * LANE_RIGHT, width * LANE_LEFT, DANGER_AT);
       this.dangerLine.setPosition(this.dangerX, this.laneY).setSize(3, height * 0.16);
 
@@ -295,6 +344,7 @@ export function createBattleScene(ctx) {
         this.effects.update(delta);
         this.updateEnemyHit(delta);
         this.updateMissReveal(delta);
+        this.updateWaitingLine(state, delta);
       }
       this.render(state);
       ctx.syncHud(state);
@@ -370,6 +420,8 @@ export function createBattleScene(ctx) {
             break;
           case EV.WORD_START:
             this.effects.setCrackProgress(0);
+            // 前面那隻進場了，整排往前踏一步（下面用動畫補回來）
+            this.waitShift = 1;
             ctx.speakCurrentWord();
             break;
           default:
@@ -398,6 +450,31 @@ export function createBattleScene(ctx) {
       const alpha = Math.min(1, this.missRemainMs / MISS_FADE_MS);
       this.missText.setAlpha(alpha);
       this.missHint.setAlpha(alpha);
+    }
+
+    /**
+     * 排隊中的敵人。
+     *
+     * 純畫面：邏輯上永遠只有一隻在推進（見 create 裡的說明）。
+     * 這裡只做兩件事——顯示還剩幾隻，以及換字時讓整排往前踏一步。
+     */
+    updateWaitingLine(state, delta) {
+      // 還沒登場的數量。當前這隻已經被 startNextWord 取走了，所以不算在內
+      const pending = state.status === 'running' ? state.queue.length - state.queueHead : 0;
+
+      if (this.waitShift > 0) {
+        // 往 0 收斂就是「踏回定位」。用 delta 而不是固定值，掉格時才不會瞬移
+        this.waitShift -= this.waitShift * Math.min(1, delta / 140);
+        if (this.waitShift < 0.01) this.waitShift = 0;
+      }
+
+      for (let i = 0; i < this.WAITING_SLOTS; i += 1) {
+        const slot = this.waiting[i];
+        const show = i < pending;
+        if (slot.container.visible !== show) slot.container.setVisible(show);
+        if (!show) continue;
+        slot.container.setPosition(this.waitSlotX[i] + this.waitShift * this.waitGap, this.laneY);
+      }
     }
 
     /** 換一場時把提示收掉，否則上一場的字會留在新的一場上。 */

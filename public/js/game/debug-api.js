@@ -128,6 +128,20 @@ export function installDebugApi(ctx) {
       return ctx.recordedCount || 0;
     },
 
+    /** 排在後面等著的敵人。純畫面，邏輯上永遠只有一隻在推進。 */
+    waitingLine() {
+      const s = ctx.scene;
+      if (!s || !s.waiting) return { visible: 0, onScreen: 0, xs: [], shift: 0 };
+      const w = window.innerWidth;
+      const shown = s.waiting.filter((slot) => slot.container.visible);
+      return {
+        visible: shown.length,
+        onScreen: shown.filter((slot) => slot.container.x < w).length,
+        xs: s.waiting.map((slot) => Math.round(slot.container.x)),
+        shift: Number((s.waitShift || 0).toFixed(3))
+      };
+    },
+
     /** 漏字時亮出來的正確拼法。沒在顯示時 visible 是 false。 */
     missReveal() {
       const s = ctx.scene;
