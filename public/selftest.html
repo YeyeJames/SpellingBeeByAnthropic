@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>聲音自我檢查 - 拼字蜂</title>
+  <link rel="icon" href="/assets/icons/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/css/selftest.css" />
+</head>
+<body>
+  <main>
+    <h1>聲音自我檢查</h1>
+    <p class="lead">
+      我在開發環境裡聽不到任何聲音，只能證明「有送出去」跟「延遲夠低」。
+      這一頁是要借你的耳朵：按一下，聽聽看對不對。
+    </p>
+
+    <section class="panel">
+      <h2>環境</h2>
+      <dl id="env"></dl>
+    </section>
+
+    <section class="panel">
+      <h2>1. 打擊音階（最重要）</h2>
+      <p>
+        每打對一個字母，音就往上一階。<strong>七個字母走完一段完整音階，第八個回到高八度。</strong>
+        聽的時候只要確認一件事：它是不是穩穩地往上走，而不是亂跳或聽不出差別。
+      </p>
+      <button class="btn big" data-play="scale">▶︎ 播放一個 8 字母單字的音階</button>
+      <div class="row" id="letters"></div>
+    </section>
+
+    <section class="panel">
+      <h2>2. 各種回饋音</h2>
+      <p>每一顆按下去會唸出它代表什麼，然後播那個聲音。</p>
+      <div class="row" id="effects"></div>
+    </section>
+
+    <section class="panel">
+      <h2>3. 單字發音（TTS）</h2>
+      <p>
+        這是整個遊戲的核心，而且是我<strong>完全沒辦法自己驗證</strong>的部分——
+        開發環境裡沒有安裝任何語音。請確認：唸得清不清楚、速度會不會太快、慢唸有沒有真的變慢。
+      </p>
+      <div class="row">
+        <button class="btn" data-speak="normal">🔊 正常速度唸 account</button>
+        <button class="btn" data-speak="slow">🐢 慢速唸 account</button>
+        <button class="btn" data-speak="sentence">💬 唸例句</button>
+      </div>
+      <label class="voice-row">
+        使用的語音
+        <select id="voice-select"></select>
+      </label>
+      <p class="hint" id="voice-hint"></p>
+    </section>
+
+    <section class="panel">
+      <h2>4. 全部依序播放</h2>
+      <p>大約 40 秒，會把上面全部跑一遍，畫面同時顯示現在播的是什麼。</p>
+      <button class="btn big" id="run-all">▶︎ 全部播一遍</button>
+      <div id="now-playing"></div>
+    </section>
+
+    <section class="panel">
+      <h2>發現問題的話</h2>
+      <p>
+        不用描述細節，直接跟我說哪一顆按鈕的聲音不對就好，例如
+        「擊殺聲太吵」「慢唸跟正常速度聽起來一樣」「音階第 5 個音怪怪的」。
+      </p>
+    </section>
+
+    <p class="back"><a href="/game">← 回遊戲</a></p>
+  </main>
+
+  <script type="module" src="/js/selftest.js"></script>
+</body>
+</html>

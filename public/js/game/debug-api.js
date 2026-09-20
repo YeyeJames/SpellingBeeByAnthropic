@@ -113,6 +113,11 @@ export function installDebugApi(ctx) {
       return ctx.shouldShowWord();
     },
 
+    /** 這次用的難度，以及（如果剛校準過）量到的手速。 */
+    difficulty() {
+      return { difficulty: ctx.difficulty, calibration: ctx.calibration || null };
+    },
+
     /** 物件池使用量：常常回收代表池子開太小。 */
     effects() {
       return ctx.getEffectStats();

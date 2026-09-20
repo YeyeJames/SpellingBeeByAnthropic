@@ -19,8 +19,10 @@ import { createOverlay } from './game/overlay.js';
 import { createPerf, resetPerf } from './game/perf.js';
 import { createBattleScene } from './game/battle-scene.js';
 import { createSfx } from './game/sfx.js';
+import { runCalibration } from './game/calibrate.js';
 import { createSoundBridge } from './game/sound-events.js';
 import { speakWord, speakSentence, stopSpeaking, listEnglishVoices } from './audio-player.js';
+import { readShared, writeShared } from './local-store.js';
 
 const params = new URLSearchParams(location.search);
 
@@ -31,12 +33,28 @@ function initialSeed() {
   return (Date.now() ^ (Math.random() * 0xffffffff)) >>> 0;
 }
 
+const DIFFICULTY_KEY = 'gameDifficulty';
+
+/**
+ * 這次要用哪個難度。
+ *
+ * 優先序：網址指定 > 上次校準或手動選的 > 沒有（代表要先校準）。
+ * 網址優先是給測試用的——所有自動化測試都明確指定難度，
+ * 才不會每次都被校準畫面擋住。
+ */
+function storedDifficulty() {
+  const fromUrl = params.get('difficulty');
+  if (fromUrl) return fromUrl;
+  const saved = readShared(DIFFICULTY_KEY);
+  return saved || null;
+}
+
 const ctx = {
   words: [],
   state: null,
   log: null,
   seed: initialSeed(),
-  difficulty: params.get('difficulty') || 'normal',
+  difficulty: storedDifficulty() || 'normal',
   order: params.get('order') === 'random' ? 'random' : 'sequential',
   paused: false,
   scene: null,
@@ -272,8 +290,6 @@ async function boot() {
     ctx.sfx = createSfx({ onPlayed: (name) => ctx.debug._record('sfx', { name }) });
     ctx.soundBridge = createSoundBridge(ctx.sfx, ctx.debug);
 
-    startBattle();
-
     const overlay = createOverlay(ctx);
     const input = createInput({
       onAction: (action, t0) => {
@@ -347,18 +363,46 @@ async function boot() {
       input.focusForTyping();
     });
 
-    ctx.phaserGame = new window.Phaser.Game({
-      type: window.Phaser.AUTO,
-      parent: 'game-root',
-      backgroundColor: '#10131f',
-      scale: {
-        mode: window.Phaser.Scale.RESIZE,
-        autoCenter: window.Phaser.Scale.CENTER_BOTH
-      },
-      scene: createBattleScene(ctx)
-    });
+    /*
+     * 先決定難度再開場。
+     *
+     * 模擬的結果很清楚：難度選錯不是「比較難」，是完全不能玩
+     * （同一個孩子 easy 10% 失敗率、hard 100%）。所以第一次玩一定先量手速，
+     * 之後記住選擇；?calibrate=1 可以重新量。
+     */
+    const needsCalibration = params.get('calibrate') === '1' || !storedDifficulty();
+    const begin = () => {
+      startBattle();
+      ctx.phaserGame = new window.Phaser.Game({
+        type: window.Phaser.AUTO,
+        parent: 'game-root',
+        backgroundColor: '#10131f',
+        scale: {
+          mode: window.Phaser.Scale.RESIZE,
+          autoCenter: window.Phaser.Scale.CENTER_BOTH
+        },
+        scene: createBattleScene(ctx)
+      });
+      document.body.classList.remove('page-loading');
+    };
 
-    document.body.classList.remove('page-loading');
+    if (needsCalibration) {
+      document.body.classList.remove('page-loading');
+      runCalibration({
+        onDone: (result) => {
+          if (result?.difficulty) {
+            ctx.difficulty = result.difficulty;
+            writeShared(DIFFICULTY_KEY, result.difficulty);
+            ctx.calibration = result;
+          }
+          // 校準時他已經按過鍵了，音訊可以解鎖
+          ctx.sfx.unlock();
+          begin();
+        }
+      });
+    } else {
+      begin();
+    }
   } catch (err) {
     document.body.classList.remove('page-loading');
     if (errorEl) errorEl.textContent = `無法開始遊戲：${err.message}`;

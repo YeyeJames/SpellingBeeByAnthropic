@@ -19,7 +19,9 @@
     "test:soak": "node scripts/soak-test.mjs",
     "test:audio": "node scripts/audio-test.mjs",
     "sim": "node scripts/sim.mjs",
-    "test:parity": "node scripts/parity-test.mjs"
+    "test:parity": "node scripts/parity-test.mjs",
+    "test:calibrate": "node scripts/calibrate-test.mjs",
+    "test:all": "node scripts/determinism.mjs && node scripts/input-test.mjs && node scripts/audio-test.mjs && node scripts/calibrate-test.mjs && node scripts/parity-test.mjs && node scripts/sim.mjs"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

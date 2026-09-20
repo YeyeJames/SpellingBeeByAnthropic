@@ -24,6 +24,7 @@ import { createRng } from '../public/js/game/core/rng.js';
 import { createRecorder, recordAction, replayLog } from '../public/js/game/core/recorder.js';
 import { createPlayerModel, pollPlayer, PLAYER_PRESETS } from '../public/js/game/core/player-model.js';
 import { semitoneForIndex, comboShift, freqFor } from '../public/js/game/core/scale.js';
+import { computeIntervals, suggestDifficulty } from '../public/js/game/core/calibration.js';
 
 const require = createRequire(import.meta.url);
 const { wordsByPart } = require('../server/data/word-bank.js');
@@ -198,6 +199,45 @@ console.log('\n8) 打擊音階');
     comboShift(0) === 0 && comboShift(5) === 2 && comboShift(10) === 4 && comboShift(15) === 7 && comboShift(99) === 7,
     [0, 5, 10, 15, 99].map(comboShift).join(',')
   );
+}
+
+// ── 9. 難度校準的計算 ─────────────────────────────────────
+console.log('\n9) 難度校準');
+{
+  // 用固定間隔造三個字的按鍵時間戳
+  const make = (perWord, gap) =>
+    perWord.map((n) => {
+      const t = [];
+      for (let i = 0; i < n; i += 1) t.push(1000 + i * gap);
+      return t;
+    });
+
+  const slow = computeIntervals(make([3, 3, 4], 900));
+  const mid = computeIntervals(make([3, 3, 4], 500));
+  const fast = computeIntervals(make([3, 3, 4], 250));
+
+  check('每個字的第一次按鍵不算（含讀字與反應）', slow.length === 2 + 2 + 3, `${slow.length} 筆`);
+  check('慢手速 → 輕鬆', suggestDifficulty(slow).difficulty === 'easy', suggestDifficulty(slow).difficulty);
+  check('中手速 → 標準', suggestDifficulty(mid).difficulty === 'normal', suggestDifficulty(mid).difficulty);
+  check('快手速 → 挑戰', suggestDifficulty(fast).difficulty === 'hard', suggestDifficulty(fast).difficulty);
+
+  // 中間卡住一次不該把結論帶走——這正是用中位數而不是平均的理由
+  const stalled = computeIntervals([[0, 500, 1000, 4500, 5000, 5500, 6000]]);
+  const s1 = suggestDifficulty(stalled);
+  const meanMs = stalled.reduce((a, b) => a + b, 0) / stalled.length;
+  check(
+    '中間發呆一次仍判為標準（中位數擋掉極端值）',
+    s1.difficulty === 'normal',
+    `中位數 ${s1.medianMs}ms、平均 ${Math.round(meanMs)}ms → ${s1.difficulty}`
+  );
+
+  // 樣本太少就不要亂猜
+  const few = suggestDifficulty(computeIntervals([[0, 200]]));
+  check('樣本不足時不下結論', few.confident === false && few.difficulty === 'normal', JSON.stringify(few));
+
+  // 不合理的值要被濾掉
+  const noisy = computeIntervals([[0, 5, 10, 15, 20]]); // 全部 5ms，不是人類手速
+  check('濾掉不合理的間隔', noisy.length === 0, `${noisy.length} 筆`);
 }
 
 console.log(`\n${failures === 0 ? '全部通過' : `有 ${failures} 項失敗`}`);

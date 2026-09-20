@@ -18,6 +18,7 @@
     <!-- 小孩覺得「剛剛怪怪的」就按這個，我拿到錄影檔就能完整重現 -->
     <button type="button" id="btn-replay-file" class="chrome-btn">剛剛怪怪的</button>
     <button type="button" id="btn-mute" class="chrome-btn">🔊 聲音</button>
+    <a class="chrome-link" href="/selftest">聲音檢查</a>
     <span class="chrome-hint">↑再聽 ↓慢唸 →例句 · Esc 暫停 · F2 靜音 · F3 除錯</span>
   </div>
 
@@ -35,6 +36,29 @@
   <div id="ime-warning" hidden>
     <strong>請把輸入法切成英文</strong>
     <span>現在是中文輸入法，打出來的字母遊戲收不到。<br />按鍵盤上的切換鍵（通常是 Shift 或 Ctrl+空白鍵）換成英文再繼續。</span>
+  </div>
+
+  <!--
+    校準：第一次玩時先量手速再建議難度。
+    模擬顯示難度選錯的代價是災難性的（同一個孩子在 easy 10% 失敗率、
+    在 hard 是 100%），所以不能讓他自己猜。
+  -->
+  <div id="calibrate" hidden>
+    <strong>先量一下你打字有多快</strong>
+    <p id="calibrate-prompt">把下面三個字打出來就好，不會扣血也不會輸。</p>
+    <div id="calibrate-word"></div>
+    <div id="calibrate-typed"></div>
+    <div id="calibrate-progress"></div>
+
+    <div id="calibrate-result" hidden>
+      <p>建議難度：<span id="calibrate-label"></span></p>
+      <p id="calibrate-detail"></p>
+    </div>
+    <div id="calibrate-choice" hidden>
+      <button type="button" class="btn-difficulty" data-difficulty="easy">輕鬆</button>
+      <button type="button" class="btn-difficulty" data-difficulty="normal">標準</button>
+      <button type="button" class="btn-difficulty" data-difficulty="hard">挑戰</button>
+    </div>
   </div>
 
   <!--

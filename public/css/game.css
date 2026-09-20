@@ -227,3 +227,91 @@ body.is-touch #listen-buttons {
   color: #94a3b8;
   line-height: 1.7;
 }
+
+/* ── 校準畫面 ─────────────────────────────────────────── */
+
+#calibrate {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 2rem;
+  text-align: center;
+  background: rgba(8, 10, 18, 0.96);
+}
+
+#calibrate[hidden] {
+  display: none;
+}
+
+#calibrate strong {
+  font-size: 1.5rem;
+  color: #ffd166;
+}
+
+#calibrate p {
+  margin: 0;
+  color: #94a3b8;
+}
+
+#calibrate-word {
+  font-family: ui-monospace, monospace;
+  font-size: 3.4rem;
+  letter-spacing: 0.12em;
+  color: #e2e8f0;
+  margin-top: 1rem;
+}
+
+#calibrate-typed {
+  font-family: ui-monospace, monospace;
+  font-size: 1.6rem;
+  letter-spacing: 0.12em;
+  color: #6ee7b7;
+  min-height: 2rem;
+}
+
+#calibrate-progress {
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+#calibrate-result {
+  margin-top: 0.8rem;
+}
+
+#calibrate-label {
+  color: #ffd166;
+  font-size: 1.4rem;
+}
+
+#calibrate-choice {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.8rem;
+}
+
+.btn-difficulty {
+  background: #1e293b;
+  color: #cbd5e1;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 0.55rem 1.2rem;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.btn-difficulty:hover {
+  background: #334155;
+}
+
+/* 建議的那一顆標起來，但三顆都能按——量測是起點，不是判決 */
+.btn-difficulty.is-suggested {
+  background: #f5b301;
+  color: #10131f;
+  border-color: #f5b301;
+  font-weight: 600;
+}

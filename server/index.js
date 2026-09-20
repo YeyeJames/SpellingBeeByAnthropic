@@ -150,6 +150,12 @@ function main() {
     res.sendFile(path.join(__dirname, '..', 'public', 'game.html'));
   });
 
+  // 聲音自我檢查頁。開發環境聽不到聲音，這一頁是借家長的耳朵驗證。
+  app.get('/selftest', (req, res) => {
+    res.set('Cache-Control', 'no-cache');
+    res.sendFile(path.join(__dirname, '..', 'public', 'selftest.html'));
+  });
+
   /*
    * 靜態檔案一律要求重新驗證。
    *
