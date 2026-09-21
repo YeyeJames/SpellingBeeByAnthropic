@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  甲蟲：短單字（4 個字母以內）的敵人。
+
+  風格照設計書：深色剪影 + 亮色描邊（rim light）。矮胖、貼地，
+  讀起來是「一小隻、很快就到」——對應短字時間也短。
+
+  換圖插槽：想換成自己的圖，直接覆蓋這個檔案即可，尺寸維持 96×72。
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 72" width="96" height="72">
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- 六隻腳 -->
+    <g stroke="#7f3d3d" stroke-width="3">
+      <path d="M30 44 L18 58 M48 48 L44 62 M66 44 L78 58"/>
+      <path d="M30 30 L16 22 M66 30 L80 22"/>
+    </g>
+    <!-- 甲殼 -->
+    <ellipse cx="48" cy="38" rx="30" ry="22" fill="#0e1220" stroke="#ff5d5d" stroke-width="3"/>
+    <!-- 殼上的分線與紋路 -->
+    <path d="M48 17 L48 59" stroke="#ff5d5d" stroke-width="2" opacity="0.65"/>
+    <path d="M33 28 Q48 33 63 28 M33 46 Q48 41 63 46" stroke="#ff8a8a" stroke-width="1.6" opacity="0.5"/>
+    <!-- 頭與觸角 -->
+    <ellipse cx="20" cy="38" rx="11" ry="10" fill="#161c2e" stroke="#ff5d5d" stroke-width="2.5"/>
+    <path d="M13 31 L4 24 M13 45 L4 52" stroke="#ff5d5d" stroke-width="2.4"/>
+    <!-- 眼睛：亮一點，讓它看著蜂巢的方向 -->
+    <circle cx="16" cy="36" r="2.6" fill="#ffd166"/>
+  </g>
+</svg>

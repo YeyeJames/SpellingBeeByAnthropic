@@ -26,6 +26,7 @@ import { createRecorder, recordAction, replayLog } from '../public/js/game/core/
 import { createPlayerModel, pollPlayer, PLAYER_PRESETS } from '../public/js/game/core/player-model.js';
 import { semitoneForIndex, comboShift, freqFor } from '../public/js/game/core/scale.js';
 import { computeIntervals, suggestDifficulty } from '../public/js/game/core/calibration.js';
+import { ENEMY_KINDS, enemyKindFor } from '../public/js/game/core/enemy-kind.js';
 
 const require = createRequire(import.meta.url);
 const { wordsByPart } = require('../server/data/word-bank.js');
@@ -360,6 +361,39 @@ console.log('\n6.8) Combo 三階效果');
       `${state.frenzyMs}ms`
     );
   }
+}
+
+// ── 6.9 字長 → 敵人種類（Phase 2.3） ─────────────────────
+// 不是隨機挑外形，是照字母數。時間公式本來就跟著字長走，
+// 外形要把這件事講出來：看到蜘蛛就知道這隻大、要打久一點。
+console.log('\n6.9) 字長決定敵人種類');
+{
+  const CASES = [
+    ['cat', 'beetle'],
+    ['knee', 'beetle'],
+    ['knife', 'wasp'],
+    ['scissors', 'spider'],
+    ['scientist', 'spider'],
+    ['alarm clock', 'spider'] // 含空白的照整串算
+  ];
+  for (const [word, expected] of CASES) {
+    const got = enemyKindFor(word).key;
+    check(`${word}（${word.length} 字元）→ ${expected}`, got === expected, got);
+  }
+
+  check('三種敵人都用得到', new Set(CASES.map((c) => c[1])).size === 3);
+  check('種類清單就是三種', ENEMY_KINDS.length === 3, ENEMY_KINDS.map((k) => k.key).join(','));
+
+  // 純函式：同一個字永遠同一種，重播與截圖比對才對得起來
+  check(
+    '同一個字永遠是同一種',
+    enemyKindFor('scissors').key === enemyKindFor('scissors').key
+  );
+  check('奇怪的輸入不會爆', enemyKindFor('').key === 'beetle' && enemyKindFor(null).key === 'beetle');
+
+  // 字越長，敵人越大——這是「一眼看出要打多久」的依據
+  const sizes = ENEMY_KINDS.map((k) => k.width);
+  check('越後面的種類越大', sizes.every((v, i) => i === 0 || v > sizes[i - 1]), sizes.join(' < '));
 }
 
 // ── 7. 參考資料：手速 × 難度的結果對照 ────────────────────

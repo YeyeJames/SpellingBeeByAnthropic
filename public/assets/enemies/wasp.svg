@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  黃蜂：中等長度（5~7 個字母）的敵人。
+
+  細長、有翅膀、身上有節——比甲蟲大一圈，讀起來「這隻要打久一點」。
+  換圖插槽：覆蓋同名檔案即可，尺寸維持 112×72。
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 112 72" width="112" height="72">
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- 翅膀：半透明，壓在身體後面 -->
+    <ellipse cx="62" cy="22" rx="22" ry="10" fill="#8fb7ff" opacity="0.22"
+             stroke="#8fb7ff" stroke-width="1.6" transform="rotate(-18 62 22)"/>
+    <ellipse cx="72" cy="26" rx="18" ry="8" fill="#8fb7ff" opacity="0.16"
+             stroke="#8fb7ff" stroke-width="1.4" transform="rotate(-8 72 26)"/>
+    <!-- 腳 -->
+    <g stroke="#7f3d3d" stroke-width="2.6">
+      <path d="M46 48 L38 62 M62 50 L60 64 M78 46 L88 60"/>
+    </g>
+    <!-- 腹部（有節） -->
+    <ellipse cx="78" cy="38" rx="24" ry="16" fill="#0e1220" stroke="#ff5d5d" stroke-width="3"/>
+    <path d="M68 25 Q70 38 68 51 M80 23 Q82 38 80 53 M91 27 Q93 38 91 49"
+          stroke="#ffd166" stroke-width="2.6" opacity="0.75"/>
+    <!-- 胸 -->
+    <ellipse cx="44" cy="38" rx="15" ry="13" fill="#161c2e" stroke="#ff5d5d" stroke-width="2.6"/>
+    <!-- 頭與觸角 -->
+    <ellipse cx="22" cy="38" rx="12" ry="11" fill="#161c2e" stroke="#ff5d5d" stroke-width="2.6"/>
+    <path d="M14 30 L4 22 M14 46 L4 54" stroke="#ff5d5d" stroke-width="2.4"/>
+    <circle cx="17" cy="36" r="2.8" fill="#ffd166"/>
+    <!-- 尾針 -->
+    <path d="M102 38 L111 38" stroke="#ff5d5d" stroke-width="3"/>
+  </g>
+</svg>

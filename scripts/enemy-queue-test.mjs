@@ -160,6 +160,59 @@ for (const [w, h] of [
   await context.close();
 }
 
+/* ── 6. 美術：三種外形與三層視差 ────────────────────────── */
+console.log('\n6) 三種敵人外形與三層背景');
+{
+  const { context, page } = await openGame(1440, 810);
+
+  const art = await page.evaluate(() => {
+    const sc = window.__spellbeeScene;
+    return {
+      artOk: sc.enemyArtOk,
+      hasImage: !!sc.enemyBody.setTexture,
+      layers: sc.bgLayers.length,
+      layerKeys: sc.bgLayers.map((l) => l.texture.key),
+      tilePos: sc.bgLayers.map((l) => l.tilePositionX)
+    };
+  });
+  check('SVG 素材有載到', art.artOk, String(art.artOk));
+  check('敵人是貼圖不是幾何圖形', art.hasImage);
+  check('背景有三層', art.layers === 3, `${art.layers} 層`);
+  check(
+    '三層用的是三張不同的貼圖',
+    new Set(art.layerKeys).size === 3,
+    art.layerKeys.join(',')
+  );
+
+  // 視差：三層必須以不同速度移動，否則只是一張圖在平移
+  await page.waitForTimeout(900);
+  const moved = await page.evaluate(
+    (before) => window.__spellbeeScene.bgLayers.map((l, i) => l.tilePositionX - before[i]),
+    art.tilePos
+  );
+  check('三層都有在動', moved.every((d) => d > 0), moved.map((d) => d.toFixed(1)).join(', '));
+  check(
+    '速度不一樣（這才叫視差）',
+    moved[0] < moved[1] && moved[1] < moved[2],
+    moved.map((d) => d.toFixed(1)).join(' < ')
+  );
+
+  /*
+   * 換字時外形要跟著換。
+   * w13a 的第一個字是 knee（4 字元，甲蟲），後面有比較長的字。
+   */
+  const kinds = new Set();
+  for (let i = 0; i < 8; i += 1) {
+    const k = await page.evaluate(() => window.__spellbeeScene.enemyKind);
+    kinds.add(k);
+    if (!(await killWord(page))) break;
+  }
+  check('一場之內會出現不只一種敵人', kinds.size >= 2, [...kinds].join(','));
+
+  check('沒有未捕捉的例外（這一段）', pageErrors.length === 0, pageErrors.slice(0, 2).join(' | '));
+  await context.close();
+}
+
 await browser.close();
 
 console.log('\n驗收');

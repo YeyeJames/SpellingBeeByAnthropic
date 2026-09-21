@@ -17,6 +17,8 @@ import { createClock, advanceClock } from './core/clock.js';
 import { stepBattle, clearEvents, EV, EV_NAME, LISTEN_KIND } from './core/battle.js';
 import { samplePerf } from './perf.js';
 import { createEffects } from './effects.js';
+import { ENEMY_KINDS, enemyKindFor } from './core/enemy-kind.js';
+import { createRng } from './core/rng.js';
 
 const SCAFFOLD_NOTE = '（靜音或裝置沒有語音時才顯示）';
 
@@ -82,6 +84,101 @@ const ENEMY_FLASH_COLOR = 0xffffff;
 const ENEMY_QUEUE_COLOR = 0x222a44;
 const ENEMY_QUEUE_STROKE = 0x7f3d3d;
 
+/*
+ * 三層視差背景的定義。
+ *
+ * 貼圖一次畫好轉成材質，之後只動 tilePositionX——每格不配置任何東西。
+ * 速度單位是「每秒幾個像素」。遠山 4px/s 幾乎看不出在動，那是刻意的：
+ * 鏡頭其實固定，飄太快就變成蜂巢在往右跑，反而假。
+ */
+const PARALLAX_TEX_W = 960;
+const PARALLAX_TEX_H = 200;
+
+const PARALLAX_LAYERS = [
+  {
+    key: 'bg-far',
+    seed: 0x5eed01,
+    speed: 4,
+    yFactor: 0.58, // 這一層的底邊落在畫面高度的幾成
+    hFactor: 0.26,
+    /** 遠山：幾道重疊的鈍圓丘陵，最暗。 */
+    draw(g, rng, w, h) {
+      for (let band = 0; band < 2; band += 1) {
+        g.fillStyle(band === 0 ? 0x141a2c : 0x18203a, 1);
+        let x = -80;
+        while (x < w + 80) {
+          const rx = 120 + rng.int(160);
+          const ry = 46 + rng.int(46) + band * 10;
+          g.fillEllipse(x, h - 6 + band * 8, rx * 2, ry * 2);
+          x += rx * (1.1 + rng.next() * 0.5);
+        }
+      }
+    }
+  },
+  {
+    key: 'bg-mid',
+    seed: 0x5eed02,
+    speed: 11,
+    yFactor: 0.7,
+    hFactor: 0.2,
+    /** 中景：一排樹叢，比遠山亮一階。 */
+    draw(g, rng, w, h) {
+      let x = 10;
+      while (x < w + 40) {
+        const trunkH = 34 + rng.int(38);
+        const crownR = 18 + rng.int(20);
+        g.fillStyle(0x151d33, 1);
+        g.fillRect(x - 3, h - trunkH, 6, trunkH);
+        g.fillStyle(0x1a2440, 1);
+        g.fillEllipse(x, h - trunkH - crownR * 0.6, crownR * 2.2, crownR * 1.7);
+        x += 46 + rng.int(70);
+      }
+    }
+  },
+  {
+    key: 'bg-near',
+    seed: 0x5eed03,
+    speed: 26,
+    yFactor: 0.945,
+    hFactor: 0.1,
+    /** 近景：草葉與零星小花，最亮也跑最快。 */
+    draw(g, rng, w, h) {
+      let x = 0;
+      while (x < w + 20) {
+        const bladeH = 18 + rng.int(34);
+        const lean = rng.int(11) - 5;
+        g.lineStyle(3, 0x263454, 1);
+        g.beginPath();
+        g.moveTo(x, h);
+        g.lineTo(x + lean, h - bladeH);
+        g.strokePath();
+        // 偶爾插一朵花，讓重複沒那麼明顯
+        if (rng.next() < 0.08) {
+          g.fillStyle(0x4a5a2f, 1);
+          g.fillCircle(x + lean, h - bladeH - 4, 3.5);
+        }
+        x += 8 + rng.int(14);
+      }
+    }
+  }
+];
+
+/**
+ * 把整張貼圖染成同一個顏色（受擊閃白用）。
+ *
+ * Phaser 4 拿掉了 setTintFill，要改成 setTint + setTintMode(FILL)。
+ * 舊的呼叫不會拋例外，只會在主控台印一行警告然後「什麼都不做」——
+ * 也就是閃白整個失效卻看不出來。測試裡「不准有 console 錯誤」那一條
+ * 就是抓到這個。
+ */
+function fillTint(image, color) {
+  image.setTint(color);
+  if (image.setTintMode) {
+    const FILL = window.Phaser?.TintModes?.FILL;
+    image.setTintMode(FILL === undefined ? 1 : FILL);
+  }
+}
+
 function lerp(a, b, t) {
   return a + (b - a) * t;
 }
@@ -115,13 +212,89 @@ export function createBattleScene(ctx) {
       this.energyPulseT = -1;
     }
 
+    /*
+     * 敵人的 SVG。
+     *
+     * 手寫 SVG 而不是點陣圖：可無限縮放、檔案小、風格一致，而且
+     * 「換圖插槽」是真的——想換成自己畫的圖，覆蓋同名檔案即可，程式不用動。
+     *
+     * 用兩倍尺寸點陣化，高解析度螢幕上才不會糊（載進來之後縮回 0.5）。
+     * 載不到就退回原本的橢圓，遊戲照玩——素材不該是能不能玩的前提。
+     */
+    preload() {
+      this.enemyArtOk = true;
+      this.load.on('loaderror', (file) => {
+        if (String(file?.key || '').startsWith('enemy-')) this.enemyArtOk = false;
+      });
+      for (const kind of ENEMY_KINDS) {
+        this.load.svg(`enemy-${kind.key}`, `/assets/enemies/${kind.key}.svg`, {
+          width: kind.width * 2,
+          height: kind.height * 2
+        });
+      }
+    }
+
+    /** 建一隻敵人的身體：有素材就用 SVG，沒有就退回橢圓。 */
+    makeEnemyBody(kindKey) {
+      if (this.enemyArtOk && this.textures.exists(`enemy-${kindKey}`)) {
+        return this.add.image(0, 0, `enemy-${kindKey}`).setScale(0.5);
+      }
+      return this.add.ellipse(0, 0, 68, 52, ENEMY_BASE_COLOR).setStrokeStyle(3, 0xff5d5d);
+    }
+
+    /**
+     * 畫出三層背景的貼圖。
+     *
+     * 用固定種子的亂數擺形狀，所以每次啟動長得一樣——不這樣的話
+     * 截圖比對永遠不會過，而且每次重開背景都變樣會讓人分心。
+     */
+    buildParallaxTextures() {
+      for (const def of PARALLAX_LAYERS) {
+        if (this.textures.exists(def.key)) continue;
+        const g = this.make.graphics({ add: false });
+        const rng = createRng(def.seed);
+        def.draw(g, rng, PARALLAX_TEX_W, PARALLAX_TEX_H);
+        g.generateTexture(def.key, PARALLAX_TEX_W, PARALLAX_TEX_H);
+        g.destroy();
+      }
+    }
+
+    /** 三層各自以不同速度緩慢飄移。 */
+    updateParallax(delta) {
+      for (let i = 0; i < this.bgLayers.length; i += 1) {
+        this.bgLayers[i].tilePositionX += (PARALLAX_LAYERS[i].speed * delta) / 1000;
+      }
+    }
+
+    /** 換一種敵人外形。橢圓版本沒有貼圖可換，就維持原樣。 */
+    setEnemyKind(body, kindKey) {
+      if (body.setTexture && this.enemyArtOk && this.textures.exists(`enemy-${kindKey}`)) {
+        body.setTexture(`enemy-${kindKey}`);
+      }
+    }
+
     create() {
       const { width, height } = this.scale;
 
-      // ── 背景：三層，之後會換成真正的視差 ──────────────────
-      this.bgFar = this.add.rectangle(0, 0, width, height, 0x10131f).setOrigin(0);
-      this.bgMid = this.add.rectangle(0, height * 0.52, width, height * 0.48, 0x171c2e).setOrigin(0);
-      this.ground = this.add.rectangle(0, height * 0.72, width, height * 0.28, 0x1e2540).setOrigin(0);
+      /*
+       * 三層視差背景。
+       *
+       * 貼圖是程式畫出來再轉成材質的，不吃任何外部圖檔——這個環境
+       * 連不到素材站，而手寫一張 1920 寬的背景 SVG 又不會比較好維護。
+       * 形狀用固定種子亂數擺，所以每次跑起來長得一模一樣（視覺回歸才比得了）。
+       *
+       * 三層速度不同才有深度：遠山幾乎不動，草叢跑得最快。
+       * 鏡頭其實是固定的，這個緩慢的飄移是為了讓畫面「活著」，
+       * 所以刻意壓得很慢——快了就變成蜂巢在往右跑，那是假的。
+       */
+      this.bgFar = this.add.rectangle(0, 0, width, height, 0x0c0f1a).setOrigin(0);
+      this.buildParallaxTextures();
+      this.bgLayers = PARALLAX_LAYERS.map((def) =>
+        this.add.tileSprite(0, 0, width, 10, def.key).setOrigin(0, 0)
+      );
+      this.ground = this.add.rectangle(0, height * 0.7, width, height * 0.3, 0x1b2137).setOrigin(0);
+      // 地面要蓋在最遠的兩層上面、但在最近那層下面，層次才對
+      this.children.bringToTop(this.bgLayers[2]);
 
       /*
        * 蜂巢與敵人用 ellipse / rectangle 這種定位語意明確的基本圖形。
@@ -151,20 +324,21 @@ export function createBattleScene(ctx) {
       this.waiting = [];
       for (let i = 0; i < this.WAITING_SLOTS; i += 1) {
         const container = this.add.container(0, 0);
-        const body = this.add
-          .ellipse(0, 0, 68, 52, ENEMY_QUEUE_COLOR)
-          .setStrokeStyle(3, ENEMY_QUEUE_STROKE);
+        const body = this.makeEnemyBody(ENEMY_KINDS[0].key);
+        // 不上色調，只靠透明度與縮放拉開層次——上了色調剪影就糊掉了
+        if (!body.setTint) body.setFillStyle(ENEMY_QUEUE_COLOR).setStrokeStyle(3, ENEMY_QUEUE_STROKE);
         container.add(body);
         // 越後面越小越淡：讀起來像「排在遠處」，不會跟當前目標搶注意力
         container.setScale(0.74 - i * 0.05).setAlpha(0.5 - i * 0.07).setVisible(false);
-        this.waiting.push({ container, x: 0 });
+        this.waiting.push({ container, body, x: 0, kind: '' });
       }
       /* 隊伍往前踏一步的動畫進度：1 = 剛換字，0 = 已經就定位 */
       this.waitShift = 0;
 
       // 敵人包成 Container：移動容器時裡面的裂痕必然跟著走
       this.enemy = this.add.container(0, 0);
-      this.enemyBody = this.add.ellipse(0, 0, 68, 52, ENEMY_BASE_COLOR).setStrokeStyle(3, 0xff5d5d);
+      this.enemyBody = this.makeEnemyBody(ENEMY_KINDS[0].key);
+      this.enemyKind = '';
       this.enemy.add(this.enemyBody);
 
       this.effects = createEffects(this, ctx.getSeed());
@@ -259,11 +433,28 @@ export function createBattleScene(ctx) {
       const height = this.scale.height;
 
       this.bgFar.setSize(width, height);
-      this.bgMid.setPosition(0, height * 0.52).setSize(width, height * 0.48);
-      this.ground.setPosition(0, height * 0.72).setSize(width, height * 0.28);
+      this.ground.setPosition(0, height * 0.7).setSize(width, height * 0.3);
+      PARALLAX_LAYERS.forEach((def, i) => {
+        const layer = this.bgLayers[i];
+        const h = height * def.hFactor;
+        layer.setPosition(0, height * def.yFactor - h);
+        layer.setSize(width, h);
+        // 貼圖是固定高度畫的，用縮放讓它填滿這一層的高度
+        layer.setTileScale(1, h / PARALLAX_TEX_H);
+      });
 
-      // 戰場：地面帶的稍微上方，讓角色站在地上而不是浮在半空
-      this.laneY = height * 0.68;
+      /*
+       * 戰場擺在地面帶「裡面」，不是上緣。
+       *
+       * 原本在 0.68，正好卡在天空與地面的交界：敵人是深色剪影，背後也是
+       * 深色天空，等於剪影疊剪影，看不出輪廓。挪到地面帶中間之後，
+       * 背後是比較亮的地面，蟲的形狀才讀得出來。
+       *
+       * 矮螢幕要再往上收：iPad 橫向把螢幕鍵盤叫出來只剩 430px 高，
+       * 照比例算會直接撞到下面那條工具列，敵人走到最後幾步會被按鈕蓋住——
+       * 而那正是最需要看清楚的時刻。
+       */
+      this.laneY = Math.min(height * 0.8, height - 100);
       this.hiveX = width * LANE_LEFT;
       this.hive.setPosition(this.hiveX, this.laneY);
       this.hiveGlow.setPosition(this.hiveX, this.laneY);
@@ -375,6 +566,7 @@ export function createBattleScene(ctx) {
         this.updateMissReveal(delta);
         this.updateWaitingLine(state, delta);
         this.updateBonusBanner(state, delta);
+        this.updateParallax(delta);
       }
       this.render(state);
       ctx.syncHud(state);
@@ -422,7 +614,8 @@ export function createBattleScene(ctx) {
             this.hitStopUntil = performance.now() + HIT_STOP_MS;
             ctx.blockInput(HIT_STOP_MS);
             this.enemyHitT = -1;
-            this.enemyBody.setScale(1, 1);
+            this.enemyBody.setScale(this.enemyBody.setTexture ? 0.5 : 1);
+            if (this.enemyBody.clearTint) this.enemyBody.clearTint();
             break;
           case EV.WORD_MISSED: {
             this.cameras.main.shake(180, 0.01);
@@ -457,12 +650,19 @@ export function createBattleScene(ctx) {
             }
             break;
           }
-          case EV.WORD_START:
+          case EV.WORD_START: {
             this.effects.setCrackProgress(0);
             // 前面那隻進場了，整排往前踏一步（下面用動畫補回來）
             this.waitShift = 1;
+            // 換上這個字對應的敵人：字越長、蟲越大（見 core/enemy-kind.js）
+            const kind = enemyKindFor(state.target).key;
+            if (kind !== this.enemyKind) {
+              this.enemyKind = kind;
+              this.setEnemyKind(this.enemyBody, kind);
+            }
             ctx.speakCurrentWord();
             break;
+          }
           default:
             break;
         }
@@ -512,6 +712,19 @@ export function createBattleScene(ctx) {
         const show = i < pending;
         if (slot.container.visible !== show) slot.container.setVisible(show);
         if (!show) continue;
+
+        /*
+         * 排隊的也要換成該單字對應的外形。
+         * 不換的話後面排的全是同一隻，看不出「等一下有一隻大的要來」——
+         * 而那正是排隊要製造的壓力。
+         */
+        const word = state.words[state.queue[state.queueHead + i]];
+        const kind = word ? enemyKindFor(word.english).key : '';
+        if (kind && kind !== slot.kind) {
+          slot.kind = kind;
+          this.setEnemyKind(slot.body, kind);
+        }
+
         slot.container.setPosition(this.waitSlotX[i] + this.waitShift * this.waitGap, this.laneY);
       }
     }
@@ -561,14 +774,20 @@ export function createBattleScene(ctx) {
       if (this.enemyHitT >= 0) {
         this.enemyHitT += delta;
         const k = this.enemyHitT / ENEMY_HIT_MS;
+        const isImage = !!this.enemyBody.setTexture;
+        // 貼圖版本的基準縮放是 0.5（SVG 以兩倍尺寸點陣化，見 preload）
+        const base = isImage ? 0.5 : 1;
         if (k >= 1) {
           this.enemyHitT = -1;
-          this.enemyBody.setScale(1, 1);
-          this.enemyBody.setFillStyle(ENEMY_BASE_COLOR);
+          this.enemyBody.setScale(base, base);
+          if (isImage) this.enemyBody.clearTint();
+          else this.enemyBody.setFillStyle(ENEMY_BASE_COLOR);
         } else {
           // 先被擠扁再彈回來
-          this.enemyBody.setScale(lerp(1.22, 1, k), lerp(0.78, 1, k));
-          this.enemyBody.setFillStyle(lerpColor(ENEMY_FLASH_COLOR, ENEMY_BASE_COLOR, k));
+          this.enemyBody.setScale(base * lerp(1.22, 1, k), base * lerp(0.78, 1, k));
+          const flash = lerpColor(ENEMY_FLASH_COLOR, ENEMY_BASE_COLOR, k);
+          if (isImage) fillTint(this.enemyBody, flash);
+          else this.enemyBody.setFillStyle(flash);
         }
       }
 
