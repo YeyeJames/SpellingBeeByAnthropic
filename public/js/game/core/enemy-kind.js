@@ -24,16 +24,15 @@ export const ENEMY_KINDS = [
     file: 'beetle.svg',
     maxLetters: 4, // 4 個字母以內
     width: 120,
-    height: 90
+    height: 84
   },
   {
     key: 'wasp',
     label: '黃蜂',
-    // 這一張是真的繪圖（去背後的 PNG），其餘兩種還是手寫 SVG
-    file: 'wasp.png',
+    file: 'wasp.svg',
     maxLetters: 7, // 5~7 個字母
     width: 150,
-    height: 99
+    height: 100
   },
   {
     key: 'spider',
@@ -41,7 +40,7 @@ export const ENEMY_KINDS = [
     file: 'spider.svg',
     maxLetters: Infinity, // 8 個字母以上
     width: 182,
-    height: 125
+    height: 124
   }
 ];
 

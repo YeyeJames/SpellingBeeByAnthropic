@@ -1,31 +1,58 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!--
-  蜘蛛：長單字（8 個字母以上）的敵人。
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 150" width="220" height="150">
+  <defs>
+    <radialGradient id="body" cx="36%" cy="26%" r="80%">
+      <stop offset="0%" stop-color="#2c3757"/>
+      <stop offset="58%" stop-color="#161d33"/>
+      <stop offset="100%" stop-color="#0a0d17"/>
+    </radialGradient>
+    <radialGradient id="eye" cx="38%" cy="32%" r="72%">
+      <stop offset="0%" stop-color="#fffdf2"/>
+      <stop offset="45%" stop-color="#ffd166"/>
+      <stop offset="100%" stop-color="#e08a0c"/>
+    </radialGradient>
+    <linearGradient id="wing" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#cfe2ff" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#8fb7ff" stop-opacity="0.35"/>
+    </linearGradient>
+    <filter id="glow" x="-45%" y="-45%" width="190%" height="190%">
+      <feGaussianBlur stdDeviation="6"/>
+    </filter>
+  </defs>
+  <g filter="url(#glow)" opacity="0.5">
+    <ellipse cx="140" cy="70" rx="58" ry="52" fill="#ff2d2d"/>
+    <circle cx="70" cy="76" r="34" fill="#ff2d2d"/>
+  </g>
 
-  最大一隻，八隻腳張開佔滿畫面——讀起來就是「這隻要打很久」。
-  時間公式本來就給長字更多秒數，外形要讓他一眼看出來。
-  換圖插槽：覆蓋同名檔案即可，尺寸維持 128×88。
--->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 88" width="128" height="88">
-  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
-    <!-- 八隻腳：左右各四，有關節 -->
-    <g stroke="#7f3d3d" stroke-width="3.2">
-      <path d="M50 40 L28 20 L12 28 M52 46 L26 36 L8 44"/>
-      <path d="M52 52 L26 60 L10 56 M50 58 L30 74 L16 72"/>
-      <path d="M78 40 L100 20 L116 28 M76 46 L102 36 L120 44"/>
-      <path d="M76 52 L102 60 L118 56 M78 58 L98 74 L112 72"/>
+  <!-- 八隻長腳：兩段式，關節朝上 -->
+  <g stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <g stroke="#ff5d5d" stroke-width="13">
+      <path d="M104 48 L74 20 L44 26"/><path d="M100 64 L60 46 L28 52"/>
+      <path d="M100 94 L62 108 L32 114"/><path d="M104 108 L78 132 L52 140"/>
+      <path d="M170 56 L198 24 L214 38"/><path d="M178 72 L210 58 L216 74"/>
+      <path d="M176 90 L206 104 L212 118"/><path d="M166 102 L188 126 L178 140"/>
     </g>
-    <!-- 腹部 -->
-    <ellipse cx="78" cy="48" rx="26" ry="22" fill="#0e1220" stroke="#ff5d5d" stroke-width="3"/>
-    <path d="M78 28 L78 70 M60 40 Q78 46 96 40" stroke="#ff8a8a" stroke-width="1.8" opacity="0.45"/>
-    <!-- 頭胸 -->
-    <ellipse cx="46" cy="48" rx="18" ry="16" fill="#161c2e" stroke="#ff5d5d" stroke-width="2.8"/>
-    <!-- 四顆眼睛 -->
-    <circle cx="36" cy="43" r="3.2" fill="#ffd166"/>
-    <circle cx="36" cy="53" r="2.4" fill="#ffd166" opacity="0.8"/>
-    <circle cx="44" cy="40" r="2.2" fill="#ffd166" opacity="0.7"/>
-    <circle cx="44" cy="56" r="2" fill="#ffd166" opacity="0.6"/>
-    <!-- 螯牙 -->
-    <path d="M30 50 L20 56 M30 46 L20 40" stroke="#ff5d5d" stroke-width="2.6"/>
+    <g stroke="#10162a" stroke-width="6">
+      <path d="M104 48 L74 20 L44 26"/><path d="M100 64 L60 46 L28 52"/>
+      <path d="M100 94 L62 108 L32 114"/><path d="M104 108 L78 132 L52 140"/>
+      <path d="M170 56 L198 24 L214 38"/><path d="M178 72 L210 58 L216 74"/>
+      <path d="M176 90 L206 104 L212 118"/><path d="M166 102 L188 126 L178 140"/>
+    </g>
+  </g>
+
+  <!-- 腹部 -->
+  <ellipse cx="140" cy="70" rx="58" ry="52" fill="url(#body)" stroke="#ff5d5d" stroke-width="6"/>
+  <path d="M104 36 Q140 22 178 40 Q142 50 112 56 Z" fill="#33406a" opacity="0.6"/>
+  <!-- 頭胸 -->
+  <circle cx="70" cy="76" r="34" fill="url(#body)" stroke="#ff5d5d" stroke-width="6"/>
+  <!-- 四顆眼睛：兩大兩小 -->
+  <ellipse cx="56" cy="70" rx="13" ry="14" fill="url(#eye)"/>
+  <ellipse cx="74" cy="64" rx="9" ry="10" fill="url(#eye)" opacity="0.9"/>
+  <circle cx="54" cy="86" r="5.5" fill="url(#eye)" opacity="0.75"/>
+  <circle cx="72" cy="84" r="4.5" fill="url(#eye)" opacity="0.65"/>
+  <circle cx="51" cy="65" r="4.5" fill="#fffdf2"/>
+  <!-- 螯牙 -->
+  <g stroke-linecap="round" fill="none">
+    <path d="M44 96 L30 108" stroke="#ff5d5d" stroke-width="11"/>
+    <path d="M44 96 L30 108" stroke="#10162a" stroke-width="5"/>
   </g>
 </svg>

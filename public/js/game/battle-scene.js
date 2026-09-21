@@ -91,6 +91,9 @@ const ENEMY_QUEUE_STROKE = 0x7f3d3d;
  * 速度單位是「每秒幾個像素」。遠山 4px/s 幾乎看不出在動，那是刻意的：
  * 鏡頭其實固定，飄太快就變成蜂巢在往右跑，反而假。
  */
+/* 蜂巢的素材尺寸。跟敵人一樣以兩倍點陣化，載入後縮 0.5。 */
+const HIVE = { width: 110, height: 125 };
+
 const PARALLAX_TEX_W = 960;
 const PARALLAX_TEX_H = 200;
 
@@ -226,6 +229,11 @@ export function createBattleScene(ctx) {
       this.load.on('loaderror', (file) => {
         if (String(file?.key || '').startsWith('enemy-')) this.enemyArtOk = false;
       });
+      // 蜂巢：跟敵人同一套畫風，暖色而不是紅色——它是要保護的東西
+      this.load.svg('hive', '/assets/base/hive.svg', {
+        width: HIVE.width * 2,
+        height: HIVE.height * 2
+      });
       for (const kind of ENEMY_KINDS) {
         const url = `/assets/enemies/${kind.file}`;
         if (kind.file.endsWith('.svg')) {
@@ -310,8 +318,14 @@ export function createBattleScene(ctx) {
        * 左上角定位、setOrigin 對它無效，本體與附掛物總是錯開一段。
        * 真正的 SVG 素材本來就要另外做，沒必要為了中繼版本去猜引擎的行為。
        */
-      this.hiveGlow = this.add.circle(0, 0, 62, 0xf5b301, 0.12);
-      this.hive = this.add.ellipse(0, 0, 84, 84, 0xf5b301);
+      /*
+       * 這顆圓現在只負責「敵人逼近」的警告閃爍。
+       * 平常透明——蜂巢素材自己帶了暖色輝光，兩層疊起來會變成一圈灰盤子。
+       */
+      this.hiveGlow = this.add.circle(0, 0, 62, 0xf5b301, 0);
+      this.hive = this.textures.exists('hive')
+        ? this.add.image(0, 0, 'hive').setScale(0.5)
+        : this.add.ellipse(0, 0, 84, 84, 0xf5b301);
       // 危險線：敵人越過它就代表快到家了
       this.dangerLine = this.add.rectangle(0, 0, 3, 120, 0xff5d5d, 0).setOrigin(0.5);
 
@@ -838,7 +852,7 @@ export function createBattleScene(ctx) {
         this.hiveGlow.setFillStyle(0xff5d5d, 0.1 + pulse * k * 0.35);
       } else if (this.lastDanger !== false) {
         this.dangerLine.setFillStyle(0xff5d5d, 0);
-        this.hiveGlow.setFillStyle(0xf5b301, 0.12);
+        this.hiveGlow.setFillStyle(0xf5b301, 0);
       }
       this.lastDanger = state.progress >= DANGER_AT;
 

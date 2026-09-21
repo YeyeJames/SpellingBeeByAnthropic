@@ -1,32 +1,60 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!--
-  黃蜂：中等長度（5~7 個字母）的敵人。
-
-  細長、有翅膀、身上有節——比甲蟲大一圈，讀起來「這隻要打久一點」。
-  換圖插槽：覆蓋同名檔案即可，尺寸維持 112×72。
--->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 112 72" width="112" height="72">
-  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
-    <!-- 翅膀：半透明，壓在身體後面 -->
-    <ellipse cx="62" cy="22" rx="22" ry="10" fill="#8fb7ff" opacity="0.22"
-             stroke="#8fb7ff" stroke-width="1.6" transform="rotate(-18 62 22)"/>
-    <ellipse cx="72" cy="26" rx="18" ry="8" fill="#8fb7ff" opacity="0.16"
-             stroke="#8fb7ff" stroke-width="1.4" transform="rotate(-8 72 26)"/>
-    <!-- 腳 -->
-    <g stroke="#7f3d3d" stroke-width="2.6">
-      <path d="M46 48 L38 62 M62 50 L60 64 M78 46 L88 60"/>
-    </g>
-    <!-- 腹部（有節） -->
-    <ellipse cx="78" cy="38" rx="24" ry="16" fill="#0e1220" stroke="#ff5d5d" stroke-width="3"/>
-    <path d="M68 25 Q70 38 68 51 M80 23 Q82 38 80 53 M91 27 Q93 38 91 49"
-          stroke="#ffd166" stroke-width="2.6" opacity="0.75"/>
-    <!-- 胸 -->
-    <ellipse cx="44" cy="38" rx="15" ry="13" fill="#161c2e" stroke="#ff5d5d" stroke-width="2.6"/>
-    <!-- 頭與觸角 -->
-    <ellipse cx="22" cy="38" rx="12" ry="11" fill="#161c2e" stroke="#ff5d5d" stroke-width="2.6"/>
-    <path d="M14 30 L4 22 M14 46 L4 54" stroke="#ff5d5d" stroke-width="2.4"/>
-    <circle cx="17" cy="36" r="2.8" fill="#ffd166"/>
-    <!-- 尾針 -->
-    <path d="M102 38 L111 38" stroke="#ff5d5d" stroke-width="3"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 210 140" width="210" height="140">
+  <defs>
+    <radialGradient id="body" cx="36%" cy="26%" r="80%">
+      <stop offset="0%" stop-color="#2c3757"/>
+      <stop offset="58%" stop-color="#161d33"/>
+      <stop offset="100%" stop-color="#0a0d17"/>
+    </radialGradient>
+    <radialGradient id="eye" cx="38%" cy="32%" r="72%">
+      <stop offset="0%" stop-color="#fffdf2"/>
+      <stop offset="45%" stop-color="#ffd166"/>
+      <stop offset="100%" stop-color="#e08a0c"/>
+    </radialGradient>
+    <linearGradient id="wing" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#cfe2ff" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#8fb7ff" stop-opacity="0.35"/>
+    </linearGradient>
+    <filter id="glow" x="-45%" y="-45%" width="190%" height="190%">
+      <feGaussianBlur stdDeviation="6"/>
+    </filter>
+  </defs>
+  <g filter="url(#glow)" opacity="0.5">
+    <ellipse cx="140" cy="72" rx="56" ry="40" fill="#ff2d2d"/>
+    <circle cx="74" cy="68" r="34" fill="#ff2d2d"/>
   </g>
+
+  <!-- 腳 -->
+  <g stroke-linecap="round" fill="none">
+    <g stroke="#ff5d5d" stroke-width="13">
+      <path d="M70 98 L62 118"/><path d="M104 102 L102 122"/><path d="M138 104 L146 122"/>
+    </g>
+    <g stroke="#10162a" stroke-width="7">
+      <path d="M70 98 L62 118"/><path d="M104 102 L102 122"/><path d="M138 104 L146 122"/>
+    </g>
+  </g>
+
+  <!-- 翅膀：圓潤的兩片 -->
+  <g stroke="#9cc3ff" stroke-width="3">
+    <ellipse cx="116" cy="26" rx="44" ry="19" fill="url(#wing)" transform="rotate(-12 116 26)"/>
+    <ellipse cx="146" cy="34" rx="34" ry="14" fill="url(#wing)" opacity="0.75" transform="rotate(-4 146 34)"/>
+  </g>
+
+  <!-- 腹部：圓胖 + 黃條紋 -->
+  <ellipse cx="140" cy="72" rx="56" ry="40" fill="url(#body)" stroke="#ff5d5d" stroke-width="6"/>
+  <g fill="#ffd166">
+    <path d="M118 36 Q126 72 118 108 L136 108 Q144 72 136 36 Z"/>
+    <path d="M154 40 Q162 72 154 104 L170 100 Q177 72 170 44 Z"/>
+  </g>
+  <path d="M194 78 L208 88" stroke="#ff5d5d" stroke-width="9" stroke-linecap="round"/>
+
+  <!-- 頭 -->
+  <circle cx="74" cy="68" r="34" fill="url(#body)" stroke="#ff5d5d" stroke-width="6"/>
+  <!-- 觸角 -->
+  <g stroke-linecap="round" fill="none">
+    <path d="M56 42 L44 20" stroke="#ff5d5d" stroke-width="11"/>
+    <path d="M56 42 L44 20" stroke="#10162a" stroke-width="5"/>
+  </g>
+  <ellipse cx="62" cy="68" rx="16" ry="17" fill="url(#eye)"/>
+  <circle cx="56" cy="62" r="5" fill="#fffdf2"/>
+  <path d="M42 44 L70 54" stroke="#10162a" stroke-width="8" stroke-linecap="round"/>
 </svg>

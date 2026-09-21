@@ -1,77 +1,56 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" width="240" height="160">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 140" width="200" height="140">
   <defs>
-    <radialGradient id="shell" cx="38%" cy="28%" r="78%">
-      <stop offset="0%" stop-color="#232c47"/>
-      <stop offset="55%" stop-color="#141a2e"/>
-      <stop offset="100%" stop-color="#0b0e18"/>
+    <radialGradient id="body" cx="36%" cy="26%" r="80%">
+      <stop offset="0%" stop-color="#2c3757"/>
+      <stop offset="58%" stop-color="#161d33"/>
+      <stop offset="100%" stop-color="#0a0d17"/>
     </radialGradient>
-    <radialGradient id="head" cx="35%" cy="30%" r="80%">
-      <stop offset="0%" stop-color="#1c2438"/>
-      <stop offset="100%" stop-color="#0b0e18"/>
+    <radialGradient id="eye" cx="38%" cy="32%" r="72%">
+      <stop offset="0%" stop-color="#fffdf2"/>
+      <stop offset="45%" stop-color="#ffd166"/>
+      <stop offset="100%" stop-color="#e08a0c"/>
     </radialGradient>
-    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
-      <feGaussianBlur stdDeviation="5"/>
+    <linearGradient id="wing" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#cfe2ff" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#8fb7ff" stop-opacity="0.35"/>
+    </linearGradient>
+    <filter id="glow" x="-45%" y="-45%" width="190%" height="190%">
+      <feGaussianBlur stdDeviation="6"/>
     </filter>
-    <radialGradient id="eye" cx="40%" cy="35%" r="70%">
-      <stop offset="0%" stop-color="#fff3c4"/>
-      <stop offset="60%" stop-color="#ffd166"/>
-      <stop offset="100%" stop-color="#d98f12"/>
-    </radialGradient>
   </defs>
-
-  <!-- 紅色輝光：整體剪影糊一層墊在最底下 -->
-  <g filter="url(#glow)" opacity="0.55" fill="none" stroke="#ff2d2d" stroke-width="9"
-     stroke-linecap="round" stroke-linejoin="round">
-    <path d="M78 96 L52 126 M110 104 L96 134 M150 104 L150 136 M186 98 L206 128"/>
-    <ellipse cx="146" cy="76" rx="66" ry="46"/>
-    <ellipse cx="74" cy="86" rx="30" ry="30"/>
+  <!-- 紅色輝光 -->
+  <g filter="url(#glow)" opacity="0.5">
+    <ellipse cx="116" cy="66" rx="72" ry="48" fill="#ff2d2d"/>
+    <circle cx="44" cy="78" r="30" fill="#ff2d2d"/>
   </g>
 
-  <!-- 腳：先紅後暗，做出描邊 -->
-  <g stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <g stroke="#ff5d5d" stroke-width="11">
-      <path d="M80 98 L58 118 L50 134"/>
-      <path d="M112 106 L104 126 L94 140"/>
-      <path d="M152 106 L156 128 L150 142"/>
-      <path d="M184 100 L200 120 L210 134"/>
-      <path d="M92 74 L68 58 L54 54"/>
-      <path d="M176 72 L198 58 L212 56"/>
+  <!-- 六隻短粗腳 -->
+  <g stroke-linecap="round" fill="none">
+    <g stroke="#ff5d5d" stroke-width="15">
+      <path d="M68 102 L54 124 L40 130"/><path d="M110 110 L106 130 L94 136"/>
+      <path d="M152 104 L164 126 L178 132"/>
     </g>
-    <g stroke="#10162a" stroke-width="6">
-      <path d="M80 98 L58 118 L50 134"/>
-      <path d="M112 106 L104 126 L94 140"/>
-      <path d="M152 106 L156 128 L150 142"/>
-      <path d="M184 100 L200 120 L210 134"/>
-      <path d="M92 74 L68 58 L54 54"/>
-      <path d="M176 72 L198 58 L212 56"/>
+    <g stroke="#10162a" stroke-width="8">
+      <path d="M68 102 L54 124 L40 130"/><path d="M110 110 L106 130 L94 136"/>
+      <path d="M152 104 L164 126 L178 132"/>
     </g>
   </g>
 
-  <!-- 觸角：短而粗，跟黃蜂的細長觸角明顯不同 -->
-  <g fill="none" stroke-linecap="round">
-    <path d="M56 70 L40 56 L28 56" stroke="#ff5d5d" stroke-width="9"/>
-    <path d="M56 70 L40 56 L28 56" stroke="#10162a" stroke-width="4.5"/>
+  <!-- 兩根短角 -->
+  <g stroke-linecap="round" fill="none">
+    <path d="M34 62 L6 50 M20 55 L10 66" stroke="#ff5d5d" stroke-width="16"/>
+    <path d="M34 62 L6 50 M20 55 L10 66" stroke="#10162a" stroke-width="8"/>
   </g>
+
+  <!-- 殼：一整塊寬圓 -->
+  <ellipse cx="116" cy="66" rx="72" ry="48" fill="url(#body)" stroke="#ff5d5d" stroke-width="6"/>
+  <path d="M116 18 L116 114" stroke="#ff5d5d" stroke-width="4" opacity="0.7"/>
+  <path d="M72 36 Q116 20 162 38 Q120 46 84 52 Z" fill="#33406a" opacity="0.7"/>
 
   <!-- 頭 -->
-  <ellipse cx="74" cy="86" rx="30" ry="30" fill="url(#head)" stroke="#ff5d5d" stroke-width="5"/>
-  <!-- 大顎 -->
-  <g fill="none" stroke-linecap="round">
-    <path d="M48 92 L30 100 M48 80 L30 72" stroke="#ff5d5d" stroke-width="8"/>
-    <path d="M48 92 L30 100 M48 80 L30 72" stroke="#10162a" stroke-width="3.5"/>
-  </g>
-
-  <!-- 前胸背板 -->
-  <ellipse cx="110" cy="80" rx="28" ry="34" fill="url(#head)" stroke="#ff5d5d" stroke-width="5"/>
-
-  <!-- 鞘翅：一整塊寬圓的殼，這是跟黃蜂最大的差別 -->
-  <ellipse cx="152" cy="76" rx="66" ry="46" fill="url(#shell)" stroke="#ff5d5d" stroke-width="5.5"/>
-  <!-- 殼中線 -->
-  <path d="M152 31 L152 121" stroke="#ff5d5d" stroke-width="3" opacity="0.75"/>
-  <!-- 殼上的高光面，做出體積 -->
-  <path d="M118 48 Q152 36 188 50 Q158 60 128 62 Z" fill="#2a3552" opacity="0.85"/>
-
-  <!-- 眼睛 -->
-  <ellipse cx="62" cy="80" rx="8.5" ry="10" fill="url(#eye)"/>
-  <ellipse cx="60" cy="77" rx="3" ry="3.4" fill="#fffbe8" opacity="0.9"/>
+  <circle cx="44" cy="78" r="30" fill="url(#body)" stroke="#ff5d5d" stroke-width="6"/>
+  <!-- 大眼睛 + 兇眉 -->
+  <ellipse cx="36" cy="78" rx="14" ry="15" fill="url(#eye)"/>
+  <circle cx="31" cy="73" r="4.5" fill="#fffdf2"/>
+  <path d="M20 62 L44 70" stroke="#10162a" stroke-width="7" stroke-linecap="round"/>
 </svg>
