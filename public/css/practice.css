@@ -19,9 +19,31 @@
   align-self: center;
 }
 
-#setup-panel {
+/*
+ * 內容放得下就置中，放不下就靠上——而且靠上時最上面那一段要捲得到。
+ *
+ * 原本寫 justify-content: center。那是 flexbox 一個很典型的陷阱：
+ * 容器一旦捲動，置中會讓內容從**上下兩端**一起溢出，而 scrollTop 不能是
+ * 負的，所以溢出到上面的那一段永遠捲不到。實測 800px 高的畫面上
+ * 「🎧 聽寫練習」這個標題就停在 y = -40，怎麼捲都看不到。
+ *
+ * 改用 auto margin：放得下時效果跟置中一樣，放不下時自動退回靠上對齊，
+ * 而且每個瀏覽器都吃這一招（不必賭 `safe center` 的支援度）。
+ */
+#setup-panel,
+#summary-panel {
   overflow-y: auto;
-  justify-content: center;
+  justify-content: flex-start;
+}
+
+#setup-panel > *:first-child,
+#summary-panel > *:first-child {
+  margin-top: auto;
+}
+
+#setup-panel > *:last-child,
+#summary-panel > *:last-child {
+  margin-bottom: auto;
 }
 
 #setup-panel h1 {
@@ -265,7 +287,6 @@
 
 #summary-panel {
   text-align: center;
-  justify-content: center;
 }
 
 /* 窄螢幕：輔助鍵只留圖示 */

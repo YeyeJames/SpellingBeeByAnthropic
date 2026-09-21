@@ -9,9 +9,23 @@
     <button class="nav-icon-btn" data-nav-mute type="button" title="靜音開關">🔊</button>
     <span data-sync-status title="資料同步狀態"></span>
     <span class="coin-badge" data-nav-coins>🪙 0</span>
-    <!-- 暱稱本身就是換人按鈕：共用裝置上「現在是誰在玩」要一直看得到 -->
-    <button class="nav-user-btn" data-nav-switch type="button" title="點一下換人玩">
-      👤<span data-nav-nickname></span>
-    </button>
+    <!--
+      暱稱按鈕。共用裝置上「現在是誰在玩」要一直看得到，所以名字常駐。
+
+      原本點一下就直接跳回選單，但它長得像一個顯示狀態的標籤，
+      提示只寫在 title 裡（滑鼠停上去才看得到，平板上根本看不到）——
+      結果就是沒有人知道那是可以按的，想換帳號只好自己去找首頁網址。
+      改成明確的選單：右邊多一個 ▾，點開有「換人玩」與「登出」。
+    -->
+    <div class="nav-user" data-nav-user>
+      <button class="nav-user-btn" data-nav-switch type="button" aria-haspopup="true" aria-expanded="false">
+        👤<span data-nav-nickname></span><span class="nav-user-caret">▾</span>
+      </button>
+      <div class="nav-user-menu" data-nav-user-menu hidden>
+        <p class="nav-user-menu-head">目前是 <strong data-nav-nickname-menu></strong></p>
+        <button type="button" data-nav-switch-account>🔄 換人玩</button>
+        <button type="button" data-nav-logout>🚪 登出</button>
+      </div>
+    </div>
   </div>
 </header>

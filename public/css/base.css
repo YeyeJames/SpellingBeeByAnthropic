@@ -211,6 +211,62 @@ input[type='password']:focus {
   flex-shrink: 0;
 }
 
+/* ── 換人／登出選單 ───────────────────────────────────── */
+
+.nav-user {
+  position: relative;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+/* ▾ 是「這顆可以點開」的唯一線索，不能省 */
+.nav-user-caret {
+  font-size: 0.7rem;
+  opacity: 0.85;
+  flex-shrink: 0;
+}
+
+.nav-user-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.45rem);
+  z-index: 50;
+  min-width: 11rem;
+  padding: 0.4rem;
+  background: var(--color-bg-panel);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5);
+}
+
+.nav-user-menu[hidden] {
+  display: none;
+}
+
+.nav-user-menu-head {
+  margin: 0.25rem 0.5rem 0.45rem;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+.nav-user-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 0.6rem;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.nav-user-menu button:hover {
+  background: var(--color-bg-raised);
+}
+
 /* 螢幕不夠寬時，導覽只留圖示 */
 @media (max-width: 600px) {
   .top-nav .nav-label {

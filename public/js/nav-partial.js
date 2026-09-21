@@ -8,7 +8,14 @@ let currentCoins = 0;
 
 // 導覽列樣板存進本地：切換分頁時可以立刻畫出來，完全不必等網路。
 // 同時在背景更新快取，樣板改版後下次進來就會生效。
-const NAV_CACHE_KEY = 'navHtml';
+/*
+ * 版本號要跟著樣板一起改。
+ *
+ * 不改的話，樣板改版後第一次進來用的仍是舊的快取 HTML，而新的 JS 會去找
+ * 舊 HTML 裡沒有的元素——按鈕直接變成死的，要重新整理一次才會好。
+ * 那種問題在自己的機器上永遠看不到（快取是空的），只有使用者會遇到。
+ */
+const NAV_CACHE_KEY = 'navHtml2';
 
 function fetchNavHtml() {
   return fetch('/partials/nav.html')
@@ -56,12 +63,61 @@ export async function mountNav(user, activePage) {
 
   prefetchOtherPages(activePage);
 
-  // 回選單換人：不登出，這樣選單上仍會顯示「繼續玩」，
-  // 想換別人點他的頭像就進去了（沒有密碼，家裡沒有外人）
+  /*
+   * 換人／登出的選單。
+   *
+   * 「換人玩」不登出：選單上那個帳號仍然顯示「繼續玩」，想換別人點他的
+   * 頭像就進去了（沒有密碼，家裡沒有外人）。「登出」才真的把 session 清掉，
+   * 留給「這台電腦等一下不是我們在用」的情況。
+   *
+   * 兩個都留著是因為它們的心智模型不同：小孩想的是「換人」，
+   * 大人想的是「登出」，兩個詞都要看得到才不會有人找不到路。
+   */
+  const menu = mountPoint.querySelector('[data-nav-user-menu]');
   const switchBtn = mountPoint.querySelector('[data-nav-switch]');
-  if (switchBtn) {
+  const nicknameMenuEl = mountPoint.querySelector('[data-nav-nickname-menu]');
+  if (nicknameMenuEl) nicknameMenuEl.textContent = user.nickname;
+
+  /*
+   * 萬一仍然拿到舊版樣板（快取剛好卡在中間狀態），退回原本的行為：
+   * 點暱稱直接回選單。寧可少一個選單，也不能讓按鈕變成死的。
+   */
+  if (switchBtn && !menu) {
     switchBtn.addEventListener('click', () => {
       window.location.href = '/index.html';
+    });
+  }
+
+  if (switchBtn && menu) {
+    const setOpen = (open) => {
+      menu.hidden = !open;
+      switchBtn.setAttribute('aria-expanded', String(open));
+    };
+
+    switchBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setOpen(menu.hidden);
+    });
+
+    // 點別的地方、或按 Esc 就收起來
+    document.addEventListener('click', (e) => {
+      if (!menu.hidden && !mountPoint.querySelector('[data-nav-user]').contains(e.target)) {
+        setOpen(false);
+      }
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !menu.hidden) setOpen(false);
+    });
+
+    mountPoint
+      .querySelector('[data-nav-switch-account]')
+      ?.addEventListener('click', () => {
+        window.location.href = '/index.html';
+      });
+
+    mountPoint.querySelector('[data-nav-logout]')?.addEventListener('click', async () => {
+      const { logout } = await import('./auth.js');
+      logout();
     });
   }
 

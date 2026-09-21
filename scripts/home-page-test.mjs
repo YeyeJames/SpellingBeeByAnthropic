@@ -11,6 +11,7 @@
  *   3. 刪除鈕平常不出現——孩子每天點這一頁，常駐的叉叉遲早會被按到
  *   4. 刪除要把名字完整打一次才算數
  *   5. 進去之後到的是練習頁（先練再玩）
+ *   6. 進了帳號之後，從導覽列就換得掉帳號——不必自己回去找首頁網址
  *
  * 用法：node scripts/home-page-test.mjs
  */
@@ -193,6 +194,108 @@ console.log('\n3) 刪除鈕平常不出現');
   check('畫面上也不見了', !names.includes('妹妹'), names.join('、'));
   check('刪完自動離開管理模式', names.includes('新增帳號'), names.join('、'));
   check('沒有瀏覽器錯誤', errors.length === 0, errors.slice(0, 2).join(' | '));
+  await context.close();
+}
+
+/* ── 5. 從練習頁換帳號 ─────────────────────────────────── */
+/*
+ * 實際用起來才發現的問題：進了帳號之後，畫面上找不到任何「換人」或「登出」，
+ * 想換另一個帳號只能自己回去找首頁網址。
+ *
+ * 功能其實一直都在（右上角的暱稱就是按鈕），但它長得像一個顯示「現在是誰」
+ * 的標籤，提示只寫在 title 裡——滑鼠停上去才看得到，平板上根本看不到。
+ * **功能存在但沒有人找得到，等於不存在。**
+ */
+console.log('\n5) 從練習頁換帳號');
+{
+  const context = await browser.newContext({ viewport: { width: 1000, height: 800 } });
+  const USER = {
+    _id: 'id-brother',
+    nickname: '哥哥',
+    coins: 120,
+    activeTheme: null,
+    stats: { currentStreak: 0 }
+  };
+  await context.addInitScript((u) => {
+    localStorage.setItem('sb:v2:shared:currentUser', JSON.stringify(u));
+  }, USER);
+  await context.route('**/api/auth/me', (r) =>
+    r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: USER }) })
+  );
+  await context.route('**/api/practice/review-queue', (r) =>
+    r.fulfill({ status: 200, contentType: 'application/json', body: '{"words":[]}' })
+  );
+  await context.route('**/api/practice/progress', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ unlockAfter: 2, progress: {} })
+    })
+  );
+  let loggedOut = false;
+  await context.route('**/api/auth/logout', (r) => {
+    loggedOut = true;
+    r.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' });
+  });
+
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto(`${BASE}/practice.html`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('[data-nav-switch]', { timeout: 10000 });
+
+  check('看得到現在是誰在玩', (await page.locator('[data-nav-nickname]').innerText()) === '哥哥');
+
+  /*
+   * 順手釘住一個寫這支測試時才發現的版面問題：
+   * #setup-panel 原本用 justify-content: center，而它是會捲動的容器——
+   * 置中會讓內容從上下兩端一起溢出，但 scrollTop 不能是負的，
+   * 所以溢出到上面那一段永遠捲不到。實測「🎧 聽寫練習」停在 y = -40。
+   */
+  const titleTop = await page.evaluate(() => {
+    const panel = document.getElementById('setup-panel');
+    panel.scrollTop = 0;
+    return Math.round(panel.querySelector('h1').getBoundingClientRect().top);
+  });
+  check('頁面標題捲得到（不會被置中溢出吃掉）', titleTop >= 0, `top=${titleTop}`);
+
+  /*
+   * ▾ 是「這顆可以點開」的唯一線索。沒有它，這顆按鈕就退回成一個看起來
+   * 不能按的標籤，也就是原本那個問題。
+   */
+  check('按鈕上有可以點開的記號', (await page.locator('.nav-user-caret').count()) === 1);
+
+  check('選單平常收起來', await page.evaluate(() => document.querySelector('[data-nav-user-menu]').hidden));
+
+  await page.click('[data-nav-switch]');
+  await page.waitForTimeout(150);
+  const menuText = await page.locator('[data-nav-user-menu]').innerText();
+  check('點一下打得開', !(await page.evaluate(() => document.querySelector('[data-nav-user-menu]').hidden)));
+  check('兩個出路都寫出來了', menuText.includes('換人玩') && menuText.includes('登出'), menuText.replace(/\n/g, ' / '));
+
+  // 點別的地方要收起來，不然它會一直擋在畫面上
+  await page.mouse.click(30, 400);
+  await page.waitForTimeout(150);
+  check('點別的地方會收起來', await page.evaluate(() => document.querySelector('[data-nav-user-menu]').hidden));
+
+  // 換人玩：回選單，但**不登出**——那個帳號仍要顯示「繼續玩」
+  await page.click('[data-nav-switch]');
+  await page.waitForTimeout(120);
+  await page.click('[data-nav-switch-account]');
+  await page.waitForURL('**/index.html', { timeout: 10000 });
+  check('「換人玩」回到帳號選單', page.url().includes('/index.html'), page.url());
+  check('換人不會順便登出（那個帳號還要顯示「繼續玩」）', loggedOut === false, String(loggedOut));
+
+  // 登出：真的清掉 session
+  await page.goto(`${BASE}/practice.html`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('[data-nav-switch]', { timeout: 10000 });
+  await page.click('[data-nav-switch]');
+  await page.waitForTimeout(120);
+  await page.click('[data-nav-logout]');
+  await page.waitForURL('**/index.html', { timeout: 10000 });
+  check('「登出」真的登出了', loggedOut === true, String(loggedOut));
+  check('沒有瀏覽器錯誤', errors.length === 0, errors.slice(0, 2).join(' | '));
+
   await context.close();
 }
 
