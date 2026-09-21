@@ -91,6 +91,8 @@ const ctx = {
   soundBridge: null,
   // 每一場一個 id，分數回報用它去重（同一場重送不會被加兩次）
   battleId: newId(),
+  // 這次開機以來已經打完的每一場錄影（當下這一場在 ctx.log）
+  sessionLogs: [],
 
   /** 一場結束。畫面端在 BATTLE_END 時呼叫。 */
   onBattleEnd(state, won) {
@@ -257,6 +259,13 @@ function startBattle() {
     difficulty: ctx.difficulty,
     order: ctx.order
   });
+  /*
+   * 換一場之前先把上一場收進這次開機的檔案櫃。
+   *
+   * 原本 ctx.log 是直接覆蓋掉的，所以他連玩三場，我只拿得到第三場——
+   * 而「他玩了幾場」「第一場玩完了沒」正是最想知道的事。
+   */
+  if (ctx.log && ctx.log.entries.length > 0) ctx.sessionLogs.push(ctx.log);
   ctx.log = createRecorder({
     seed: ctx.seed,
     difficulty: ctx.difficulty,
@@ -400,10 +409,25 @@ function toggleRules(force) {
 /** 下載目前這一場的錄影檔。小孩按「剛剛怪怪的」就是按這個。 */
 function downloadLog() {
   if (!ctx.log) return;
-  const blob = new Blob([serializeLog(ctx.log)], { type: 'application/json' });
+  /*
+   * 匯出這次開機以來的**每一場**，不是只有當下這一場。
+   *
+   * 給 scripts/analyze-log.mjs 吃。多存幾場的成本是幾十 KB，
+   * 但少存的代價是「他玩了幾場、有沒有玩完」這種問題根本答不出來。
+   */
+  const battles = ctx.log.entries.length > 0 ? [...ctx.sessionLogs, ctx.log] : [...ctx.sessionLogs];
+  const bundle = {
+    kind: 'session',
+    createdAt: new Date().toISOString(),
+    group: params.get('group') || null,
+    groupLabel: ctx.groupLabel || null,
+    battles
+  };
+  const blob = new Blob([serializeLog(bundle)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `spellbee-replay-${ctx.seed}.json`;
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '');
+  a.download = `spellbee-${params.get('group') || 'game'}-${stamp}.json`;
   a.click();
   URL.revokeObjectURL(a.href);
 }
