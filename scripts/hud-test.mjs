@@ -140,18 +140,34 @@ console.log('\n4) 遊戲中的進度列');
     progress: document.getElementById('progress-label').textContent
   }));
   check('顯示組別、字數與出題順序', before.group === 'Week 18・14 字・照順序', before.group);
-  check('一開始是打完 0 個', before.progress === '打完 0 / 14', before.progress);
+  /*
+   * 四個數字都要在：打完幾個、總共幾個、漏掉幾個、還剩幾個。
+   * 原本只有「打完 X / N」——少了他其實更在意的「還剩幾個」，
+   * 那是他判斷要不要撐完這一場的依據。
+   */
+  check('一開始是打完 0 個', /打完 0 \/ 14/.test(before.progress), before.progress);
+  check('看得到漏掉幾個', /漏掉 0/.test(before.progress), before.progress);
+  check('看得到還剩幾個', /還剩 14 個/.test(before.progress), before.progress);
+
+  // 狀態列的字級要明顯比下面那排按鈕大，不然小孩根本不會去看
+  const sizes = await page.evaluate(() => ({
+    status: parseFloat(getComputedStyle(document.querySelector('.chrome-status')).fontSize),
+    controls: parseFloat(getComputedStyle(document.querySelector('.chrome-controls')).fontSize)
+  }));
+  check('狀態列的字比按鈕列大一截', sizes.status >= sizes.controls * 1.3,
+    `狀態 ${sizes.status}px / 按鈕 ${sizes.controls}px`);
 
   // 把第一個字整個打完
   const word = await page.evaluate(() => window.__spellbee.state().target);
   for (const ch of word) await page.keyboard.press(ch);
   await page.waitForFunction(
-    () => document.getElementById('progress-label').textContent !== '打完 0 / 14',
+    () => /打完 1 \//.test(document.getElementById('progress-label').textContent),
     null,
     { timeout: 5000 }
   );
   const after = await page.evaluate(() => document.getElementById('progress-label').textContent);
-  check(`打完「${word}」之後數字加一`, after === '打完 1 / 14', after);
+  check(`打完「${word}」之後數字加一`, /打完 1 \/ 14/.test(after), after);
+  check('剩下的數量跟著減一', /還剩 13 個/.test(after), after);
 
   console.log('\n5) 網址帶 order= 時跳過開場畫面');
   check('開場畫面沒有出現', await page.evaluate(() => document.getElementById('pregame').hidden));

@@ -28,6 +28,7 @@ import {
   stopSpeaking,
   listEnglishVoices
 } from './audio-player.js';
+import { buildRules, buildQuickRules } from './game/rules.js';
 import { readShared, writeShared, newId } from './local-store.js';
 
 const params = new URLSearchParams(location.search);
@@ -291,7 +292,13 @@ const ORDER_LABELS = { sequential: '照順序', random: '打亂' };
 let lastKilled = -1;
 let lastMissed = -1;
 
-/** 每一格由 battle-scene 呼叫。只有數字真的變了才動 DOM。 */
+/**
+ * 每一格由 battle-scene 呼叫。只有數字真的變了才動 DOM。
+ *
+ * 原本只寫「打完 3 / 14」。少了兩個他其實更在意的數字：漏掉幾個、
+ * 還剩幾個。「還剩幾個」尤其重要——那是他判斷「要不要撐完這一場」的依據。
+ * 漏掉的字會排回隊伍尾端，所以剩下的數量不等於 總數 − 打完，要另外算。
+ */
 function syncHud(state) {
   if (!state) return;
   const { wordsKilled, wordsMissed } = state.stats;
@@ -302,9 +309,12 @@ function syncHud(state) {
   const el = document.getElementById('progress-label');
   if (!el) return;
   const total = ctx.words.length;
-  el.textContent = wordsMissed > 0
-    ? `打完 ${wordsKilled} / ${total}（漏 ${wordsMissed}）`
-    : `打完 ${wordsKilled} / ${total}`;
+  // 還沒登場的 + 正在打的那一隻
+  const left = Math.max(0, state.queue.length - state.queueHead + (state.wordIndex >= 0 ? 1 : 0));
+  el.innerHTML =
+    `✅ 打完 ${wordsKilled} / ${total}` +
+    `　<span class="miss">❌ 漏掉 ${wordsMissed}</span>` +
+    `　<span class="left">還剩 ${left} 個</span>`;
 }
 
 function updateHud() {
@@ -333,6 +343,58 @@ function updateHud() {
    */
   const dl = document.getElementById('difficulty-label');
   if (dl) dl.textContent = `難度 ${DIFFICULTY_LABELS[ctx.difficulty] || ctx.difficulty}`;
+}
+
+/*
+ * 玩法說明。
+ *
+ * 規則本來只存在於程式碼裡——按 ↑ 會重聽，但「重聽要付什麼代價」畫面上
+ * 一個字都沒有。他按了、敵人突然衝了一段，他不知道是自己按的還是遊戲壞了。
+ * 看不懂的規則等於不存在。
+ *
+ * 打開時一定要暫停：規則有六段，讀完至少二十秒，沒暫停的話讀一讀就死了。
+ */
+let rulesWasPaused = false;
+
+function renderRules() {
+  const body = document.getElementById('rules-body');
+  if (!body || body.dataset.difficulty === ctx.difficulty) return;
+  body.dataset.difficulty = ctx.difficulty;
+  body.innerHTML = buildRules(ctx.difficulty)
+    .map(
+      (sec) =>
+        `<section class="rules-section"><h3>${sec.icon} ${escapeHtml(sec.title)}</h3><ul>` +
+        sec.lines.map((l) => `<li>${escapeHtml(l)}</li>`).join('') +
+        '</ul></section>'
+    )
+    .join('');
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function rulesOpen() {
+  return document.getElementById('rules-panel')?.hidden === false;
+}
+
+function toggleRules(force) {
+  const el = document.getElementById('rules-panel');
+  if (!el) return;
+  const next = force === undefined ? el.hidden : force;
+  if (next) {
+    renderRules();
+    // 記住原本暫停了沒有：他可能本來就停在暫停畫面讀東西，關掉說明不該把他推回戰鬥
+    rulesWasPaused = ctx.paused;
+    setPaused(true);
+    el.hidden = false;
+  } else {
+    el.hidden = true;
+    if (!rulesWasPaused) setPaused(false);
+    ctx.input?.focusForTyping();
+  }
 }
 
 /** 下載目前這一場的錄影檔。小孩按「剛剛怪怪的」就是按這個。 */
@@ -549,7 +611,12 @@ async function boot() {
         document.getElementById('btn-mute')?.dispatchEvent(new Event('refresh'));
         return muted;
       },
-      onPause: (info) => setPaused(info?.force ? true : !ctx.paused),
+      onPause: (info) => {
+        // 說明開著的時候，Esc 的意思是「關掉說明」而不是「繼續戰鬥」
+        if (rulesOpen()) return toggleRules(false);
+        return setPaused(info?.force ? true : !ctx.paused);
+      },
+      onToggleRules: () => toggleRules(),
       onToggleOverlay: () => overlay.toggle(),
       onImeSuspected: () => {
         if (imeEl) imeEl.hidden = false;
@@ -610,6 +677,13 @@ async function boot() {
       location.href = url.toString();
     });
 
+    document.getElementById('btn-rules')?.addEventListener('click', () => toggleRules(true));
+    document.getElementById('rules-close')?.addEventListener('click', () => toggleRules(false));
+    // 點說明以外的地方也能關（小孩不一定會去找那顆按鈕）
+    document.getElementById('rules-panel')?.addEventListener('click', (e) => {
+      if (e.target.id === 'rules-panel') toggleRules(false);
+    });
+
     document.getElementById('btn-replay-file')?.addEventListener('click', downloadLog);
     // 重開一場也走開場畫面：換一場正是他會想換出題順序的時候
     document.getElementById('btn-restart')?.addEventListener('click', () => {
@@ -637,6 +711,16 @@ async function boot() {
         ctx.recordedCount > 0
           ? `總共 ${ctx.words.length} 個字（其中 ${ctx.recordedCount} 個唸的是你自己錄的聲音）`
           : `總共 ${ctx.words.length} 個字`;
+      /*
+       * 最容易誤會的三件事，每一場都放一次。
+       * 難度可能在校準之後才決定，所以這裡才生成，不是載入時。
+       */
+      const quick = document.getElementById('pregame-rules');
+      if (quick) {
+        quick.innerHTML = buildQuickRules(ctx.difficulty)
+          .map((line) => `<p>${escapeHtml(line)}</p>`)
+          .join('');
+      }
       pregameEl.querySelectorAll('[data-order]').forEach((btn) => {
         // 把上次選的標起來：他會知道上一場是怎麼打的
         btn.classList.toggle('is-last', btn.dataset.order === storedOrder());

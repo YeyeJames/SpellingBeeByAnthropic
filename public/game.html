@@ -12,28 +12,35 @@
   <div id="game-root"></div>
 
   <div id="game-chrome">
-    <a class="chrome-link" href="/practice.html">← 回練習</a>
     <!--
-      現在練的是哪一組、總共幾個字、打完幾個。
-      沒有這個就只剩一顆一顆冒出來的字，看不出「這一關還有多長」——
-      而那正是他願意再打一場的理由。
+      第一排：現在練的是哪一組、打到哪了。
+      這兩件事是玩的時候會一直瞄的，所以字級比下面那排大得多——
+      擠在一堆按鈕中間用 0.82rem 寫，等於沒寫。
     -->
-    <span id="group-label" class="chrome-group"></span>
-    <span id="progress-label" class="chrome-progress"></span>
-    <span id="seed-label" class="chrome-seed"></span>
-    <!--
-      目前難度一定要看得見，而且要能一鍵重測。
-      同一台電腦會有不只一個人玩（爸爸測完換小孩），難度記住卻不顯示的話，
-      下一個人會直接繼承上一個人的設定——慢手速用到挑戰難度是 100% 失敗率。
-    -->
-    <span id="difficulty-label" class="chrome-difficulty"></span>
-    <button type="button" id="btn-recalibrate" class="chrome-btn">重測手速</button>
-    <button type="button" id="btn-restart" class="chrome-btn">重開一場</button>
-    <!-- 小孩覺得「剛剛怪怪的」就按這個，我拿到錄影檔就能完整重現 -->
-    <button type="button" id="btn-replay-file" class="chrome-btn">剛剛怪怪的</button>
-    <button type="button" id="btn-mute" class="chrome-btn">🔊 聲音</button>
-    <a class="chrome-link" href="/selftest">聲音檢查</a>
-    <span class="chrome-hint">↑再聽 ↓慢唸 →例句 · Esc 暫停 · F2 靜音 · F3 除錯</span>
+    <div class="chrome-status">
+      <span id="group-label" class="chrome-group"></span>
+      <span id="progress-label" class="chrome-progress"></span>
+      <span id="difficulty-label" class="chrome-difficulty"></span>
+    </div>
+
+    <!-- 第二排：按鈕與提示，平常不會看，所以小一點 -->
+    <div class="chrome-controls">
+      <a class="chrome-link" href="/practice.html">← 回練習</a>
+      <button type="button" id="btn-rules" class="chrome-btn chrome-btn-rules">❓ 玩法說明</button>
+      <!--
+        難度要能一鍵重測。同一台電腦會有不只一個人玩（爸爸測完換小孩），
+        難度記住卻不重測的話，下一個人會直接繼承上一個人的設定——
+        慢手速用到挑戰難度是 100% 失敗率。
+      -->
+      <button type="button" id="btn-recalibrate" class="chrome-btn">重測手速</button>
+      <button type="button" id="btn-restart" class="chrome-btn">重開一場</button>
+      <!-- 小孩覺得「剛剛怪怪的」就按這個，我拿到錄影檔就能完整重現 -->
+      <button type="button" id="btn-replay-file" class="chrome-btn">剛剛怪怪的</button>
+      <button type="button" id="btn-mute" class="chrome-btn">🔊 聲音</button>
+      <a class="chrome-link" href="/selftest">聲音檢查</a>
+      <span id="seed-label" class="chrome-seed"></span>
+      <span class="chrome-hint">↑再聽 ↓慢唸 →例句 · Esc 暫停 · F1 說明 · F2 靜音 · F3 除錯</span>
+    </div>
   </div>
 
   <!-- 觸控裝置專用：桌機用方向鍵，這三顆只在有觸控時才顯示 -->
@@ -83,6 +90,8 @@
   <div id="pregame" hidden>
     <strong id="pregame-group"></strong>
     <p id="pregame-count"></p>
+    <!-- 最容易誤會的三件事，每一場都會看到一次 -->
+    <div id="pregame-rules"></div>
     <p class="pregame-hint">要照課本順序，還是打亂？</p>
     <div id="pregame-order">
       <button type="button" class="btn-order" data-order="sequential">照順序</button>
@@ -111,6 +120,20 @@
     <p class="pregame-hint">先在練習模式把整組做完，看過中文跟例句再來玩。</p>
     <!-- 樣式跟開場那兩顆一樣，但不共用 class：那個 class 是「選出題順序」的按鈕 -->
     <a class="btn-locked-back" href="/practice.html">去練習模式</a>
+  </div>
+
+  <!--
+    玩法說明。
+    內容由 js/game/rules.js 從 balance.js 現場算出來——數字寫死在這裡的話，
+    平衡一調說明就變成謊言，而且不會有任何錯誤，他只會照著過時的說明玩。
+    字級刻意開大：這是要給小四生看的，擠成一團等於沒寫。
+  -->
+  <div id="rules-panel" hidden>
+    <div class="rules-box">
+      <h2>🐝 蜂巢保衛戰・玩法說明</h2>
+      <div id="rules-body"></div>
+      <button type="button" id="rules-close" class="btn-rules-close">知道了（Esc 或 F1 關閉）</button>
+    </div>
   </div>
 
   <p id="game-error" class="game-error"></p>

@@ -38,6 +38,7 @@ export function createInput({
   onPause,
   onToggleOverlay,
   onToggleMute,
+  onToggleRules,
   onImeSuspected,
   onImeCleared
 }) {
@@ -77,6 +78,19 @@ export function createInput({
     if (e.key === 'F3') {
       e.preventDefault();
       onToggleOverlay?.();
+      return;
+    }
+
+    /*
+     * F1 = 玩法說明。
+     *
+     * 不用 H 或 ?——字母鍵一律留給拼字（? 在美式鍵盤上要按 Shift+/，
+     * 而 Shift 在打字途中隨時會被按到）。F1 在幾乎所有軟體裡都是說明，
+     * 他不用學。
+     */
+    if (e.key === 'F1') {
+      e.preventDefault();
+      onToggleRules?.();
       return;
     }
 

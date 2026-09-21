@@ -108,6 +108,16 @@ const ENEMY_QUEUE_STROKE = 0x7f3d3d;
 /* 蜂巢的素材尺寸。跟敵人一樣以兩倍點陣化，載入後縮 0.5。 */
 const HIVE = { width: 110, height: 125 };
 
+/*
+ * 跑道離畫面底部（工具列上緣）至少要留這麼多。
+ *
+ * 蜂巢與敵人都是以 laneY 為中心畫的，所以真正該留的是「最高的東西的一半」：
+ * 蜂巢 125/2 ≈ 63，最近距離的蜘蛛 124×1.2/2 ≈ 75。取 80 再留一點餘裕。
+ * 寫死一個小數字的話，矮螢幕上蜂巢下半截會被工具列切掉——而蜂巢正是
+ * 他要保護的東西，看不到就不知道敵人離家有多近。
+ */
+const LANE_BOTTOM_CLEARANCE = 80;
+
 const PARALLAX_TEX_W = 960;
 const PARALLAX_TEX_H = 200;
 
@@ -496,7 +506,15 @@ export function createBattleScene(ctx) {
        * 照比例算會直接撞到下面那條工具列，敵人走到最後幾步會被按鈕蓋住——
        * 而那正是最需要看清楚的時刻。
        */
-      this.laneY = Math.min(height * 0.8, height - 100);
+      /*
+       * 下面那條工具列的高度是量出來的，不是猜的。
+       *
+       * 它現在有兩排（大字的狀態列 + 按鈕列），寫死一個常數的話，
+       * 文案一長換行就會多一排，敵人走到最後幾步剛好被蓋住——
+       * 而那正是最需要看清楚的時刻。量出來就永遠對得上。
+       */
+      const chromeH = document.getElementById('game-chrome')?.offsetHeight || 0;
+      this.laneY = Math.min(height * 0.8, height - chromeH - LANE_BOTTOM_CLEARANCE);
       this.hiveX = width * LANE_LEFT;
       this.hive.setPosition(this.hiveX, this.laneY);
       this.hiveGlow.setPosition(this.hiveX, this.laneY);
