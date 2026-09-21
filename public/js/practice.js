@@ -1,7 +1,13 @@
 import { api } from './api.js';
 import { requireLogin } from './auth.js';
 import { mountNav, refreshNavCoins, setNavCoins } from './nav-partial.js';
-import { playWordAudio, speakSentence, playCompetitionSequence, stopSpeaking } from './audio-player.js';
+import {
+  playWordAudio,
+  speakSentence,
+  playCompetitionSequence,
+  stopSpeaking,
+  warmUpSpeech
+} from './audio-player.js';
 import * as sound from './sound-manager.js';
 import { loadPhaser } from './game/load-phaser.js';
 import { runPageInit } from './ui-status.js';
@@ -455,12 +461,19 @@ function recordCompletionLocally(groupId) {
   writeUser(currentUser && currentUser._id, 'groupProgress', { progress, unlockAfter });
 }
 
+/*
+ * 按下開始的那一刻就是使用者手勢，正好拿來把語音引擎叫醒。
+ * 不先叫醒的話，iOS 上第一個單字的開頭會被切掉——而第一個音聽錯，
+ * 整個字就拼錯了。
+ */
 document.getElementById('start-practice-btn').addEventListener('click', () => {
   sound.playClick();
+  warmUpSpeech();
   startPractice();
 });
 reviewBtn.addEventListener('click', () => {
   sound.playClick();
+  warmUpSpeech();
   startPractice({ reviewOnly: true });
 });
 

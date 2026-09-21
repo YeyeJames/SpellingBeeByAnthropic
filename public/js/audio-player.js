@@ -11,7 +11,36 @@ const VOICE_KEY = 'preferredVoiceURI';
 const SLOW_RATE = 0.55;
 const NORMAL_RATE = 0.9;
 
+/*
+ * ── 為什麼唸單字前要等一下 ────────────────────────────────
+ *
+ * 回報：練習模式第一次唸單字時，有時候前面半秒聽不到。
+ *
+ * iOS Safari 的語音合成有兩個很典型的問題，這裡兩個都踩到了：
+ *
+ *   1. cancel() 之後馬上 speak()。cancel() 內部是非同步的，同一個
+ *      事件迴圈就接著 speak，引擎還在收拾上一段，新的那段不是被吞掉
+ *      就是被切掉開頭。而我們每換一題都會走這條路（送出答案時
+ *      stopSpeaking() 會 cancel，下一題馬上要唸）。
+ *
+ *   2. 音訊工作階段剛被啟用時的第一段語音會被切掉開頭。這就是
+ *      「**第一次**唸的時候」特別容易發生的原因。
+ *
+ * 對策：第一次使用者互動時先用一段無聲的語音把引擎叫醒（warmUpSpeech），
+ * 之後每次發話前都留一小段空檔，剛 cancel 過就留久一點。
+ *
+ * 這 90ms 對練習模式完全感覺不到（他還在讀畫面），但少了它，
+ * 被切掉的是單字的第一個音——而這是聽寫，第一個音聽錯就整個字拼錯。
+ */
+const SPEAK_LEAD_MS = 90; // 每次發話前的基本空檔
+const CANCEL_SETTLE_MS = 180; // 剛 cancel 過要等更久
+
 let cachedVoices = [];
+let lastCancelAt = 0;
+/* 每次發話拿一個號碼牌；等待期間有人插隊就放棄這一段 */
+let speakToken = 0;
+
+const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function loadVoices() {
   if (!('speechSynthesis' in window)) return;
@@ -50,12 +79,51 @@ function pickEnglishVoice() {
   return voices.find((v) => v.lang === 'en-US') || voices[0];
 }
 
-function speak(text, rate) {
+/**
+ * 把引擎叫醒。
+ *
+ * 必須在**使用者手勢裡**呼叫（點按鈕、按鍵），否則 iOS 不會啟用音訊
+ * 工作階段。用一段無聲的空白語音，聽不到但足以把引擎帶起來，
+ * 之後真正要唸的第一個字就不會被切掉開頭。重複呼叫沒有副作用。
+ */
+let warmedUp = false;
+export function warmUpSpeech() {
+  if (warmedUp || !('speechSynthesis' in window)) return false;
+  warmedUp = true;
+  try {
+    const u = new SpeechSynthesisUtterance(' ');
+    u.volume = 0;
+    u.rate = 1;
+    window.speechSynthesis.speak(u);
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+/** 只在真的有東西在唸的時候才 cancel，並記下時間點。 */
+function cancelSpeech() {
+  if (!('speechSynthesis' in window)) return;
+  const s = window.speechSynthesis;
+  if (s.speaking || s.pending) {
+    s.cancel();
+    lastCancelAt = Date.now();
+  }
+}
+
+async function speak(text, rate) {
+  if (!('speechSynthesis' in window)) return false;
+
+  const myToken = (speakToken += 1);
+  cancelSpeech();
+
+  // 剛 cancel 過就等久一點，讓引擎收拾完上一段
+  const sinceCancel = Date.now() - lastCancelAt;
+  await delay(Math.max(SPEAK_LEAD_MS, CANCEL_SETTLE_MS - sinceCancel));
+  // 等的時候有人又要唸別的了，這一段就作廢——否則兩個字會疊在一起
+  if (myToken !== speakToken) return false;
+
   return new Promise((resolve) => {
-    if (!('speechSynthesis' in window)) {
-      resolve(false);
-      return;
-    }
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'en-US';
     const voice = pickEnglishVoice();
@@ -64,9 +132,24 @@ function speak(text, rate) {
       utterance.lang = voice.lang;
     }
     utterance.rate = rate;
-    utterance.onend = () => resolve(true);
-    utterance.onerror = () => resolve(false);
-    window.speechSynthesis.cancel();
+
+    /*
+     * 保險絲：被 cancel 的語音在某些瀏覽器上 onend 與 onerror 都不會觸發，
+     * 那個 Promise 就永遠不會結束。競賽模式是 await 這個 Promise 的
+     * （單字 → 例句 → 再唸一次），卡住的話整個流程就停在那裡不動了。
+     */
+    let done = false;
+    const finish = (ok) => {
+      if (done) return;
+      done = true;
+      clearTimeout(fuse);
+      resolve(ok);
+    };
+    const estimateMs = (1200 + text.length * 130) / Math.max(0.3, rate);
+    const fuse = setTimeout(() => finish(false), estimateMs * 2 + 2000);
+
+    utterance.onend = () => finish(true);
+    utterance.onerror = () => finish(false);
     window.speechSynthesis.speak(utterance);
   });
 }
@@ -161,7 +244,9 @@ export async function playCompetitionSequence(word) {
 }
 
 export function stopSpeaking() {
-  if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+  // 號碼牌往前推：正在等空檔的那一段會自己作廢，不會晚一步才冒出來
+  speakToken += 1;
+  cancelSpeech();
   // 真人錄音也要停。只停 TTS 的話，換字時上一段錄音會繼續播下去
   stopRecordedAudio();
 }

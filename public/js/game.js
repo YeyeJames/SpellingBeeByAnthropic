@@ -26,7 +26,8 @@ import {
   playWordAudio,
   speakSentence,
   stopSpeaking,
-  listEnglishVoices
+  listEnglishVoices,
+  warmUpSpeech
 } from './audio-player.js';
 import { buildRules, buildQuickRules } from './game/rules.js';
 import { readShared, writeShared, newId } from './local-store.js';
@@ -627,6 +628,8 @@ async function boot() {
       onAction: (action, t0) => {
         // 瀏覽器要求先有使用者手勢才准發聲，第一個按鍵正好就是
         ctx.sfx.unlock();
+        // 語音引擎也要一起叫醒，否則 iOS 上第一個單字的開頭會被切掉
+        warmUpSpeech();
         return ctx.sendAction(action, t0);
       },
       onToggleMute: () => {
