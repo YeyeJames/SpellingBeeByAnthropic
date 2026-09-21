@@ -92,6 +92,11 @@ export function installDebugApi(ctx) {
       return out;
     },
 
+    /** 分層背景音樂的現況：在不在播、幾拍、大小調、各層音量。 */
+    bgm() {
+      return ctx.bgm ? ctx.bgm.report() : null;
+    },
+
     /** 音效延遲：keydown → 排進音訊佇列，外加裝置本身的輸出延遲。 */
     audioLatency() {
       return ctx.sfx ? ctx.sfx.latencyReport() : null;

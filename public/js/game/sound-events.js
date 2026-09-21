@@ -21,6 +21,7 @@ import { EV, EV_NAME } from './core/battle.js';
  * 也不含 WORD_MISSED：扣血的聲音由緊接著的 HP_LOST 負責，重複播只會吵。
  */
 export const DUAL_CHANNEL_EVENTS = [
+  EV.COMBO_BONUS,
   EV.LETTER_OK,
   EV.LETTER_BAD,
   EV.WORD_KILLED,
@@ -53,6 +54,10 @@ export function createSoundBridge(sfx, debug) {
             break;
           case EV.LETTER_BAD:
             sfx.wrong(t0);
+            record(ev.type);
+            break;
+          case EV.COMBO_BONUS:
+            sfx.comboTier(ev.a, t0);
             record(ev.type);
             break;
           case EV.WORD_KILLED:

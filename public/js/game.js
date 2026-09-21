@@ -19,6 +19,7 @@ import { createOverlay } from './game/overlay.js';
 import { createPerf, resetPerf } from './game/perf.js';
 import { createBattleScene } from './game/battle-scene.js';
 import { createSfx } from './game/sfx.js';
+import { createBgm } from './game/bgm.js';
 import { runCalibration } from './game/calibrate.js';
 import { createSoundBridge } from './game/sound-events.js';
 import {
@@ -85,6 +86,7 @@ const ctx = {
   // 測試用：人為讓遊戲有一段「不接受輸入」的空窗，驗證按鍵不會被吃掉
   blockedUntil: 0,
   sfx: null,
+  bgm: null,
   soundBridge: null,
 
   getState: () => ctx.state,
@@ -257,6 +259,8 @@ function startBattle() {
   ctx.paused = false;
   ctx.blockedUntil = 0;
   stopSpeaking();
+  // 音樂跟著戰鬥起停。start 只在第一次真的開始播，之後重複呼叫沒有副作用
+  ctx.bgm?.start();
   ctx.soundBridge?.reset();
   ctx.scene?.effects?.reset();
   ctx.scene?.clearMiss?.();
@@ -438,6 +442,7 @@ async function boot() {
     }
 
     ctx.sfx = createSfx({ onPlayed: (name) => ctx.debug._record('sfx', { name }) });
+    ctx.bgm = createBgm(ctx.sfx);
     ctx.soundBridge = createSoundBridge(ctx.sfx, ctx.debug);
 
     const overlay = createOverlay(ctx);

@@ -17,10 +17,13 @@ import { semitoneForIndex, comboShift, freqFor } from './core/scale.js';
 
 const MUTE_KEY = 'gameMuted';
 const VOLUME_KEY = 'gameSfxVolume';
+const BGM_VOLUME_KEY = 'gameBgmVolume';
 
 export function createSfx({ onPlayed } = {}) {
   let ctx = null;
   let master = null;
+  let sfxBus = null;
+  let bgmBus = null;
   let noiseBuffer = null;
   let muted = readShared(MUTE_KEY) === '1';
   /*
@@ -35,6 +38,11 @@ export function createSfx({ onPlayed } = {}) {
   let volume = storedVolume === null || storedVolume === '' ? 0.7 : Number(storedVolume);
   if (!Number.isFinite(volume) || volume < 0 || volume > 1) volume = 0.7;
 
+  // 背景音樂預設比音效小：音樂是襯底，打擊回饋才是主角
+  const storedBgm = readShared(BGM_VOLUME_KEY);
+  let bgmVolume = storedBgm === null || storedBgm === '' ? 0.35 : Number(storedBgm);
+  if (!Number.isFinite(bgmVolume) || bgmVolume < 0 || bgmVolume > 1) bgmVolume = 0.35;
+
   /* 排程延遲樣本：keydown 到我們真的把聲音排進去，中間隔了多久 */
   const latency = { samples: [], worst: 0 };
 
@@ -43,9 +51,28 @@ export function createSfx({ onPlayed } = {}) {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (!AudioCtx) return null;
       ctx = new AudioCtx({ latencyHint: 'interactive' });
+      /*
+       * 音訊匯流排分兩條。
+       *
+       *   master ── 靜音與總音量（一鍵靜音要同時關掉音效與音樂）
+       *     ├─ sfxBus ── 音效
+       *     └─ bgmBus ── 背景音樂
+       *
+       * 設計書要求 BGM 與 SFX 分開調整，所以不能全部直接接上 master。
+       * 而兩者共用同一個 AudioContext：開第二個 context 會有第二套時鐘，
+       * 節拍跟打擊音就對不準了，而且瀏覽器對 context 數量有限制。
+       */
       master = ctx.createGain();
-      master.gain.value = muted ? 0 : volume;
+      master.gain.value = muted ? 0 : 1;
       master.connect(ctx.destination);
+
+      sfxBus = ctx.createGain();
+      sfxBus.gain.value = volume;
+      sfxBus.connect(master);
+
+      bgmBus = ctx.createGain();
+      bgmBus.gain.value = bgmVolume;
+      bgmBus.connect(master);
 
       // 噪音來源只做一次，之後每次播放都重用這塊 buffer
       const len = Math.floor(ctx.sampleRate * 0.4);
@@ -71,7 +98,7 @@ export function createSfx({ onPlayed } = {}) {
     g.gain.exponentialRampToValueAtTime(gain, at + 0.008);
     g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
     osc.connect(g);
-    g.connect(master);
+    g.connect(sfxBus);
     osc.start(at);
     osc.stop(at + dur + 0.02);
   }
@@ -92,7 +119,7 @@ export function createSfx({ onPlayed } = {}) {
     g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
     src.connect(filter);
     filter.connect(g);
-    g.connect(master);
+    g.connect(sfxBus);
     src.start(at, 0, Math.min(dur, noiseBuffer.duration));
   }
 
@@ -200,6 +227,40 @@ export function createSfx({ onPlayed } = {}) {
       played('combo', t0);
     },
 
+    /**
+     * Combo 里程碑：三階疊加音，一階比一階厚。
+     *
+     * 設計書寫的是「一階比一階厚」，所以厚度不是靠音量堆出來的——
+     * 是靠**音的數量**：第一階兩個音、第二階三個音、第三階四個音加一層噪音爆。
+     * 音量堆只會變吵，音堆起來才會變厚。
+     *
+     * @param tier 1 衝刺 / 2 蜜糖 / 3 狂蜂
+     */
+    comboTier(tier, t0) {
+      const c = ensureCtx();
+      if (!c) return;
+      const at = c.currentTime;
+      // 大三和弦往上疊：根音、三度、五度、八度
+      const CHORDS = {
+        1: [0, 4, 7],
+        2: [0, 4, 7, 12],
+        3: [0, 4, 7, 12, 16]
+      };
+      const notes = CHORDS[tier] || CHORDS[1];
+      notes.forEach((semi, i) => {
+        tone({
+          freq: freqFor(semi + (tier - 1) * 2),
+          at: at + i * 0.045,
+          dur: 0.5 + tier * 0.12,
+          type: tier >= 3 ? 'sawtooth' : 'triangle',
+          gain: 0.12 + tier * 0.02
+        });
+      });
+      // 第三階再加一層上行噪音，做出「整個場面變了」的份量
+      if (tier >= 3) noise({ at, dur: 0.45, gain: 0.1, from: 300, to: 3600, q: 0.8 });
+      played(`combo${tier}`, t0);
+    },
+
     /** 一場結束。 */
     finish(won, t0) {
       const c = ensureCtx();
@@ -247,19 +308,42 @@ export function createSfx({ onPlayed } = {}) {
     setMuted(v) {
       muted = !!v;
       writeShared(MUTE_KEY, muted ? '1' : '0');
-      if (master) master.gain.value = muted ? 0 : volume;
+      if (master) master.gain.value = muted ? 0 : 1;
       return muted;
     },
 
     setVolume(v) {
       volume = Math.max(0, Math.min(1, Number(v) || 0));
       writeShared(VOLUME_KEY, String(volume));
-      if (master && !muted) master.gain.value = volume;
+      if (sfxBus) sfxBus.gain.value = volume;
       return volume;
     },
 
     getVolume() {
       return volume;
+    },
+
+    setBgmVolume(v) {
+      bgmVolume = Math.max(0, Math.min(1, Number(v) || 0));
+      writeShared(BGM_VOLUME_KEY, String(bgmVolume));
+      if (bgmBus) bgmBus.gain.value = bgmVolume;
+      return bgmVolume;
+    },
+
+    getBgmVolume() {
+      return bgmVolume;
+    },
+
+    /**
+     * 給背景音樂用的接點。
+     *
+     * BGM 自己排程音符，但必須掛在同一個 AudioContext 與同一個靜音開關底下，
+     * 所以由這裡把 context 與匯流排交出去，而不是讓 BGM 自己開一個。
+     */
+    audioBus() {
+      const c = ensureCtx();
+      if (!c) return null;
+      return { ctx: c, destination: bgmBus };
     }
   };
 }

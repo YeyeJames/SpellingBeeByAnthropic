@@ -63,6 +63,20 @@ const BONUS_LABELS = {
   2: { text: '蜜糖時間！下一個字時間加倍', color: '#fbbf24' },
   3: { text: '狂蜂狀態！擊退 ×3、蜂蜜 ×2', color: '#fb923c' }
 };
+/*
+ * 重聽的畫面回饋。
+ *
+ * 重聽原本只有聲音：按下去，單字再唸一次，畫面完全不動。靜音的時候
+ * （在客廳、在車上）他按了就完全沒有反應，只會以為按鍵壞了——而重聽
+ * 是要付代價的（敵人會前進），沒有回饋等於白白被扣。
+ */
+const LISTEN_BANNER_MS = 900;
+const LISTEN_LABELS = {
+  [LISTEN_KIND.REPLAY]: '🔊 再聽一次',
+  [LISTEN_KIND.SLOW]: '🐢 放慢唸',
+  [LISTEN_KIND.SENTENCE]: '📖 例句'
+};
+
 /* 敵人被擊中的擠壓與閃白時間 */
 const ENEMY_HIT_MS = 130;
 
@@ -438,6 +452,13 @@ export function createBattleScene(ctx) {
         .setOrigin(1, 0.5);
       this.lastEffectLabel = null;
 
+      /* 重聽的畫面回饋（靜音時這是唯一的回饋） */
+      this.listenText = this.add
+        .text(0, 0, '', { fontFamily: 'system-ui, sans-serif', fontSize: '18px', color: '#a5b4fc' })
+        .setOrigin(0.5)
+        .setAlpha(0);
+      this.listenRemainMs = 0;
+
       this.statusText = this.add
         .text(0, 0, '', { fontFamily: 'system-ui, sans-serif', fontSize: '30px', color: '#f8fafc' })
         .setOrigin(0.5)
@@ -523,8 +544,11 @@ export function createBattleScene(ctx) {
       this.missHint.setFontSize(Math.round(18 * ui));
       this.statusText.setFontSize(Math.round(30 * ui));
 
+      this.listenText.setFontSize(Math.round(18 * ui));
       this.wordText.setPosition(width * 0.5, height * 0.3);
       this.scaffoldNote.setPosition(width * 0.5, height * 0.3 + 40 * ui);
+      // 貼在題目上方：看得到，又不跟下面那疊提示文字搶位置
+      this.listenText.setPosition(width * 0.5, height * 0.3 - 40 * ui);
       /*
        * 放在題目下面、戰場上面：看得到，又不會擋住正在走過來的敵人。
        * 也要跟 statusText（0.5）錯開——最後一條命是被這個字打掉的時候，
@@ -585,12 +609,18 @@ export function createBattleScene(ctx) {
         this.effects.update(delta);
         this.updateEnemyHit(delta);
         this.updateMissReveal(delta);
+        this.updateListenBanner(delta);
         this.updateWaitingLine(state, delta);
         this.updateBonusBanner(state, delta);
         this.updateParallax(delta);
       }
       this.render(state);
       ctx.syncHud(state);
+      /*
+       * 把戰況餵給音樂。每格呼叫，但值沒變就不做事——
+       * 音樂要「直接反映戰況」，所以連擊與血量一變就要跟著走。
+       */
+      ctx.bgm?.setState({ combo: state.combo, hp: state.hp, paused: ctx.isPaused() });
 
       const now = performance.now();
       // 新狀態已經畫出來了，結算這一格的按鍵延遲
@@ -605,10 +635,19 @@ export function createBattleScene(ctx) {
       // 先把還沒發聲的事件唸掉（按鍵造成的那些已經在套用當下發過了）
       ctx.soundBridge?.flush(state, null);
 
+      /*
+       * 畫面端登記。
+       *
+       * 只有真的畫了東西才登記——這個計數器的唯一用途是回答
+       * 「靜音的時候這個回饋還在嗎」，在迴圈開頭無條件登記的話，
+       * 每個事件都會顯示「有畫面」，檢查就永遠通過，等於沒有檢查。
+       * （重聽原本就是這樣混過去的：只有聲音，畫面完全不動。）
+       */
+      const vfx = (ev) => ctx.debug._recordChannel(EV_NAME[ev.type] || `EV_${ev.type}`, 'vfx');
+
       for (let i = 0; i < state.evCount; i += 1) {
         const ev = state.ev[i];
         ctx.debug._recordBattleEvent(ev);
-        ctx.debug._recordChannel(EV_NAME[ev.type] || `EV_${ev.type}`, 'vfx');
         switch (ev.type) {
           case EV.LETTER_OK: {
             const ex = this.enemy.x;
@@ -621,11 +660,13 @@ export function createBattleScene(ctx) {
             this.effects.setCrackProgress(ev.a / Math.max(1, ev.b));
             this.enemyHitT = 0;
             this.energyPulseT = 0;
+            vfx(ev);
             break;
           }
           case EV.LETTER_BAD:
             this.cameras.main.flash(90, 255, 60, 60, false);
             this.cameras.main.shake(60, 0.003);
+            vfx(ev);
             break;
           case EV.WORD_KILLED:
             this.effects.burst(this.enemy.x, this.enemy.y, 18);
@@ -637,6 +678,7 @@ export function createBattleScene(ctx) {
             this.enemyHitT = -1;
             this.enemyBody.setScale(this.enemyBody.setTexture ? 0.5 : 1);
             if (this.enemyBody.clearTint) this.enemyBody.clearTint();
+            vfx(ev);
             break;
           case EV.WORD_MISSED: {
             this.cameras.main.shake(180, 0.01);
@@ -654,6 +696,7 @@ export function createBattleScene(ctx) {
               );
               this.missRemainMs = MISS_REVEAL_MS;
             }
+            vfx(ev);
             break;
           }
           case EV.LISTEN:
@@ -661,6 +704,10 @@ export function createBattleScene(ctx) {
             ctx.speakCurrentWord(
               ev.a === LISTEN_KIND.SLOW ? 'slow' : ev.a === LISTEN_KIND.SENTENCE ? 'sentence' : 'normal'
             );
+            // 靜音時這是唯一的回饋：按了要看得出來有按到
+            this.listenText.setText(LISTEN_LABELS[ev.a] || '🔊');
+            this.listenRemainMs = LISTEN_BANNER_MS;
+            vfx(ev);
             break;
           case EV.COMBO_BONUS: {
             const label = BONUS_LABELS[ev.a];
@@ -668,9 +715,24 @@ export function createBattleScene(ctx) {
               this.bonusText.setText(label.text).setColor(label.color);
               this.bonusRemainMs = BONUS_BANNER_MS;
               this.cameras.main.flash(120, 120, 220, 255, false);
+              vfx(ev);
             }
             break;
           }
+          /*
+           * 下面這三個的畫面在 render() 裡跟著狀態走（連擊數字、血量圓點、
+           * 結束訊息），不需要在這裡另外演出；登記一筆是因為對帳表只認事件，
+           * 不登記會被誤判成「只有聲音沒有畫面」。
+           */
+          case EV.COMBO_UP:
+          case EV.HP_LOST:
+            vfx(ev);
+            break;
+          case EV.BATTLE_END:
+            // 音樂跟著戰鬥起停：一場結束就收掉，結算畫面要安靜
+            ctx.bgm?.stop();
+            vfx(ev);
+            break;
           case EV.WORD_START: {
             this.effects.setCrackProgress(0);
             // 前面那隻進場了，整排往前踏一步（下面用動畫補回來）
@@ -682,6 +744,7 @@ export function createBattleScene(ctx) {
               this.setEnemyKind(this.enemyBody, kind);
             }
             ctx.speakCurrentWord();
+            vfx(ev);
             break;
           }
           default:
@@ -710,6 +773,18 @@ export function createBattleScene(ctx) {
       const alpha = Math.min(1, this.missRemainMs / MISS_FADE_MS);
       this.missText.setAlpha(alpha);
       this.missHint.setAlpha(alpha);
+    }
+
+    /** 重聽提示：亮一下就淡掉，不擋住題目。 */
+    updateListenBanner(delta) {
+      if (this.listenRemainMs <= 0) return;
+      this.listenRemainMs -= delta;
+      if (this.listenRemainMs <= 0) {
+        this.listenRemainMs = 0;
+        this.listenText.setAlpha(0);
+        return;
+      }
+      this.listenText.setAlpha(Math.min(1, this.listenRemainMs / (LISTEN_BANNER_MS * 0.5)));
     }
 
     /**
