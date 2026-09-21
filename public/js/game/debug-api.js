@@ -147,6 +147,28 @@ export function installDebugApi(ctx) {
       };
     },
 
+    /**
+     * 畫面上正在飄的分數字樣。
+     *
+     * 規則要從演出中長出來，而「演出有沒有真的發生」只能從這裡看——
+     * 截圖比對抓不到 800ms 內就消失的東西。
+     */
+    floats() {
+      const pool = ctx.scene?.effects?.pools?.floats;
+      if (!pool) return [];
+      return pool.items
+        .filter((i) => i.active)
+        .map((i) => ({ text: i.node.text, color: i.node.style?.color || '' }));
+    },
+
+    /**
+     * 懲罰衝刺：畫面位置落後邏輯位置多少（progress 單位）。
+     * 大於 0 代表蟲正在往前滑；歸零代表已經追上。
+     */
+    penaltyLag() {
+      return ctx.scene?.penaltyLag ?? 0;
+    },
+
     /** 漏字時亮出來的正確拼法。沒在顯示時 visible 是 false。 */
     missReveal() {
       const s = ctx.scene;
@@ -251,7 +273,8 @@ export function installDebugApi(ctx) {
         tick: ctx.getState()?.tick ?? -1,
         type: EV_NAME[ev.type] || `EV_${ev.type}`,
         a: ev.a,
-        b: ev.b
+        b: ev.b,
+        c: ev.c
       });
     }
   };

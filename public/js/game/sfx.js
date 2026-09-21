@@ -205,11 +205,20 @@ export function createSfx({ onPlayed } = {}) {
       played('hpLost', t0);
     },
 
-    /** 重聽：一聲輕微的風聲，提醒「這有代價」。 */
+    /**
+     * 重聽：一聲往下掉的風聲，提醒「這有代價」。
+     *
+     * 原本是 600→2200 的上行掃頻——上行聽起來像「得到了什麼」，
+     * 跟實際發生的事（蟲往前衝、你被扣時間）完全相反。改成下行，
+     * 再壓一個低頻的悶響當「往前撞」的重量。長度對齊畫面上的衝刺動畫，
+     * 兩者才像同一件事而不是兩件事。
+     */
     listen(t0) {
       const c = ensureCtx();
       if (!c) return;
-      noise({ at: c.currentTime, dur: 0.3, gain: 0.1, from: 600, to: 2200, q: 2 });
+      const at = c.currentTime;
+      noise({ at, dur: 0.32, gain: 0.11, from: 2000, to: 420, q: 2 });
+      tone({ freq: 150, at, dur: 0.26, type: 'sine', gain: 0.16 });
       played('listen', t0);
     },
 

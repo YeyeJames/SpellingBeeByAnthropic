@@ -58,11 +58,41 @@ const MISS_FADE_MS = 500;
  */
 const BONUS_BANNER_MS = 1600;
 const BONUS_FADE_MS = 400;
+/*
+ * 橫幅要寫出**具體數字**，不是只寫效果名稱。
+ *
+ * 「蜂群衝刺！」他讀得懂字但不知道發生了什麼；「敵人速度 −50%，持續 3 秒」
+ * 他才會把畫面上的變化跟這行字連起來。數字全部從 balance.js 現場算，
+ * 調平衡不用回來改文案（跟 rules.js 同一個理由）。
+ */
+const cb = BALANCE.combo;
 const BONUS_LABELS = {
-  1: { text: '蜂群衝刺！敵人慢一半', color: '#67e8f9' },
-  2: { text: '蜜糖時間！下一個字時間加倍', color: '#fbbf24' },
-  3: { text: '狂蜂狀態！擊退 ×3、蜂蜜 ×2', color: '#fb923c' }
+  1: {
+    text: `🐝 蜂群衝刺　敵人速度 −${Math.round((1 - cb.dashSpeedFactor) * 100)}%　${cb.dashMs / 1000} 秒`,
+    color: '#67e8f9'
+  },
+  2: {
+    text: `🍯 蜜糖時間　下一個字時間 ×${cb.sweetTimeFactor}`,
+    color: '#fbbf24'
+  },
+  3: {
+    text: `⚡ 狂蜂狀態　擊退 ×${cb.frenzyKnockbackFactor}、蜂蜜 ×${cb.frenzyHoneyFactor}　${cb.frenzyMs / 1000} 秒`,
+    color: '#fb923c'
+  }
 };
+
+/*
+ * 懲罰的「衝刺」演出。
+ *
+ * 重聽會讓敵人前進 1.5 秒的距離，但畫面上是瞬間跳過去的——看起來像瞬移，
+ * 而瞬移不會讓人覺得「我剛剛付出了代價」。改成用 320ms 滑過去之後，
+ * 他會**看著**蟲往前衝那一段，那個焦慮感本身就是代價。
+ *
+ * 重點：這純粹是畫面。state.progress 仍然當下就變更（戰鬥邏輯不能為了
+ * 演出而延遲，那會破壞確定性與重播）。畫面上的蟲用一個逐漸歸零的位移
+ * 去追邏輯位置，320ms 內追上。
+ */
+const PENALTY_DASH_MS = 320;
 /*
  * 重聽的畫面回饋。
  *
@@ -75,6 +105,12 @@ const LISTEN_LABELS = {
   [LISTEN_KIND.REPLAY]: '🔊 再聽一次',
   [LISTEN_KIND.SLOW]: '🐢 放慢唸',
   [LISTEN_KIND.SENTENCE]: '📖 例句'
+};
+/* 事件帶的是代號，代價表的鍵是字串，這張表把兩者對起來 */
+const LISTEN_COST_KEY = {
+  [LISTEN_KIND.REPLAY]: 'replay',
+  [LISTEN_KIND.SLOW]: 'slow',
+  [LISTEN_KIND.SENTENCE]: 'sentence'
 };
 
 /* 敵人被擊中的擠壓與閃白時間 */
@@ -237,6 +273,13 @@ export function createBattleScene(ctx) {
       this.enemyHitT = -1;
       this.hitStopUntil = 0;
       this.energyPulseT = -1;
+      /*
+       * 懲罰衝刺：畫面位置落後邏輯位置多少（progress 單位）。
+       * 0 代表畫面已經追上邏輯。只影響畫面，不影響任何遊戲結果。
+       */
+      this.penaltyLag = 0;
+      this.penaltyLagFrom = 0;
+      this.penaltyT = 0;
     }
 
     /*
@@ -627,6 +670,7 @@ export function createBattleScene(ctx) {
         this.effects.update(delta);
         this.updateEnemyHit(delta);
         this.updateMissReveal(delta);
+        this.updatePenaltyDash(delta);
         this.updateListenBanner(delta);
         this.updateWaitingLine(state, delta);
         this.updateBonusBanner(state, delta);
@@ -678,15 +722,63 @@ export function createBattleScene(ctx) {
             this.effects.setCrackProgress(ev.a / Math.max(1, ev.b));
             this.enemyHitT = 0;
             this.energyPulseT = 0;
+            /*
+             * 加了幾分要看得見。
+             *
+             * 蜂蜜一直都有在算，但畫面從來沒講——右上角的數字默默跳動，
+             * 他不會把「我剛剛打對了這個字母」跟那個數字連在一起。
+             * 狂蜂狀態時是 +2，所以金額直接從事件帶出來（見 battle.js 的 emit）。
+             */
+            this.effects.floatText(`+${ev.c}`, ex, ey - 34, {
+              // 有加倍就換色放大，一眼看得出「現在賺比較多」
+              color: ev.c > BALANCE.honey.perCorrectLetter ? '#fde047' : '#f5b301',
+              scale: ev.c > BALANCE.honey.perCorrectLetter ? 1.35 : 1
+            });
             vfx(ev);
             break;
           }
           case EV.LETTER_BAD:
             this.cameras.main.flash(90, 255, 60, 60, false);
             this.cameras.main.shake(60, 0.003);
+            // 打錯的代價也要看得見：紅字寫出前進了幾秒，而且蟲真的往前衝
+            this.effects.floatText(
+              `-${BALANCE.wrongLetterPenaltyMs / 1000} 秒`,
+              this.enemy.x,
+              this.enemy.y - 46,
+              { color: '#f87171', scale: 1.15, fan: false }
+            );
+            this.startPenaltyDash(state, BALANCE.wrongLetterPenaltyMs);
             vfx(ev);
             break;
-          case EV.WORD_KILLED:
+          case EV.WORD_KILLED: {
+            /*
+             * 擊殺獎勵拆成兩行飄。
+             *
+             * 「+15」他看不出那 15 是怎麼來的；「+5」加上「+10 長字！」
+             * 他就知道長字有額外獎勵——而那正是我們希望他去挑長字的原因。
+             */
+            const isLong = ev.b >= BALANCE.honey.longWordFrom;
+            /*
+             * ev.c 是「擊殺 + 長字」的總額，而且已經乘過狂蜂倍率。
+             * 把倍率反推回來才能把兩筆拆開顯示——比在這裡重算一次倍率可靠：
+             * 倍率只有 battle.js 知道，重算遲早會跟它走散。
+             */
+            const unit = BALANCE.honey.perKill + (isLong ? BALANCE.honey.longWordBonus : 0);
+            const factor = unit > 0 ? ev.c / unit : 1;
+            const base = BALANCE.honey.perKill * factor;
+            this.effects.floatText(`+${Math.round(base)}`, this.enemy.x, this.enemy.y - 56, {
+              color: '#fde047',
+              scale: 1.4,
+              fan: false
+            });
+            if (isLong) {
+              this.effects.floatText(
+                `+${Math.round(ev.c - base)} 長字！`,
+                this.enemy.x,
+                this.enemy.y - 100,
+                { color: '#fb923c', scale: 1.2, fan: false }
+              );
+            }
             this.effects.burst(this.enemy.x, this.enemy.y, 18);
             this.effects.setCrackProgress(0);
             this.cameras.main.shake(70, 0.004);
@@ -698,6 +790,7 @@ export function createBattleScene(ctx) {
             if (this.enemyBody.clearTint) this.enemyBody.clearTint();
             vfx(ev);
             break;
+          }
           case EV.WORD_MISSED: {
             this.cameras.main.shake(180, 0.01);
             this.effects.setCrackProgress(0);
@@ -725,6 +818,25 @@ export function createBattleScene(ctx) {
             // 靜音時這是唯一的回饋：按了要看得出來有按到
             this.listenText.setText(LISTEN_LABELS[ev.a] || '🔊');
             this.listenRemainMs = LISTEN_BANNER_MS;
+            /*
+             * 重聽的代價要看得見。
+             *
+             * 這是設計書 §9 特別點名的一條：他按了重聽、蟲突然前進一段，
+             * 但因為是瞬移，他不知道那是自己造成的還是遊戲怪怪的。
+             * 紅字寫出前進幾秒 + 蟲真的滑過去，因果才連得起來。
+             */
+            {
+              const cost = BALANCE.listenCostMs[LISTEN_COST_KEY[ev.a]] || 0;
+              if (cost > 0) {
+                this.effects.floatText(
+                  `-${cost / 1000} 秒`,
+                  this.enemy.x,
+                  this.enemy.y - 46,
+                  { color: '#f87171', scale: 1.25, fan: false }
+                );
+                this.startPenaltyDash(state, cost);
+              }
+            }
             vfx(ev);
             break;
           case EV.COMBO_BONUS: {
@@ -733,6 +845,13 @@ export function createBattleScene(ctx) {
               this.bonusText.setText(label.text).setColor(label.color);
               this.bonusRemainMs = BONUS_BANNER_MS;
               this.cameras.main.flash(120, 120, 220, 255, false);
+              // 連擊數也飄一個出來：他才知道剛剛那一串是怎麼換到這個效果的
+              this.effects.floatText(`${ev.b} 連擊！`, this.enemy.x, this.enemy.y - 140, {
+                color: label.color,
+                scale: 1.5,
+                // 大事要出現在指定的位置，散開會撞到旁邊那一串小加分
+                fan: false
+              });
               vfx(ev);
             }
             break;
@@ -755,6 +874,8 @@ export function createBattleScene(ctx) {
             break;
           case EV.WORD_START: {
             this.effects.setCrackProgress(0);
+            // 換字了，上一隻還沒補完的衝刺要丟掉——不然新的蟲會從跑道外面滑進來
+            this.penaltyLag = 0;
             // 前面那隻進場了，整排往前踏一步（下面用動畫補回來）
             this.waitShift = 1;
             // 換上這個字對應的敵人：字越長、蟲越大（見 core/enemy-kind.js）
@@ -793,6 +914,44 @@ export function createBattleScene(ctx) {
       const alpha = Math.min(1, this.missRemainMs / MISS_FADE_MS);
       this.missText.setAlpha(alpha);
       this.missHint.setAlpha(alpha);
+    }
+
+    /**
+     * 懲罰的衝刺演出。
+     *
+     * 邏輯上 state.progress 已經加上去了（那一步不能延遲，否則重播與確定性
+     * 都會壞掉）。這裡只是讓畫面上的蟲**先留在原地**，再用 PENALTY_DASH_MS
+     * 滑到新位置——他會看著蟲往前衝那一段，代價才變成一個體驗而不是一個數字。
+     *
+     * @param ms 這次懲罰讓蟲前進多少毫秒的距離
+     */
+    startPenaltyDash(state, ms) {
+      if (!state || !state.crossMs) return;
+      // 累加而不是覆寫：連續打錯兩次時兩段距離要一起補，不是只補最後一次
+      this.penaltyLag = Math.min(1, this.penaltyLag + ms / state.crossMs);
+      this.penaltyLagFrom = this.penaltyLag;
+      this.penaltyT = 0;
+    }
+
+    /**
+     * 衝刺推進。
+     *
+     * 用「已經過了多少毫秒」算，不是每格扣掉一個比例。
+     * 指數衰減看起來很順，但它永遠到不了零，而且**推進速度取決於影格數**——
+     * 掉格的機器上蟲會滑得比較久，無頭瀏覽器上甚至滑不完。
+     * 綁在時間上才保證每一台機器都剛好在 PENALTY_DASH_MS 追上。
+     */
+    updatePenaltyDash(delta) {
+      if (this.penaltyLag <= 0) return;
+      this.penaltyT += delta;
+      const k = Math.min(1, this.penaltyT / PENALTY_DASH_MS);
+      if (k >= 1) {
+        this.penaltyLag = 0;
+        return;
+      }
+      // easeOutCubic：一開始衝得快、收尾慢下來，像被撞了一下往前滑
+      const eased = 1 - (1 - k) ** 3;
+      this.penaltyLag = this.penaltyLagFrom * (1 - eased);
     }
 
     /** 重聽提示：亮一下就淡掉，不擋住題目。 */
@@ -881,6 +1040,9 @@ export function createBattleScene(ctx) {
       this.missHint.setAlpha(0);
       this.bonusRemainMs = 0;
       this.bonusText.setAlpha(0);
+      this.listenRemainMs = 0;
+      this.listenText.setAlpha(0);
+      this.penaltyLag = 0;
       this.lastEffectLabel = null;
       this.effectLabel.setText('');
     }
@@ -921,7 +1083,15 @@ export function createBattleScene(ctx) {
 
     render(state) {
       const width = this.scale.width;
-      const x = Phaser.Math.Linear(width * LANE_RIGHT, width * LANE_LEFT, state.progress);
+      /*
+       * 畫面位置 = 邏輯位置 − 還沒補完的懲罰距離。
+       *
+       * 平常 penaltyLag 是 0，兩者完全相同。剛被懲罰的那 0.3 秒內蟲會從
+       * 舊位置滑到新位置——看得到的衝刺，而不是一次瞬移。
+       * 邏輯位置本身一點都沒被動到（見 startPenaltyDash）。
+       */
+      const shown = Math.max(0, Math.min(1, state.progress - this.penaltyLag));
+      const x = Phaser.Math.Linear(width * LANE_RIGHT, width * LANE_LEFT, shown);
       this.enemy.setPosition(x, this.laneY);
 
       /*
@@ -932,15 +1102,16 @@ export function createBattleScene(ctx) {
        * 不會跟本體的受擊擠壓打架（兩者相乘剛好）。
        */
       this.enemy.setScale(
-        Phaser.Math.Linear(ENEMY_SCALE_FAR, ENEMY_SCALE_NEAR, state.progress)
+        // 縮放也跟著畫面位置，不然衝刺時蟲會先變大再滑過去，看起來很怪
+        Phaser.Math.Linear(ENEMY_SCALE_FAR, ENEMY_SCALE_NEAR, shown)
       );
 
       /*
        * 越過危險線之後，畫面本身開始警告。
        * 小孩的眼睛都在鍵盤上，只靠位置移動很容易到最後一刻才發現。
        */
-      if (state.progress >= DANGER_AT) {
-        const k = (state.progress - DANGER_AT) / (1 - DANGER_AT);
+      if (shown >= DANGER_AT) {
+        const k = (shown - DANGER_AT) / (1 - DANGER_AT);
         // 越近閃得越快：用遊戲時間當相位，暫停時也會跟著停
         const pulse = 0.35 + 0.35 * Math.sin(state.timeMs * (0.008 + k * 0.02));
         this.dangerLine.setFillStyle(0xff5d5d, 0.25 + k * 0.45);
@@ -949,7 +1120,7 @@ export function createBattleScene(ctx) {
         this.dangerLine.setFillStyle(0xff5d5d, 0);
         this.hiveGlow.setFillStyle(0xf5b301, 0);
       }
-      this.lastDanger = state.progress >= DANGER_AT;
+      this.lastDanger = shown >= DANGER_AT;
 
       this.hpDots.forEach((dot, i) => dot.setFillStyle(i < state.hp ? 0xf5b301 : 0x334155));
 

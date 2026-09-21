@@ -32,12 +32,20 @@ const STINGER_COUNT = 10; // 130ms 存活，最快約 35ms 一發
 const FRAGMENT_COUNT = 18; // 420ms 存活，最快約 35ms 一片
 const SPLASH_COUNT = 64; // 620ms 存活，一次擊殺 18 顆，要容得下連續三次
 const CRACK_COUNT = 14;
+/*
+ * 飄分：每打對一個字母、每擊殺、每次懲罰都飄一個。
+ *
+ * 存活 800ms，而最快的情況是快手速連打（約 120ms 一個字母）再加上擊殺
+ * 與長字獎勵同時出現，所以同時存在大概 8~9 個。12 是寬鬆的上限。
+ */
+const FLOAT_COUNT = 12;
 
 const STINGER_MS = 130;
 const MUZZLE_MS = 110;
 const MUZZLE_COUNT = 8;
 const FRAGMENT_MS = 420;
 const SPLASH_MS = 620;
+const FLOAT_MS = 800;
 
 const COLOR_STINGER = 0xffe08a;
 const COLOR_FRAGMENT = 0x6ee7b7;
@@ -52,6 +60,8 @@ function easeOutCubic(t) {
 
 export function createEffects(scene, seed) {
   const rng = createRng((seed ^ 0x9e3779b9) >>> 0);
+  /* 飄分的排位序號，見 floatText */
+  let floatSeq = 0;
 
   /*
    * 蜂針改成「曳光」而不是飛行物。
@@ -109,6 +119,32 @@ export function createEffects(scene, seed) {
     vy: 0
   }));
 
+  /*
+   * 飄分。
+   *
+   * 設計書 §9：規則要從演出中長出來，不是從說明書讀進去。蜂蜜的加減一直
+   * 都有在算，但畫面從來沒講過——右上角的數字默默跳動，他不會把「我剛剛
+   * 打對了這個字母」跟「+1」連在一起。飄一個數字出來就連起來了，成本極低。
+   */
+  const floats = createPool(FLOAT_COUNT, () => ({
+    node: scene.add
+      .text(0, 0, '', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '20px',
+        color: '#f5b301',
+        stroke: '#10131f',
+        strokeThickness: 4
+      })
+      .setOrigin(0.5)
+      .setVisible(false),
+    t: 0,
+    x0: 0,
+    y0: 0,
+    vx: 0,
+    rise: 0,
+    scale: 1
+  }));
+
   // 敵人身上的裂痕：固定掛在敵人容器裡，按進度一道一道顯示
   const cracks = createPool(CRACK_COUNT, (i) => ({
     node: scene.add.rectangle(0, 0, 3, 14, COLOR_CRACK).setVisible(false),
@@ -124,7 +160,7 @@ export function createEffects(scene, seed) {
   }
 
   return {
-    pools: { stingers, fragments, splashes, cracks, muzzles },
+    pools: { stingers, fragments, splashes, cracks, muzzles, floats },
 
     /** 把裂痕掛進敵人容器，這樣敵人移動時裂痕會跟著走。 */
     attachCracksTo(container) {
@@ -176,6 +212,55 @@ export function createEffects(scene, seed) {
       f.arc = -60 - rng.next() * 60; // 往上拋一點，不要直線飛
       f.node.setText(letter.toUpperCase());
       f.node.setPosition(x0, y0).setVisible(true).setAlpha(1).setScale(1);
+    },
+
+    /**
+     * 飄一個數字出來。
+     *
+     * @param text  要飄的字，例如 "+1"、"-1.5 秒"、"+5 長字！"
+     * @param opts.color 顏色。加分用金色、扣時間用紅色、Combo 加成用亮金色
+     * @param opts.scale 大小倍率。越重要的事越大，他不用讀字就知道有差
+     */
+    floatText(text, x, y, { color = '#f5b301', scale = 1, fan = true } = {}) {
+      const f = obtain(floats);
+      f.t = 0;
+
+      /*
+       * fan=false 給「大事」用（連擊達標、擊殺獎勵）。
+       * 那種訊息只會一次出現一個，而且必須出現在指定的位置——
+       * 跟著散開的話反而會撞到旁邊那一串小加分。
+       */
+      if (!fan) {
+        f.x0 = x;
+        f.y0 = y;
+        f.vx = 0;
+        f.rise = 44;
+        f.scale = scale;
+        f.node.setText(text).setColor(color);
+        f.node.setPosition(x, y).setVisible(true).setAlpha(1).setScale(scale);
+        return;
+      }
+
+      /*
+       * 散開的方式是「輪流排位」，不是純亂數。
+       *
+       * 快手速連打時五六個 +1 會在 100ms 內從同一個點冒出來，純亂數靠運氣
+       * 分不開——實測就是糊成一團完全看不出數字，等於白飄。
+       * 用一個循環的序號扇形排開，最少也保證相鄰兩個差一格；
+       * 亂數只負責加一點抖動，讓它不要整齊得像表格。
+       */
+      const slot = floatSeq % 5;
+      floatSeq = (floatSeq + 1) % 15;
+      const spread = (slot - 2) * 30 + (rng.next() - 0.5) * 14;
+
+      f.x0 = x + spread;
+      // 起點高度也錯開，同一時間冒出來的才不會在同一條水平線上
+      f.y0 = y - (floatSeq % 3) * 18;
+      f.vx = spread * 0.5;
+      f.rise = 56 + rng.next() * 20;
+      f.scale = scale;
+      f.node.setText(text).setColor(color);
+      f.node.setPosition(f.x0, f.y0).setVisible(true).setAlpha(1).setScale(scale);
     },
 
     /** 擊殺時的蜂蜜噴濺。 */
@@ -260,6 +345,25 @@ export function createEffects(scene, seed) {
         p.node.setAlpha(1 - k);
         p.node.setScale(1 - k * 0.6);
       }
+
+      for (let i = 0; i < floats.size; i += 1) {
+        const f = floats.items[i];
+        if (!f.active) continue;
+        f.t += dtMs;
+        const k = f.t / FLOAT_MS;
+        if (k >= 1) {
+          f.active = false;
+          f.node.setVisible(false);
+          continue;
+        }
+        const e = easeOutCubic(k);
+        f.node.setPosition(f.x0 + f.vx * e, f.y0 - f.rise * e);
+        // 前 15% 先彈大一下再回來：小小的「跳出來」，眼睛才會被抓到
+        const pop = k < 0.15 ? 1 + (0.15 - k) * 2 : 1;
+        f.node.setScale(f.scale * pop);
+        // 後半才開始淡出，不然數字還沒讀完就不見了
+        f.node.setAlpha(k < 0.55 ? 1 : 1 - (k - 0.55) / 0.45);
+      }
     },
 
     /** F3 疊加層與測試要看的池子使用量。分開列，才知道是哪一個池子太小。 */
@@ -268,13 +372,18 @@ export function createEffects(scene, seed) {
         stingers: activeCount(stingers),
         fragments: activeCount(fragments),
         splashes: activeCount(splashes),
+        floats: activeCount(floats),
         recycled:
-          stingers.recycled + fragments.recycled + splashes.recycled + muzzles.recycled,
-        spawned: stingers.spawned + fragments.spawned + splashes.spawned + muzzles.spawned,
+          stingers.recycled + fragments.recycled + splashes.recycled + muzzles.recycled +
+          floats.recycled,
+        spawned:
+          stingers.spawned + fragments.spawned + splashes.spawned + muzzles.spawned +
+          floats.spawned,
         recycledBy: {
           stingers: stingers.recycled,
           fragments: fragments.recycled,
-          splashes: splashes.recycled
+          splashes: splashes.recycled,
+          floats: floats.recycled
         }
       };
     },
@@ -284,6 +393,7 @@ export function createEffects(scene, seed) {
       releaseAll(stingers);
       releaseAll(fragments);
       releaseAll(splashes);
+      releaseAll(floats);
       for (let i = 0; i < CRACK_COUNT; i += 1) cracks.items[i].node.setVisible(false);
     }
   };

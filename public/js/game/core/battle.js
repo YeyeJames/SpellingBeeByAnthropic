@@ -48,16 +48,25 @@ const EVENT_CAPACITY = 64;
 
 function createEventPool() {
   const pool = new Array(EVENT_CAPACITY);
-  for (let i = 0; i < EVENT_CAPACITY; i += 1) pool[i] = { type: 0, a: 0, b: 0 };
+  for (let i = 0; i < EVENT_CAPACITY; i += 1) pool[i] = { type: 0, a: 0, b: 0, c: 0 };
   return pool;
 }
 
-function emit(state, type, a = 0, b = 0) {
+/*
+ * 第三個欄位 c 是給「這件事實際加了多少蜂蜜」用的。
+ *
+ * 畫面要飄出 +1 / +2（狂蜂狀態加倍），而那個倍率只有這裡知道。讓渲染端
+ * 自己照 BALANCE 算一次的話，狂蜂剛好在這一步結束時就會算錯——
+ * 畫面上飄 +1、實際加了 +2，而那種錯沒有人會發現，只會讓分數看起來很怪。
+ * 事件直接把數字帶出去最省事，也不可能對不起來。
+ */
+function emit(state, type, a = 0, b = 0, c = 0) {
   if (state.evCount >= EVENT_CAPACITY) return; // 滿了就丟棄，寧可少演出也不要配置記憶體
   const e = state.ev[state.evCount];
   e.type = type;
   e.a = a;
   e.b = b;
+  e.c = c;
   state.evCount += 1;
 }
 
@@ -213,8 +222,9 @@ function pushEnemy(state, ms) {
 function killWord(state) {
   const len = state.target.length;
   const hf = honeyFactor(state);
-  state.honey += BALANCE.honey.perKill * hf;
-  if (len >= BALANCE.honey.longWordFrom) state.honey += BALANCE.honey.longWordBonus * hf;
+  let gained = BALANCE.honey.perKill * hf;
+  if (len >= BALANCE.honey.longWordFrom) gained += BALANCE.honey.longWordBonus * hf;
+  state.honey += gained;
   state.stats.wordsKilled += 1;
 
   if (state.cleanWord) {
@@ -225,7 +235,7 @@ function killWord(state) {
     applyComboMilestone(state);
   }
 
-  emit(state, EV.WORD_KILLED, state.wordIndex, len);
+  emit(state, EV.WORD_KILLED, state.wordIndex, len, gained);
   startNextWord(state);
 }
 
@@ -320,11 +330,12 @@ export function applyAction(state, action) {
       if (consumed > 0) {
         state.typed += consumed;
         state.stats.correctLetters += 1;
-        state.honey += BALANCE.honey.perCorrectLetter * honeyFactor(state);
+        const letterHoney = BALANCE.honey.perCorrectLetter * honeyFactor(state);
+        state.honey += letterHoney;
         // 擊退：往回推，但不會推到畫面外。狂蜂狀態期間三倍
         state.progress -= (knockbackMsFor(state.difficulty) * knockbackFactor(state)) / state.crossMs;
         if (state.progress < 0) state.progress = 0;
-        emit(state, EV.LETTER_OK, state.typed, state.target.length);
+        emit(state, EV.LETTER_OK, state.typed, state.target.length, letterHoney);
 
         if (state.typed >= state.target.length) killWord(state);
       } else {
