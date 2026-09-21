@@ -227,10 +227,17 @@ export function createBattleScene(ctx) {
         if (String(file?.key || '').startsWith('enemy-')) this.enemyArtOk = false;
       });
       for (const kind of ENEMY_KINDS) {
-        this.load.svg(`enemy-${kind.key}`, `/assets/enemies/${kind.key}.svg`, {
-          width: kind.width * 2,
-          height: kind.height * 2
-        });
+        const url = `/assets/enemies/${kind.file}`;
+        if (kind.file.endsWith('.svg')) {
+          // SVG 可以指定點陣化尺寸，直接要兩倍
+          this.load.svg(`enemy-${kind.key}`, url, {
+            width: kind.width * 2,
+            height: kind.height * 2
+          });
+        } else {
+          // PNG 本來就該存成兩倍尺寸（見 core/enemy-kind.js 的換圖說明）
+          this.load.image(`enemy-${kind.key}`, url);
+        }
       }
     }
 

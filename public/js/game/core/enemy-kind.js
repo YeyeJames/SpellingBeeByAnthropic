@@ -10,12 +10,18 @@
  * 「壓力是看得見的」，不是「畫面比較花」。
  *
  * 純函式、不看亂數：同一個字永遠是同一種敵人，重播與視覺回歸才對得起來。
+ *
+ * ── 換圖插槽 ───────────────────────────────────────────────
+ * file 指到 public/assets/enemies/ 底下的檔案。換成自己的圖就改這一行，
+ * .svg 與 .png 都收（PNG 請存成 width×2 的尺寸，載入後會縮回來）。
+ * 換圖不影響任何遊戲邏輯。
  */
 
 export const ENEMY_KINDS = [
   {
     key: 'beetle',
     label: '甲蟲',
+    file: 'beetle.svg',
     maxLetters: 4, // 4 個字母以內
     width: 120,
     height: 90
@@ -23,13 +29,16 @@ export const ENEMY_KINDS = [
   {
     key: 'wasp',
     label: '黃蜂',
+    // 這一張是真的繪圖（去背後的 PNG），其餘兩種還是手寫 SVG
+    file: 'wasp.png',
     maxLetters: 7, // 5~7 個字母
     width: 150,
-    height: 96
+    height: 99
   },
   {
     key: 'spider',
     label: '蜘蛛',
+    file: 'spider.svg',
     maxLetters: Infinity, // 8 個字母以上
     width: 182,
     height: 125
