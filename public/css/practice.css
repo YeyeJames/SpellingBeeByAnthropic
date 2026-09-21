@@ -61,13 +61,14 @@
 }
 
 .part-btn {
-  border: 3px solid rgba(0, 78, 152, 0.15);
-  background: #fff;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-raised);
   border-radius: var(--radius-md);
   padding: 0.7rem 0.5rem;
   cursor: pointer;
   font-family: var(--font-display);
-  color: var(--color-secondary);
+  /* 暗底上組別名稱用亮文字色，藍色在深底上讀起來太沉 */
+  color: var(--color-text);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -86,7 +87,13 @@
 
 .part-btn.selected {
   border-color: var(--color-primary);
-  background: var(--color-bg);
+  background: var(--color-bg-panel);
+  box-shadow: 0 0 0 1px var(--color-primary) inset;
+}
+
+/* 已經解鎖的組別給一條綠邊：一眼看得出哪幾組可以玩遊戲 */
+.part-btn.unlocked {
+  border-left: 3px solid var(--color-success);
 }
 
 .order-picker {
@@ -97,6 +104,7 @@
 
 .order-picker label {
   background: var(--color-bg);
+  border: 1px solid var(--color-border);
   border-radius: 999px;
   padding: 0.4rem 0.9rem;
   cursor: pointer;
@@ -129,9 +137,9 @@
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  border: 2px solid rgba(0, 78, 152, 0.15);
-  background: #fff;
-  color: var(--color-secondary);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-raised);
+  color: var(--color-text);
   border-radius: 999px;
   padding: 0.35rem 0.8rem;
   font-size: 0.95rem;
@@ -220,6 +228,7 @@
   margin-top: 0.5rem;
   padding: 0.6rem 0.75rem;
   background: var(--color-bg);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
 }
 
@@ -235,7 +244,7 @@
 .reveal-english {
   font-size: 1.15rem;
   font-weight: bold;
-  color: var(--color-secondary);
+  color: var(--color-accent);
 }
 
 .reveal-chinese {

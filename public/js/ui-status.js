@@ -52,7 +52,8 @@ export function showWaking(message) {
   wakingEl.setAttribute('data-waking', '');
   wakingEl.style.cssText = [
     'position:fixed', 'inset:0', 'z-index:99998',
-    'background:rgba(20,40,80,.88)', 'color:#fff',
+    // 整個 app 改成暗色之後，這層也要跟著暗，不然喚醒時會突然亮一下
+    'background:rgba(8,10,18,.92)', 'color:#e8edf7',
     'display:flex', 'flex-direction:column', 'align-items:center', 'justify-content:center',
     'gap:14px', 'text-align:center', 'padding:24px',
     'font-family:system-ui,-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif'

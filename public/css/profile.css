@@ -96,7 +96,7 @@
 .voice-settings select {
   padding: 0.55rem 0.7rem;
   border-radius: var(--radius-md);
-  border: 2px solid rgba(0, 78, 152, 0.2);
+  border: 1px solid var(--color-border);
   font-size: 0.95rem;
   max-width: 100%;
 }

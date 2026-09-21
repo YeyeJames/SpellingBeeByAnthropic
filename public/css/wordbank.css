@@ -25,8 +25,8 @@
 }
 
 .wb-part-tab {
-  border: 2px solid rgba(0, 78, 152, 0.15);
-  background: #fff;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-raised);
   color: var(--color-secondary);
   border-radius: 999px;
   padding: 0.35rem 0.85rem;
@@ -63,7 +63,7 @@
   min-width: 160px;
   padding: 0.6rem 0.8rem;
   border-radius: var(--radius-md);
-  border: 2px solid rgba(0, 78, 152, 0.2);
+  border: 1px solid var(--color-border);
   font-size: 1rem;
 }
 
@@ -74,10 +74,10 @@
 }
 
 .word-card {
-  border: 2px solid rgba(0, 78, 152, 0.12);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   padding: 1rem;
-  background: #fff;
+  background: var(--color-bg-raised);
   display: flex;
   flex-direction: column;
   gap: 0.4rem;

@@ -12,7 +12,7 @@
   padding: 0.75rem 0.5rem;
   text-align: center;
   cursor: pointer;
-  background: var(--color-bg-panel, #fff);
+  background: var(--color-bg-raised);
   border-radius: var(--radius-md, 12px);
   border: 3px solid transparent;
   transition: transform 0.1s ease, border-color 0.1s ease;
@@ -88,7 +88,15 @@
 }
 
 .profile-tile.new-profile .avatar-circle {
-  background: repeating-linear-gradient(45deg, #dceeff, #dceeff 6px, #eef6ff 6px, #eef6ff 12px);
-  color: var(--color-secondary, #004e98);
+  /* 暗底上不能留亮色斜紋，那會變成整頁唯一一塊白 */
+  background: repeating-linear-gradient(
+    45deg,
+    var(--color-bg-raised),
+    var(--color-bg-raised) 6px,
+    var(--color-bg-panel) 6px,
+    var(--color-bg-panel) 12px
+  );
+  border: 2px dashed var(--color-border);
+  color: var(--color-text-muted);
 }
 

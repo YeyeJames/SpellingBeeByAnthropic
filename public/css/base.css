@@ -67,17 +67,53 @@ body.page-loading::after {
 }
 
 a {
-  color: var(--color-secondary, #004e98);
+  color: var(--color-accent);
 }
 
+/*
+ * 輸入框在暗底上一定要自己給底色與文字色。
+ * 不給的話瀏覽器會用系統預設（白底黑字），暗色畫面中間就會開一個白洞，
+ * 而那正好是他打字的地方。
+ */
 input[type='text'],
 input[type='password'] {
   font-family: var(--font-body, inherit);
   font-size: 1.1rem;
   padding: 0.6rem 0.9rem;
   border-radius: var(--radius-md, 12px);
-  border: 2px solid rgba(0, 78, 152, 0.2);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
   width: 100%;
+}
+
+input[type='text']::placeholder {
+  color: var(--color-text-muted);
+}
+
+/*
+ * 下拉選單同理，而且更容易漏掉：它預設是作業系統畫的淺灰底，
+ * 不明講就會在暗畫面裡留下一塊 #efefef。option 也要一起指定，
+ * 不然展開的清單仍然是白的。
+ */
+select {
+  font-family: var(--font-body, inherit);
+  font-size: 1rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: var(--radius-md, 12px);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+select option {
+  background: var(--color-bg-panel);
+  color: var(--color-text);
+}
+
+/* 音量滑桿：不指定的話滑軌會是淺灰的 */
+input[type='range'] {
+  accent-color: var(--color-primary);
 }
 
 input[type='text']:focus,
@@ -92,8 +128,13 @@ input[type='password']:focus {
   min-height: 1.4em;
 }
 
-/* 導覽列：固定單排，手機上不換行也不佔掉半個螢幕 */
+/*
+ * 導覽列：固定單排，手機上不換行也不佔掉半個螢幕。
+ * 暗底上要自己給底色，否則會直接浮在漸層上看不出是一條列。
+ */
 .top-nav {
+  background: var(--color-bg-panel);
+  border: 1px solid var(--color-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -117,8 +158,8 @@ input[type='password']:focus {
   text-decoration: none;
   font-family: var(--font-display, inherit);
   font-size: 0.9rem;
-  color: var(--color-secondary, #004e98);
-  background: rgba(255, 255, 255, 0.7);
+  color: var(--color-text);
+  background: rgba(31, 39, 57, 0.85);
   padding: 0.3rem 0.6rem;
   border-radius: 999px;
   white-space: nowrap;
@@ -161,7 +202,7 @@ input[type='password']:focus {
 
 .nav-icon-btn {
   border: none;
-  background: rgba(0, 78, 152, 0.1);
+  background: rgba(148, 163, 184, 0.12);
   border-radius: 999px;
   width: 32px;
   height: 32px;
