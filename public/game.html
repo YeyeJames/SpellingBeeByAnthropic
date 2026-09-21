@@ -99,6 +99,20 @@
     <span>會叫出鍵盤，然後把螢幕上的單字打出來</span>
   </div>
 
+  <!--
+    還沒解鎖的組別。
+    遊戲模式是考試，練習模式才看得到中文、例句與正確拼法——
+    所以同一組要先在練習模式完整做完兩次才玩得到。
+    這一塊不是死路：直接給一顆按鈕帶他去練習。
+  -->
+  <div id="locked-panel" hidden>
+    <strong>🔒 <span id="locked-group"></span>還沒解鎖</strong>
+    <p id="locked-detail"></p>
+    <p class="pregame-hint">先在練習模式把整組做完，看過中文跟例句再來玩。</p>
+    <!-- 樣式跟開場那兩顆一樣，但不共用 class：那個 class 是「選出題順序」的按鈕 -->
+    <a class="btn-locked-back" href="/practice.html">去練習模式</a>
+  </div>
+
   <p id="game-error" class="game-error"></p>
 
   <div id="loading-note">載入中…</div>

@@ -21,11 +21,15 @@
   <div class="center-column">
     <div class="panel container" style="max-width: 480px;">
       <h1 class="display-font" style="text-align:center; color: var(--color-primary);">🐝 拼字蜂</h1>
-      <p style="text-align:center; color: var(--color-text-muted);">選一個玩家開始練習！</p>
+      <p style="text-align:center; color: var(--color-text-muted);">選一個帳號開始練習！</p>
 
       <div id="profile-step">
         <div id="profile-grid" class="profile-grid">
           <!-- 動態填入 profile tiles -->
+        </div>
+        <p class="error-text" id="profile-error"></p>
+        <div style="display:flex; gap:0.75rem; margin-top:1rem; justify-content:center;">
+          <button class="btn secondary" id="manage-toggle" type="button">管理帳號</button>
         </div>
         <p id="logged-in-hint" class="hidden" style="text-align:center; font-size:0.85rem; color:var(--color-text-muted);">
           目前登入：<strong id="logged-in-name"></strong>
@@ -36,36 +40,32 @@
         </p>
       </div>
 
-      <div id="pin-step" class="hidden">
-        <h2 style="text-align:center;" id="pin-step-title">輸入 PIN 碼</h2>
-        <div class="pin-dots" id="pin-dots">
-          <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
-        </div>
-        <div class="pin-pad" id="pin-pad">
-          <button type="button" data-digit="1">1</button>
-          <button type="button" data-digit="2">2</button>
-          <button type="button" data-digit="3">3</button>
-          <button type="button" data-digit="4">4</button>
-          <button type="button" data-digit="5">5</button>
-          <button type="button" data-digit="6">6</button>
-          <button type="button" data-digit="7">7</button>
-          <button type="button" data-digit="8">8</button>
-          <button type="button" data-digit="9">9</button>
-          <button type="button" id="pin-back" class="wide">←</button>
-          <button type="button" data-digit="0">0</button>
-          <button type="button" id="pin-cancel" class="wide">取消</button>
-        </div>
-        <p class="error-text" id="pin-error"></p>
-      </div>
-
       <div id="new-profile-step" class="hidden">
-        <h2 style="text-align:center;">建立新玩家</h2>
-        <label for="new-nickname">暱稱</label>
-        <input type="text" id="new-nickname" maxlength="20" placeholder="輸入暱稱" />
+        <h2 style="text-align:center;">新增帳號</h2>
+        <label for="new-nickname">名字</label>
+        <input type="text" id="new-nickname" maxlength="20" placeholder="輸入名字" />
         <p class="error-text" id="new-profile-error"></p>
         <div style="display:flex; gap:0.75rem; margin-top:1rem; justify-content:center;">
           <button class="btn secondary" id="new-profile-cancel" type="button">取消</button>
-          <button class="btn" id="new-profile-next" type="button">下一步：設定 PIN</button>
+          <button class="btn" id="new-profile-create" type="button">建立帳號</button>
+        </div>
+      </div>
+
+      <div id="delete-profile-step" class="hidden">
+        <h2 style="text-align:center;">刪除帳號</h2>
+        <p style="text-align:center;">
+          要刪掉 <strong id="delete-target-name"></strong> 嗎？<br />
+          這個帳號的<strong>分數、金幣、練習進度</strong>都會不見，而且救不回來。
+        </p>
+        <p style="text-align:center; color: var(--color-text-muted); font-size:0.9rem;">
+          單字錄音不會被刪掉——那是共用的，其他帳號還聽得到。
+        </p>
+        <label for="delete-confirm">確定的話，把名字再打一次</label>
+        <input type="text" id="delete-confirm" maxlength="20" placeholder="輸入要刪除的名字" />
+        <p class="error-text" id="delete-error"></p>
+        <div style="display:flex; gap:0.75rem; margin-top:1rem; justify-content:center;">
+          <button class="btn secondary" id="delete-cancel" type="button">取消</button>
+          <button class="btn danger" id="delete-confirm-btn" type="button">確定刪除</button>
         </div>
       </div>
     </div>

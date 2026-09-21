@@ -47,6 +47,18 @@ async function ensureIndexes(database) {
     { userId: 1, opId: 1 },
     { unique: true, partialFilterExpression: { opId: { $type: 'string' } } }
   );
+  // 練完一組、打完一場也都走背景佇列，同樣會重試
+  await database.collection('groupCompletions').createIndex(
+    { userId: 1, opId: 1 },
+    { unique: true, partialFilterExpression: { opId: { $type: 'string' } } }
+  );
+  await database.collection('gameResults').createIndex(
+    { userId: 1, opId: 1 },
+    { unique: true, partialFilterExpression: { opId: { $type: 'string' } } }
+  );
+
+  // 每個帳號在每一組上只有一列進度
+  await database.collection('groupProgress').createIndex({ userId: 1, groupId: 1 }, { unique: true });
 }
 
 function getDB() {

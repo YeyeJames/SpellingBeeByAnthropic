@@ -86,5 +86,6 @@ export const api = {
   get: (path) => request('GET', path),
   post: (path, body) => request('POST', path, body),
   put: (path, body) => request('PUT', path, body),
-  del: (path) => request('DELETE', path)
+  // DELETE 也吃 body：刪帳號要把名字打一次才算數，那個確認字串得送過去
+  del: (path, body) => request('DELETE', path, body)
 };

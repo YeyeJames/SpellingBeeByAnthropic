@@ -731,6 +731,8 @@ export function createBattleScene(ctx) {
           case EV.BATTLE_END:
             // 音樂跟著戰鬥起停：一場結束就收掉，結算畫面要安靜
             ctx.bgm?.stop();
+            // 分數記在目前這個帳號底下（a=1 是打完整組，0 是蜂巢被攻破）
+            ctx.onBattleEnd?.(state, ev.a === 1);
             vfx(ev);
             break;
           case EV.WORD_START: {

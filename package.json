@@ -26,14 +26,16 @@
     "test:hud": "node scripts/hud-test.mjs",
     "test:miss": "node scripts/miss-reveal-test.mjs",
     "test:practice": "node scripts/practice-session-test.mjs",
-    "test:all": "node scripts/validate-words.mjs && node scripts/practice-session-test.mjs && node scripts/determinism.mjs && node scripts/input-test.mjs && node scripts/audio-test.mjs && node scripts/calibrate-test.mjs && node scripts/group-test.mjs && node scripts/hud-test.mjs && node scripts/miss-reveal-test.mjs && node scripts/enemy-queue-test.mjs && node scripts/bgm-test.mjs && node scripts/layout-test.mjs && node scripts/slow-cpu-test.mjs && node scripts/parity-test.mjs && node scripts/sim.mjs",
+    "test:all": "node scripts/validate-words.mjs && node scripts/practice-session-test.mjs && node scripts/account-flow-test.mjs && node scripts/home-page-test.mjs && node scripts/game-gate-test.mjs && node scripts/determinism.mjs && node scripts/input-test.mjs && node scripts/audio-test.mjs && node scripts/calibrate-test.mjs && node scripts/group-test.mjs && node scripts/hud-test.mjs && node scripts/miss-reveal-test.mjs && node scripts/enemy-queue-test.mjs && node scripts/bgm-test.mjs && node scripts/layout-test.mjs && node scripts/slow-cpu-test.mjs && node scripts/parity-test.mjs && node scripts/sim.mjs",
     "test:layout": "node scripts/layout-test.mjs",
     "test:slowcpu": "node scripts/slow-cpu-test.mjs",
     "test:queue": "node scripts/enemy-queue-test.mjs",
-    "test:bgm": "node scripts/bgm-test.mjs"
+    "test:bgm": "node scripts/bgm-test.mjs",
+    "test:account": "node scripts/account-flow-test.mjs",
+    "test:gate": "node scripts/game-gate-test.mjs",
+    "test:home": "node scripts/home-page-test.mjs"
   },
   "dependencies": {
-    "bcryptjs": "^2.4.3",
     "connect-mongo": "^5.1.0",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",

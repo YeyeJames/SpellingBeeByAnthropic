@@ -336,7 +336,12 @@ body.is-touch #listen-buttons {
 /* ── 開場畫面 ────────────────────────────────────────────
    跟校準用同一套視覺語言：全黑底、置中、大字。
    小孩在這一頁只做一個決定，所以畫面上就只有那一個決定。 */
-#pregame {
+/*
+ * 還沒解鎖的組別。跟開場畫面同一套版面——都是「遊戲還沒開始」的全螢幕說明，
+ * 長得一樣他才不用重新認一次。
+ */
+#pregame,
+#locked-panel {
   position: fixed;
   inset: 0;
   z-index: 24;
@@ -350,18 +355,32 @@ body.is-touch #listen-buttons {
   background: rgba(8, 10, 18, 0.96);
 }
 
-#pregame[hidden] {
+#pregame[hidden],
+#locked-panel[hidden] {
   display: none;
 }
 
-#pregame strong {
+#pregame strong,
+#locked-panel strong {
   font-size: 2.4rem;
   color: #ffd166;
 }
 
-#pregame p {
+#pregame p,
+#locked-panel p {
   margin: 0;
   color: #94a3b8;
+}
+
+/* 鎖著的時候標題用暖灰，不要用金色——那是「可以開始了」的顏色 */
+#locked-panel strong {
+  color: #cbd5e1;
+}
+
+#locked-panel .btn-locked-back {
+  margin-top: 0.8rem;
+  text-decoration: none;
+  display: inline-block;
 }
 
 .pregame-hint {
@@ -374,7 +393,8 @@ body.is-touch #listen-buttons {
   margin-top: 0.6rem;
 }
 
-.btn-order {
+.btn-order,
+.btn-locked-back {
   background: #1e293b;
   color: #cbd5e1;
   border: 1px solid #334155;

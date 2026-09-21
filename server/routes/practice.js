@@ -3,8 +3,10 @@ const { getDB } = require('../db');
 const Word = require('../models/Word');
 const WordProgress = require('../models/WordProgress');
 const PracticeSession = require('../models/PracticeSession');
+const GroupProgress = require('../models/GroupProgress');
 const User = require('../models/User');
 const { requireAuth } = require('../middleware/auth');
+const wordBank = require('../data/word-bank');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -150,6 +152,82 @@ router.post('/attempt', async (req, res, next) => {
   }
 });
 
+/*
+ * 這個帳號在每一組上的進度：練完幾次、解鎖了沒有、最高分。
+ *
+ * 練習頁用它在每顆按鈕上標「已練 1/2 次」或「🔒」，遊戲頁用它擋下
+ * 還沒練過的組別。同一支 API 兩邊共用，才不會兩個畫面講不同的話。
+ */
+router.get('/progress', async (req, res, next) => {
+  try {
+    const progress = await GroupProgress.listForUser(req.user._id);
+    res.json({
+      progress,
+      unlockAfter: GroupProgress.UNLOCK_AFTER_COMPLETIONS,
+      groups: wordBank.listGroups()
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * 練習模式把一整組做完了。
+ *
+ * 跟作答一樣走背景佇列補送，所以同樣要能重複執行：重試不可以讓
+ * 「練完兩次」憑空變成三次，那會讓解鎖條件形同虛設。
+ */
+router.post('/group-complete', async (req, res, next) => {
+  try {
+    const { opId, groupId, answered } = req.body || {};
+    if (!opId) return res.status(400).json({ error: '缺少 opId' });
+    if (!groupId) return res.status(400).json({ error: '缺少 groupId' });
+
+    const groupWords = wordBank.wordsByGroup(groupId);
+    if (!groupWords.length) return res.status(400).json({ error: '找不到這一組單字' });
+
+    /*
+     * 真的做完整組才算。
+     *
+     * 沒有這道檢查的話，開一場練習、答一題就離開，前端只要送一次
+     * group-complete 就能把解鎖條件繞過去——那整條規則就白寫了。
+     */
+    if (Number(answered) < groupWords.length) {
+      return res.status(400).json({
+        error: `這一組有 ${groupWords.length} 個字，要全部做完才算練完一次`
+      });
+    }
+
+    const completions = completionsCollection();
+    const existing = await completions.findOne({ userId: req.user._id, opId });
+    if (existing) {
+      const progress = await GroupProgress.getForGroup(req.user._id, groupId);
+      return res.json({ duplicate: true, progress });
+    }
+
+    try {
+      await completions.insertOne({
+        userId: req.user._id,
+        opId,
+        groupId,
+        answered: Number(answered) || 0,
+        completedAt: new Date()
+      });
+    } catch (err) {
+      if (err.code === 11000) {
+        const progress = await GroupProgress.getForGroup(req.user._id, groupId);
+        return res.json({ duplicate: true, progress });
+      }
+      throw err;
+    }
+
+    const progress = await GroupProgress.recordPracticeCompletion(req.user._id, groupId);
+    res.json({ progress });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/review-queue', async (req, res, next) => {
   try {
     const dueProgress = await WordProgress.getReviewQueue(req.user._id);
@@ -172,6 +250,11 @@ router.get('/stats', async (req, res, next) => {
 function attemptsCollection() {
   // 簡單的作答紀錄，直接操作 collection 即可，不需要額外的 model 檔案
   return getDB().collection('attempts');
+}
+
+function completionsCollection() {
+  // 只存在為了去重：哪一筆「練完一組」已經算過了
+  return getDB().collection('groupCompletions');
 }
 
 module.exports = router;

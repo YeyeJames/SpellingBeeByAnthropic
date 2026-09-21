@@ -28,6 +28,14 @@ const THROTTLE_RATE = 4;
 const MAX_P95_MS = 55;
 const LETTERS = 120;
 
+/*
+ * 這幾支要登入與資料庫，這台機器兩個都沒有，所以它們回 503、瀏覽器記一筆錯誤。
+ * 全都是設計好會發生而且已經處理掉的：拿不到錄音就用機器語音，問不到解鎖狀態
+ * 就放行，分數記不到就算了。不算故障——但也不能整段忽略 503，
+ * 否則真的壞掉時測試會安靜地放行。只放行這幾支。
+ */
+const EXPECTED_503 = ['/api/words/recorded', '/api/game/access', '/api/game/result'];
+
 let failures = 0;
 function check(name, ok, detail = '') {
   if (!ok) failures += 1;
@@ -47,7 +55,7 @@ const consoleErrors = [];
 page.on('pageerror', (e) => consoleErrors.push(`pageerror: ${e.message}`));
 page.on('console', (m) => {
   // 錄音清單那支要登入與資料庫，這台機器沒有，回 503 是預期內的
-  if (m.type() === 'error' && (m.location()?.url || '').includes('/api/words/recorded')) return;
+  if (m.type() === 'error' && EXPECTED_503.some((u) => (m.location()?.url || '').includes(u))) return;
   if (m.type() === 'error') consoleErrors.push(`console.error: ${m.text()}`);
 });
 

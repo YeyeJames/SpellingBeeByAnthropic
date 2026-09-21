@@ -16,6 +16,14 @@ import { chromium } from 'playwright-core';
 const CHROME = process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const BASE = process.env.BASE || 'http://127.0.0.1:3100';
 
+/*
+ * 這幾支要登入與資料庫，這台機器兩個都沒有，所以它們回 503、瀏覽器記一筆錯誤。
+ * 全都是設計好會發生而且已經處理掉的：拿不到錄音就用機器語音，問不到解鎖狀態
+ * 就放行，分數記不到就算了。不算故障——但也不能整段忽略 503，
+ * 否則真的壞掉時測試會安靜地放行。只放行這幾支。
+ */
+const EXPECTED_503 = ['/api/words/recorded', '/api/game/access', '/api/game/result'];
+
 let failures = 0;
 function check(name, ok, detail = '') {
   if (!ok) failures += 1;
@@ -79,13 +87,7 @@ console.log('\n2) 遊戲用 ?group= 開起來');
   const page = await context.newPage();
   page.on('pageerror', (e) => consoleErrors.push(`pageerror: ${e.message}`));
   page.on('console', (m) => {
-    /*
-     * 「哪些字有真人錄音」那支要登入與資料庫，這台機器兩個都沒有，
-     * 所以它回 503、瀏覽器記一筆錯誤。這是設計好會發生而且已經處理掉的
-     * （拿不到就全部用機器語音），不算故障——但也不能整段忽略 503，
-     * 否則真的壞掉時測試會安靜地放行。只放行這一支。
-     */
-    if (m.type() === 'error' && (m.location()?.url || '').includes('/api/words/recorded')) return;
+    if (m.type() === 'error' && EXPECTED_503.some((u) => (m.location()?.url || '').includes(u))) return;
     if (m.type() === 'error') consoleErrors.push(`console.error: ${m.text()}`);
   });
 
@@ -188,11 +190,23 @@ console.log('\n4) 練習頁選組');
   );
   check('有 Part 也有 Week', picker.buttons.includes('Part 1') && picker.buttons.includes('Week 18'), picker.buttons.join('、'));
   check('分成競賽與每週兩段', picker.heads.length === 2, picker.heads.join(' / '));
-  check('每顆按鈕都寫著字數', picker.subs.every((s) => /^\d+ 個單字$/.test(s)), picker.subs.slice(0, 3).join('、'));
+  check('每顆按鈕都寫著字數', picker.subs.every((s) => /^\d+ 個字・/.test(s)), picker.subs.slice(0, 3).join('、'));
   check(
     'Week 6② 顯示 24 個字（練習不濾掉含空白的詞條）',
-    picker.subs[picker.buttons.indexOf('Week 6②')] === '24 個單字',
+    /^24 個字・/.test(picker.subs[picker.buttons.indexOf('Week 6②')] || ''),
     picker.subs[picker.buttons.indexOf('Week 6②')]
+  );
+  /*
+   * 解鎖進度也要寫在按鈕上。
+   *
+   * 這台機器沒有資料庫，所以 /api/practice/progress 拿不到東西，每一組都是
+   * 「練習 0/2 次」——正好就是一個新帳號看到的樣子，而那是他第一次打開這一頁
+   * 時真正會看到的畫面。
+   */
+  check(
+    '按鈕上看得到還要練幾次才能玩遊戲',
+    picker.subs.every((s) => /練習 \d+\/\d+ 次|🔓/.test(s)),
+    picker.subs.slice(0, 2).join('、')
   );
 
   // 選了要記得，下次進來才不用再選一次

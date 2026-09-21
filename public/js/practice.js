@@ -6,7 +6,7 @@ import * as sound from './sound-manager.js';
 import { loadPhaser } from './game/load-phaser.js';
 import { runPageInit } from './ui-status.js';
 import { initOutbox, enqueue, onApplied } from './outbox.js';
-import { readShared, writeShared, newId } from './local-store.js';
+import { readShared, writeShared, readUser, writeUser, newId } from './local-store.js';
 import { isAnswerCorrect } from './shared/answer-match.js';
 
 const setupPanel = document.getElementById('setup-panel');
@@ -71,6 +71,31 @@ function warmUpGameEngine() {
 let groups = [];
 let selectedGroup = null;
 
+/*
+ * 每一組練了幾次、解鎖了沒有。
+ *
+ * 這是「這個帳號」的進度：哥哥練過不等於弟弟練過。以 groupId 為鍵，
+ * 拿不到（離線、剛換帳號）時是空的，畫面就只是少標記號，不會壞掉。
+ */
+let progress = {};
+let unlockAfter = 2;
+
+function progressFor(groupId) {
+  return progress[groupId] || { practiceCompletions: 0, unlocked: false, bestScore: 0 };
+}
+
+/** 一組在按鈕上的第二行：練了幾次、解鎖了沒有、最高分多少。 */
+function groupSubLabel(group) {
+  const p = progressFor(group.id);
+  const done = p.practiceCompletions || 0;
+  if (!p.unlocked) {
+    return `${group.count} 個字・練習 ${done}/${unlockAfter} 次`;
+  }
+  return p.bestScore
+    ? `${group.count} 個字・🔓 最高 ${p.bestScore}`
+    : `${group.count} 個字・🔓 可以玩遊戲`;
+}
+
 function renderPartPicker() {
   partPicker.innerHTML = '';
   if (!groups.length) {
@@ -89,19 +114,87 @@ function renderPartPicker() {
       partPicker.appendChild(head);
     }
 
+    const p = progressFor(group.id);
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = group.id === selectedGroup ? 'part-btn selected' : 'part-btn';
+    const classes = ['part-btn'];
+    if (group.id === selectedGroup) classes.push('selected');
+    if (p.unlocked) classes.push('unlocked');
+    btn.className = classes.join(' ');
     btn.innerHTML =
       `<span class="part-title">${group.label}</span>` +
-      `<span class="part-sub">${group.count} 個單字</span>`;
+      `<span class="part-sub">${groupSubLabel(group)}</span>`;
     btn.addEventListener('click', () => {
       selectedGroup = group.id;
       writeShared('lastGroup', group.id);
       renderPartPicker();
+      updateGameButton();
     });
     partPicker.appendChild(btn);
   });
+}
+
+/*
+ * 遊戲鈕會隨著選到的組別改變。
+ *
+ * 規則：同一組單字要先在練習模式**完整做完兩次**，遊戲才開得起來。
+ * 不然他會在一堆沒看過的字上一直被打死，學到的只有挫折。
+ * 鎖住時不是把鈕藏起來，而是直接在鈕上寫還差幾次——看得到目標才有動力。
+ */
+function updateGameButton() {
+  const btn = document.getElementById('go-game-btn');
+  if (!btn) return;
+  if (!selectedGroup) {
+    btn.textContent = '🐝 玩遊戲';
+    btn.disabled = false;
+    return;
+  }
+  const p = progressFor(selectedGroup);
+  if (p.unlocked) {
+    btn.textContent = '🐝 玩遊戲';
+    btn.disabled = false;
+  } else {
+    const left = Math.max(0, unlockAfter - (p.practiceCompletions || 0));
+    btn.textContent = `🔒 再練完 ${left} 次才能玩`;
+    btn.disabled = true;
+  }
+}
+
+/**
+ * 這個帳號的解鎖進度。離線時用上次存下來的，總比整片空白好。
+ *
+ * 快取一定要存在**使用者的命名空間**底下（readUser 而不是 readShared）：
+ * 這是家裡共用的裝置，存成共用的話，哥哥解鎖的組別會直接出現在弟弟的畫面上。
+ */
+async function loadProgress() {
+  const userId = currentUser && currentUser._id;
+  const cached = readUser(userId, 'groupProgress');
+  if (cached && cached.progress) {
+    progress = cached.progress;
+    unlockAfter = cached.unlockAfter || unlockAfter;
+    renderPartPicker();
+    updateGameButton();
+  }
+  /*
+   * 刻意用原始 fetch 而不是 api.js。
+   *
+   * api.js 遇到 503 會重試五次、每次間隔四秒——那是為了喚醒 Render 的睡眠
+   * 執行個體。但這一支只是畫面上的記號，資料庫還沒醒的時候不該讓整個練習頁
+   * 卡在載入畫面二十秒；卡住的話他連練習都開不了，而練習正是解鎖的唯一辦法。
+   */
+  try {
+    const res = await fetch('/api/practice/progress', { credentials: 'same-origin' });
+    if (res.ok) {
+      const data = await res.json();
+      progress = data.progress || {};
+      unlockAfter = data.unlockAfter || 2;
+      writeUser(userId, 'groupProgress', { progress, unlockAfter });
+    }
+  } catch (err) {
+    // 拿不到就沿用快取；解鎖狀態不是安全機制，是學習順序的提醒
+  }
+  renderPartPicker();
+  updateGameButton();
 }
 
 async function loadGroups() {
@@ -177,6 +270,8 @@ async function startPractice({ reviewOnly = false } = {}) {
 
   session = {
     id: newId(), // 由前端產生，作答紀錄在離線時也能先排隊
+    // 複習模式跨組，不屬於任何一組，所以不會計入解鎖進度
+    groupId: reviewOnly ? null : selectedGroup,
     words: data.words,
     index: 0,
     sessionCoins: 0,
@@ -317,8 +412,47 @@ async function nextQuestion() {
 function finishSession() {
   // 總結畫面用本地資料立刻顯示；作答紀錄由背景佇列負責送出
   summaryText.textContent = `這次練習了 ${session.words.length} 個單字，總共賺到 ${session.sessionCoins} 枚金幣！`;
+
+  /*
+   * 整組做完才算練過一次——解鎖遊戲靠的就是這個計數。
+   *
+   * 跟作答一樣丟進背景佇列：離線練完的那一次不可以不算。
+   * 伺服器會用 opId 去重，重試不會把一次變成兩次。
+   */
+  if (session.groupId) {
+    recordCompletionLocally(session.groupId);
+    enqueue({
+      kind: 'group-complete',
+      path: '/practice/group-complete',
+      body: {
+        opId: `${session.id}:complete`,
+        groupId: session.groupId,
+        answered: session.words.length
+      }
+    });
+  }
+
   showPanel(summaryPanel);
+  renderPartPicker();
+  updateGameButton();
   refreshReviewButton();
+}
+
+/*
+ * 本地先把次數加上去，畫面立刻反映。
+ *
+ * 跟金幣一樣的做法：前端用同一條規則先算，伺服器回來之後校正。
+ * 不先加的話，他剛練完第二次卻看到遊戲還鎖著，會以為壞掉了。
+ */
+function recordCompletionLocally(groupId) {
+  const row = progress[groupId] || { practiceCompletions: 0, gamesPlayed: 0, bestScore: 0 };
+  const completions = (row.practiceCompletions || 0) + 1;
+  progress[groupId] = {
+    ...row,
+    practiceCompletions: completions,
+    unlocked: completions >= unlockAfter
+  };
+  writeUser(currentUser && currentUser._id, 'groupProgress', { progress, unlockAfter });
 }
 
 document.getElementById('start-practice-btn').addEventListener('click', () => {
@@ -340,6 +474,12 @@ reviewBtn.addEventListener('click', () => {
 document.getElementById('go-game-btn')?.addEventListener('click', () => {
   if (!selectedGroup) {
     setupError.textContent = '請先選擇要玩哪一組';
+    return;
+  }
+  const p = progressFor(selectedGroup);
+  if (!p.unlocked) {
+    const left = Math.max(0, unlockAfter - (p.practiceCompletions || 0));
+    setupError.textContent = `這一組還要在練習模式完整做完 ${left} 次才能玩遊戲`;
     return;
   }
   sound.playClick();
@@ -388,6 +528,26 @@ onApplied('attempt', (result) => {
   }
 });
 
+/*
+ * 伺服器算完之後校正解鎖進度。
+ *
+ * 正常情況下跟本地算的一樣；不一樣的時候（在別台裝置上也練過、
+ * 或是重試被去重擋掉了）一律以伺服器為準。
+ */
+onApplied('group-complete', (result, op, err) => {
+  if (err || !result) {
+    // 伺服器不認這一次（例如根本沒做完），本地先加上去的那次要收回來，
+    // 不然畫面會顯示已解鎖、按下去卻被擋，那比一開始就鎖著更難理解
+    loadProgress();
+    return;
+  }
+  if (!result.progress || !result.progress.groupId) return;
+  progress[result.progress.groupId] = result.progress;
+  writeUser(currentUser && currentUser._id, 'groupProgress', { progress, unlockAfter });
+  renderPartPicker();
+  updateGameButton();
+});
+
 runPageInit(async () => {
   const user = await requireLogin();
   if (!user) return;
@@ -398,6 +558,7 @@ runPageInit(async () => {
   restoreSetupPrefs();
   await Promise.all([
     loadGroups(),
+    loadProgress(),
     mountNav(user, 'practice'),
     refreshReviewButton({ background: true })
   ]);

@@ -1,61 +1,38 @@
+/*
+ * 首頁 = 選帳號。
+ *
+ * 沒有密碼、沒有 PIN。這台機器只有我跟孩子在用，家裡沒有外人，
+ * PIN 擋不到任何人，只會讓孩子每次玩之前多按四下還常常忘記。
+ * 點一下名字就進去，另外可以新增與刪除帳號。
+ *
+ * 刻意「不」因為已登入就自動跳轉：這是家裡共用的裝置，要停在選單讓
+ * 使用者自己挑，否則永遠只會用上一個人的帳號進去，換人玩還得先登出。
+ */
+
 import { api } from './api.js';
 import { fetchCurrentUser, logout, cacheUser } from './auth.js';
 import { runPageInit } from './ui-status.js';
 
 const profileStep = document.getElementById('profile-step');
 const profileGrid = document.getElementById('profile-grid');
-const pinStep = document.getElementById('pin-step');
-const pinStepTitle = document.getElementById('pin-step-title');
-const pinDots = document.getElementById('pin-dots').querySelectorAll('.dot');
-const pinPad = document.getElementById('pin-pad');
-const pinError = document.getElementById('pin-error');
+const profileError = document.getElementById('profile-error');
+const manageToggle = document.getElementById('manage-toggle');
 const newProfileStep = document.getElementById('new-profile-step');
 const newNicknameInput = document.getElementById('new-nickname');
 const newProfileError = document.getElementById('new-profile-error');
+const deleteStep = document.getElementById('delete-profile-step');
+const deleteTargetName = document.getElementById('delete-target-name');
+const deleteConfirmInput = document.getElementById('delete-confirm');
+const deleteError = document.getElementById('delete-error');
 
-let mode = null; // 'login' | 'register'
-let activeNickname = '';
-let pinDigits = [];
+let profiles = [];
+let currentUser = null;
+let managing = false; // 管理模式：每個帳號右上角多一顆刪除鈕
+let deleteTarget = null;
 
 function showStep(step) {
-  [profileStep, pinStep, newProfileStep].forEach((s) => s.classList.add('hidden'));
+  [profileStep, newProfileStep, deleteStep].forEach((s) => s.classList.add('hidden'));
   step.classList.remove('hidden');
-}
-
-function renderPinDots() {
-  pinDots.forEach((dot, i) => dot.classList.toggle('filled', i < pinDigits.length));
-}
-
-function renderProfiles(profiles, currentUser) {
-  profileGrid.innerHTML = '';
-  profiles.forEach((p) => {
-    const isCurrent = currentUser && p.nickname === currentUser.nickname;
-    const tile = document.createElement('div');
-    tile.className = isCurrent ? 'profile-tile current' : 'profile-tile';
-    tile.innerHTML = `
-      <div class="avatar-circle">${escapeHtml(p.nickname.slice(0, 1).toUpperCase())}</div>
-      <div class="nickname">${escapeHtml(p.nickname)}</div>
-      ${isCurrent ? '<div class="current-badge">繼續玩</div>' : ''}
-    `;
-    // 已登入的那位不用再輸入 PIN，直接進去；其他人要輸入自己的 PIN
-    tile.addEventListener('click', () => {
-      if (isCurrent) {
-        window.location.href = '/practice.html';
-      } else {
-        startLogin(p.nickname);
-      }
-    });
-    profileGrid.appendChild(tile);
-  });
-
-  const newTile = document.createElement('div');
-  newTile.className = 'profile-tile new-profile';
-  newTile.innerHTML = `
-    <div class="avatar-circle">＋</div>
-    <div class="nickname">新玩家</div>
-  `;
-  newTile.addEventListener('click', startNewProfile);
-  profileGrid.appendChild(newTile);
 }
 
 function escapeHtml(str) {
@@ -64,87 +41,158 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-function startLogin(nickname) {
-  mode = 'login';
-  activeNickname = nickname;
-  pinDigits = [];
-  pinError.textContent = '';
-  pinStepTitle.textContent = `${nickname}，輸入你的 PIN 碼`;
-  renderPinDots();
-  showStep(pinStep);
+function renderProfiles() {
+  profileGrid.innerHTML = '';
+
+  profiles.forEach((p) => {
+    const isCurrent = currentUser && p.nickname === currentUser.nickname;
+    const tile = document.createElement('div');
+    tile.className = isCurrent ? 'profile-tile current' : 'profile-tile';
+
+    const coins = Number(p.coins) || 0;
+    tile.innerHTML = `
+      <div class="avatar-circle">${escapeHtml(p.nickname.slice(0, 1).toUpperCase())}</div>
+      <div class="nickname">${escapeHtml(p.nickname)}</div>
+      <div class="tile-sub">🪙 ${coins}</div>
+      ${isCurrent ? '<div class="current-badge">繼續玩</div>' : ''}
+    `;
+
+    if (managing) {
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'tile-delete';
+      del.title = `刪除 ${p.nickname}`;
+      del.textContent = '✕';
+      del.addEventListener('click', (e) => {
+        e.stopPropagation(); // 不要順便把這個帳號選進去
+        startDelete(p);
+      });
+      tile.appendChild(del);
+    } else {
+      tile.addEventListener('click', () => enterProfile(p.nickname));
+    }
+
+    profileGrid.appendChild(tile);
+  });
+
+  if (!managing) {
+    const newTile = document.createElement('div');
+    newTile.className = 'profile-tile new-profile';
+    newTile.innerHTML = `
+      <div class="avatar-circle">＋</div>
+      <div class="nickname">新增帳號</div>
+    `;
+    newTile.addEventListener('click', startNewProfile);
+    profileGrid.appendChild(newTile);
+  }
+
+  manageToggle.textContent = managing ? '完成' : '管理帳號';
+  if (!profiles.length) profileError.textContent = '';
+}
+
+async function enterProfile(nickname) {
+  profileError.textContent = '';
+  try {
+    const { user } = await api.post('/auth/login', { nickname });
+    // 立刻寫入快取，下一頁就不必再等一次登入驗證
+    cacheUser(user);
+    // 進來先看到練習頁：先練再玩，這是整個流程的順序
+    window.location.href = '/practice.html';
+  } catch (err) {
+    profileError.textContent = err.message || '進不去，請再試一次';
+  }
 }
 
 function startNewProfile() {
   newNicknameInput.value = '';
   newProfileError.textContent = '';
   showStep(newProfileStep);
+  newNicknameInput.focus();
 }
 
-document.getElementById('new-profile-cancel').addEventListener('click', () => showStep(profileStep));
-
-document.getElementById('new-profile-next').addEventListener('click', () => {
+async function createProfile() {
   const nickname = newNicknameInput.value.trim();
   if (!nickname) {
-    newProfileError.textContent = '請輸入暱稱';
+    newProfileError.textContent = '請輸入名字';
     return;
   }
-  mode = 'register';
-  activeNickname = nickname;
-  pinDigits = [];
-  pinError.textContent = '';
-  pinStepTitle.textContent = `幫 ${nickname} 設定一組 4 位數 PIN`;
-  renderPinDots();
-  showStep(pinStep);
-});
-
-pinPad.addEventListener('click', async (e) => {
-  const btn = e.target.closest('button');
-  if (!btn) return;
-
-  if (btn.id === 'pin-cancel') {
-    pinDigits = [];
-    showStep(mode === 'register' ? newProfileStep : profileStep);
-    return;
-  }
-
-  if (btn.id === 'pin-back') {
-    pinDigits.pop();
-    renderPinDots();
-    return;
-  }
-
-  const digit = btn.dataset.digit;
-  if (digit === undefined || pinDigits.length >= 4) return;
-  pinDigits.push(digit);
-  renderPinDots();
-
-  if (pinDigits.length === 4) {
-    await submitPin();
-  }
-});
-
-async function submitPin() {
-  const pin = pinDigits.join('');
-  pinError.textContent = '';
+  newProfileError.textContent = '';
   try {
-    const path = mode === 'login' ? '/auth/login' : '/auth/register';
-    const { user } = await api.post(path, { nickname: activeNickname, pin });
-    // 立刻寫入快取，下一頁就不必再等一次登入驗證
+    const { user } = await api.post('/auth/register', { nickname });
     cacheUser(user);
     window.location.href = '/practice.html';
   } catch (err) {
-    pinError.textContent = err.message || '發生錯誤，請再試一次';
-    pinDigits = [];
-    renderPinDots();
+    newProfileError.textContent = err.message || '建立失敗，請再試一次';
   }
 }
 
+function startDelete(profile) {
+  deleteTarget = profile;
+  deleteTargetName.textContent = profile.nickname;
+  deleteConfirmInput.value = '';
+  deleteError.textContent = '';
+  showStep(deleteStep);
+  deleteConfirmInput.focus();
+}
+
+async function confirmDelete() {
+  if (!deleteTarget) return;
+  deleteError.textContent = '';
+  try {
+    await api.del(`/auth/profiles/${deleteTarget._id}`, {
+      confirmNickname: deleteConfirmInput.value
+    });
+  } catch (err) {
+    deleteError.textContent = err.message || '刪不掉，請再試一次';
+    return;
+  }
+
+  // 刪掉的如果是目前登入的那位，前端的快取也要一起清掉
+  if (currentUser && currentUser._id === deleteTarget._id) {
+    currentUser = null;
+    cacheUser(null);
+    document.getElementById('logged-in-hint').classList.add('hidden');
+  }
+  deleteTarget = null;
+  managing = false;
+  await reloadProfiles();
+  showStep(profileStep);
+}
+
+async function reloadProfiles() {
+  const { profiles: list } = await api.get('/auth/profiles');
+  profiles = list || [];
+  renderProfiles();
+}
+
+manageToggle.addEventListener('click', () => {
+  managing = !managing;
+  renderProfiles();
+});
+
+document.getElementById('new-profile-cancel').addEventListener('click', () => showStep(profileStep));
+document.getElementById('new-profile-create').addEventListener('click', createProfile);
+newNicknameInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') createProfile();
+});
+
+document.getElementById('delete-cancel').addEventListener('click', () => {
+  deleteTarget = null;
+  showStep(profileStep);
+});
+document.getElementById('delete-confirm-btn').addEventListener('click', confirmDelete);
+deleteConfirmInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') confirmDelete();
+});
+
 runPageInit(async () => {
-  // 這裡刻意「不」因為已登入就自動跳轉。
-  // 這是家裡共用的裝置，要停在選單讓使用者自己挑，
-  // 否則永遠只會用上一個人的帳號進去，換人玩還得先登出。
-  const [{ profiles }, user] = await Promise.all([api.get('/auth/profiles'), fetchCurrentUser()]);
-  renderProfiles(profiles, user);
+  const [{ profiles: list }, user] = await Promise.all([
+    api.get('/auth/profiles'),
+    fetchCurrentUser()
+  ]);
+  profiles = list || [];
+  currentUser = user;
+  renderProfiles();
 
   if (user) {
     document.getElementById('logged-in-name').textContent = user.nickname;

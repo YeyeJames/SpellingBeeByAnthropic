@@ -8,6 +8,7 @@ const { LazyMongoStore } = require('./sessionStore');
 const authRoutes = require('./routes/auth');
 const wordsRoutes = require('./routes/words');
 const practiceRoutes = require('./routes/practice');
+const gameRoutes = require('./routes/game');
 const shopRoutes = require('./routes/shop');
 const usersRoutes = require('./routes/users');
 const wordBank = require('./data/word-bank');
@@ -151,6 +152,7 @@ function main() {
   app.use('/api/auth', authRoutes);
   app.use('/api/words', wordsRoutes);
   app.use('/api/practice', practiceRoutes);
+  app.use('/api/game', gameRoutes);
   app.use('/api/shop', shopRoutes);
   app.use('/api/user', usersRoutes);
 

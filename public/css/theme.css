@@ -120,6 +120,12 @@ h1, h2, h3, .display-font {
   box-shadow: 0 5px 0 #c99f1e;
 }
 
+/* 會弄丟東西的動作（刪帳號）要跟其他按鈕長得不一樣 */
+.btn.danger {
+  background: var(--color-danger, #d64545);
+  box-shadow: 0 5px 0 #9c2f2f;
+}
+
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;

@@ -28,7 +28,7 @@ import {
   stopSpeaking,
   listEnglishVoices
 } from './audio-player.js';
-import { readShared, writeShared } from './local-store.js';
+import { readShared, writeShared, newId } from './local-store.js';
 
 const params = new URLSearchParams(location.search);
 
@@ -88,6 +88,13 @@ const ctx = {
   sfx: null,
   bgm: null,
   soundBridge: null,
+  // 每一場一個 id，分數回報用它去重（同一場重送不會被加兩次）
+  battleId: newId(),
+
+  /** 一場結束。畫面端在 BATTLE_END 時呼叫。 */
+  onBattleEnd(state, won) {
+    reportResult(state, won);
+  },
 
   getState: () => ctx.state,
   getLog: () => ctx.log,
@@ -258,6 +265,7 @@ function startBattle() {
   });
   ctx.paused = false;
   ctx.blockedUntil = 0;
+  ctx.battleId = newId();
   stopSpeaking();
   // 音樂跟著戰鬥起停。start 只在第一次真的開始播，之後重複呼叫沒有副作用
   ctx.bgm?.start();
@@ -401,6 +409,61 @@ async function fetchWords() {
   });
 }
 
+/*
+ * 解鎖關卡：這一組在練習模式完整做完兩次了嗎？
+ *
+ * 目的不是防弊，是**順序**：練習模式看得到中文、例句，答完還會把正確拼法
+ * 亮出來；遊戲模式是考試。沒看過就直接考，他只會一直被沒見過的字打死。
+ *
+ * 問不到答案時（沒登入、資料庫掛了、離線）一律放行。理由很實際：
+ * 這種時候他連練習都練不了，再把遊戲也鎖起來等於整個 app 不能用，
+ * 而那個代價遠大於「偶爾跳過順序玩一場」。
+ */
+async function fetchGroupAccess(group) {
+  if (!group) return { unlocked: true, reason: 'no-group' };
+  try {
+    const res = await fetch(`/api/game/access?group=${encodeURIComponent(group)}`, {
+      credentials: 'same-origin'
+    });
+    if (!res.ok) return { unlocked: true, reason: `status-${res.status}` };
+    const data = await res.json();
+    return { ...data, reason: 'checked' };
+  } catch (err) {
+    return { unlocked: true, reason: 'offline' };
+  }
+}
+
+/**
+ * 打完一場，把分數記在這個帳號底下。
+ *
+ * 失敗就算了——分數沒記到很可惜，但絕對不該讓結算畫面卡住或跳錯誤。
+ * opId 讓伺服器去重，重送同一場不會被加兩次。
+ */
+async function reportResult(state, won) {
+  const group = params.get('group');
+  if (!group || !state) return;
+  const s = state.stats;
+  const letters = s.correctLetters + s.wrongLetters;
+  try {
+    await fetch('/api/game/result', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        opId: `${ctx.seed}:${ctx.battleId}`,
+        groupId: group,
+        score: state.honey,
+        accuracy: letters > 0 ? s.correctLetters / letters : 0,
+        won,
+        wordsKilled: s.wordsKilled,
+        wordsMissed: s.wordsMissed
+      })
+    });
+  } catch (err) {
+    /* 記不到分數就算了，不要擋住結算畫面 */
+  }
+}
+
 /** 有真人錄音的單字 id。拿不到就回空集合，代表全部用機器語音。 */
 async function fetchRecordedIds() {
   try {
@@ -418,12 +481,40 @@ function setPaused(next) {
   document.body.classList.toggle('is-paused', ctx.paused);
 }
 
+/**
+ * 這一組還沒解鎖。
+ *
+ * 不是丟一句「不能玩」就算了——要講清楚還差幾次，而且直接給一顆按鈕
+ * 帶他去練習模式。看得到目標才有動力，而不是撞到一道沒有出口的牆。
+ */
+function showLocked(access) {
+  const el = document.getElementById('locked-panel');
+  document.body.classList.remove('page-loading');
+  if (!el) return;
+  const need = access.completionsNeeded ?? access.unlockAfter ?? 2;
+  document.getElementById('locked-group').textContent = access.group?.label || '這一組';
+  document.getElementById('locked-detail').textContent =
+    `已經在練習模式完整做完 ${access.practiceCompletions || 0} 次，` +
+    `還要再 ${need} 次才能玩遊戲。`;
+  el.hidden = false;
+}
+
 async function boot() {
   const errorEl = document.getElementById('game-error');
   const imeEl = document.getElementById('ime-warning');
   const tapEl = document.getElementById('tap-to-start');
 
   try {
+    /*
+     * 先問這一組開不開得起來，再去載 Phaser 與單字。
+     * 鎖著的話載了也用不到，而且那是幾百 KB。
+     */
+    const access = await fetchGroupAccess(params.get('group'));
+    if (!access.unlocked) {
+      showLocked(access);
+      return;
+    }
+
     const [words] = await Promise.all([fetchWords(), loadPhaser()]);
     // Phase 1 只要少量單字就夠驗證手感，不用一次上 25 個
     const limit = Number(params.get('n')) || 20;

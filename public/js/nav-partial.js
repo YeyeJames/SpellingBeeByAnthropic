@@ -57,7 +57,7 @@ export async function mountNav(user, activePage) {
   prefetchOtherPages(activePage);
 
   // 回選單換人：不登出，這樣選單上仍會顯示「繼續玩」，
-  // 想換別人就點別人的頭像輸入他的 PIN 即可
+  // 想換別人點他的頭像就進去了（沒有密碼，家裡沒有外人）
   const switchBtn = mountPoint.querySelector('[data-nav-switch]');
   if (switchBtn) {
     switchBtn.addEventListener('click', () => {

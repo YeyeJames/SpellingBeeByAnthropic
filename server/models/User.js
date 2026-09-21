@@ -1,6 +1,5 @@
 const { ObjectId } = require('mongodb');
 const { getDB } = require('../db');
-const { hashPin } = require('../utils/pin');
 const { calcCoinsForCorrectAnswer } = require('../utils/coins');
 
 const DEFAULT_THEME = 'sports';
@@ -9,13 +8,11 @@ function collection() {
   return getDB().collection('users');
 }
 
-async function createUser(nickname, pin) {
-  const pinHash = await hashPin(pin);
+async function createUser(nickname) {
   const now = new Date();
   const doc = {
     nickname: nickname.trim(),
     nicknameLower: nickname.trim().toLowerCase(),
-    pinHash,
     avatar: { baseCharacter: 'rookie', accessories: [] },
     activeTheme: DEFAULT_THEME,
     audioPrefs: { bgmVolume: 0.5, sfxVolume: 0.8, muted: false },
@@ -46,9 +43,38 @@ async function findById(id) {
 
 async function listProfiles() {
   return collection()
-    .find({}, { projection: { nickname: 1, avatar: 1, activeTheme: 1 } })
+    .find({}, { projection: { nickname: 1, avatar: 1, activeTheme: 1, coins: 1, stats: 1 } })
     .sort({ nickname: 1 })
     .toArray();
+}
+
+/*
+ * 這個帳號自己的資料放在哪些 collection。
+ *
+ * 刪帳號要連著清掉，不然資料會變成沒有主人的孤兒，之後只會越積越多。
+ * wordAudio 刻意不在這張表裡——**錄音是跨帳號共用的**：孩子錄過的那個字
+ * 不管誰登入都要聽到他自己的聲音，換一個帳號玩不該把它弄不見。
+ */
+const OWNED_COLLECTIONS = [
+  'attempts',
+  'practiceSessions',
+  'wordProgress',
+  'groupProgress',
+  'groupCompletions',
+  'gameResults'
+];
+
+async function deleteUser(id) {
+  const _id = new ObjectId(id);
+  const user = await collection().findOne({ _id });
+  if (!user) return null;
+
+  const db = getDB();
+  for (const name of OWNED_COLLECTIONS) {
+    await db.collection(name).deleteMany({ userId: _id });
+  }
+  await collection().deleteOne({ _id });
+  return user;
 }
 
 async function touchLastLogin(id) {
@@ -111,6 +137,7 @@ async function unequipAccessory(id, itemKey) {
 
 function sanitizeUser(user) {
   if (!user) return null;
+  // pinHash 是舊帳號留下來的欄位，現在不再產生，但既有資料還有，照樣不外流
   const { pinHash, nicknameLower, ...safe } = user;
   return safe;
 }
@@ -120,6 +147,8 @@ module.exports = {
   findByNickname,
   findById,
   listProfiles,
+  deleteUser,
+  OWNED_COLLECTIONS,
   touchLastLogin,
   updateAudioPrefs,
   applyAttemptResult,

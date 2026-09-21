@@ -182,6 +182,32 @@ console.log('\n6) 練習頁 → 遊戲');
   await page.route('**/api/practice/review-queue', (r) =>
     r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ words: [] }) })
   );
+  /*
+   * Week 18 當成已經練完兩次。
+   *
+   * 這一段驗的是「練習頁走得到遊戲」，不是解鎖規則本身（那有
+   * account-flow-test 與 game-gate-test）。沒有這個攔截的話，這台機器
+   * 沒有資料庫 → 每一組都鎖著 → 這條路根本走不到。
+   */
+  await page.route('**/api/practice/progress', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        unlockAfter: 2,
+        progress: {
+          w18: { groupId: 'w18', practiceCompletions: 2, unlocked: true, completionsNeeded: 0, bestScore: 0 }
+        }
+      })
+    })
+  );
+  await page.route('**/api/game/access**', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ unlocked: true, practiceCompletions: 2, completionsNeeded: 0, unlockAfter: 2 })
+    })
+  );
 
   await page.goto(`${BASE}/practice.html`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#part-picker .part-btn', { timeout: 15000 });
@@ -193,7 +219,22 @@ console.log('\n6) 練習頁 → 遊戲');
   const err = await page.evaluate(() => document.getElementById('setup-error').textContent);
   check('沒選組時擋下來並說原因', err.includes('選擇'), err);
 
+  // 還沒練完的組別，遊戲鈕要是鎖住的（這是新流程的重點）
+  await page.click('#part-picker .part-btn:has(.part-title:text-is("Week 17"))');
+  const locked = await page.evaluate(() => {
+    const b = document.getElementById('go-game-btn');
+    return { disabled: b.disabled, text: b.textContent };
+  });
+  check('沒練過的組別，遊戲鈕是鎖住的', locked.disabled === true, locked.text);
+  check('鈕上寫出還要練幾次', /再練完 2 次/.test(locked.text), locked.text);
+
   await page.click('#part-picker .part-btn:has(.part-title:text-is("Week 18"))');
+  const unlocked = await page.evaluate(() => {
+    const b = document.getElementById('go-game-btn');
+    return { disabled: b.disabled, text: b.textContent };
+  });
+  check('練完兩次的組別可以按', unlocked.disabled === false, unlocked.text);
+
   await page.click('#go-game-btn');
   await page.waitForSelector('#pregame:not([hidden])', { timeout: 15000 });
   check('真的走到遊戲頁', page.url().includes('/game?group=w18'), page.url());
