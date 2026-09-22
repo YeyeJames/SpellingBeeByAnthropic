@@ -14,6 +14,11 @@
  * 三百多筆資料如果每筆都寫成完整物件，人眼根本看不出哪裡少了一欄。
  * 展開成正式格式是 word-bank.js 的工作。
  *
+ * 課本偶爾會在同一週裡把同一個字列兩次（w06 的 loose、w15 的 might）。
+ * 重複的只留一筆，否則同一組裡會連考兩次一樣的字。出現的地方有註解標出來。
+ *
+ * 2026-09 對照課本照片逐字核過一次（共 9 頁，Week 1~18），英文拼字全數相符。
+ *
  * 例句的規矩（有驗證腳本在管，見 scripts/validate-words.mjs）：
  *   - 一定要包含那個單字本身
  *   - 十二個英文字以內，用小學生看得懂的句子
@@ -293,7 +298,7 @@ const WEEKS = [
     id: 'w06',
     label: 'Week 6',
     words: [
-      // Spelling — Lesson 5
+      // Phonics — Short and Long Vowels
       ['bake', '烘焙', 'We bake cookies every Sunday.'],
       ['cone', '圓錐；甜筒', 'I ate an ice cream cone.'],
       ['hide', '躲藏', 'The cat likes to hide under the bed.'],
@@ -306,7 +311,7 @@ const WEEKS = [
       ['tell', '告訴', 'Please tell me the truth.'],
       ['ten', '十', 'There are ten pencils in the box.'],
       ['tune', '曲調', 'He whistled a happy tune.'],
-      // Phonics — oo / ew / ue
+      // Spelling — Lesson 5（oo / ew / ue）
       ['dune', '沙丘', 'We climbed a tall sand dune.'],
       ['flew', '飛（過去式）', 'The bird flew over the roof.'],
       ['noon', '中午', 'We eat lunch at noon.'],
@@ -338,7 +343,9 @@ const WEEKS = [
       ['sandwiches', '三明治（複數）', 'We packed two sandwiches for the hike.'],
       ['trembled', '顫抖（過去式）', 'Her hands trembled in the cold.'],
       ['worried', '擔心的', 'He looked worried about the test.'],
-      // Reading Plus — A Bright Idea
+      // Reading Plus — More Than Just Worms
+      // 註：loose 在 Lesson 5 已經出現過，課本這裡又列一次；同一週重複的詞
+      //     只留一筆（否則同一組裡會連考兩次一樣的字）。
       ['a couple of', '幾個；兩三個', 'I need a couple of clean towels.'],
       ['accidentally', '意外地', 'I accidentally dropped the glass.'],
       ['hate', '討厭', 'I hate being late for school.'],
@@ -352,7 +359,7 @@ const WEEKS = [
     id: 'w07',
     label: 'Week 7',
     words: [
-      // Phonics — 軟音 c / g
+      // Phonics — Hard and Soft C & G（硬音與軟音 c / g）
       ['bridge', '橋', 'We walked across the old bridge.'],
       ['card', '卡片', 'I made a birthday card for him.'],
       ['circus', '馬戲團', 'The circus came to our town.'],
@@ -374,7 +381,7 @@ const WEEKS = [
       ['case', '箱子；案例', 'Keep your glasses in the case.'],
       ['celery', '芹菜', 'I dipped celery in peanut butter.'],
       ['guess', '猜', 'Can you guess my age?'],
-      // Reading Plus — The Lost Suitcase
+      // Reading Plus — Surprise!
       ['apologized', '道歉（過去式）', 'He apologized for being rude.'],
       ['crawl', '爬行', 'The baby can crawl very fast.'],
       ['gasped', '倒抽一口氣（過去式）', 'She gasped at the surprise.'],
@@ -385,7 +392,7 @@ const WEEKS = [
       ['ruined', '毀壞（過去式）', 'Rain ruined our picnic.'],
       ['suitcase', '行李箱', 'I packed my suitcase last night.'],
       ['worst', '最糟的', 'That was the worst storm all year.'],
-      // Reading Plus — Sounds in the Night
+      // Reading Plus — The Fishing Trip
       ['high-pitched', '高音的；尖銳的', 'The whistle made a high-pitched sound.'],
       ['whistling', '吹口哨', 'The wind was whistling outside.'],
       ['excitedly', '興奮地', 'He excitedly opened the gift.'],
@@ -397,7 +404,7 @@ const WEEKS = [
     id: 'w09',
     label: 'Week 9',
     words: [
-      // Phonics — oi / oy
+      // Spelling — Lesson 7（oi / oy）
       ['oil', '油', 'Add a little oil to the pan.'],
       ['boil', '煮沸', 'Boil the water for the noodles.'],
       ['boy', '男孩', 'The boy ran to the bus stop.'],
@@ -418,7 +425,7 @@ const WEEKS = [
       ['oyster', '牡蠣', 'We found an oyster shell.'],
       ['destroy', '摧毀', 'Storms can destroy small boats.'],
       ['poison', '毒藥', 'Some berries contain poison.'],
-      // Reading Plus — The Quiet Trick
+      // Reading Plus — Sara and Bill
       ['snapped', '啪地折斷（過去式）', 'The dry branch snapped in half.'],
       ['innocently', '天真地', 'He innocently asked what happened.'],
       ['appears', '出現；看起來', 'The moon appears after sunset.'],
@@ -665,7 +672,8 @@ const WEEKS = [
     id: 'w15',
     label: 'Week 15',
     words: [
-      // Phonics — 不發音的子音
+      // Phonics — Silent Consonants（不發音的子音）
+      // 註：課本這一格把 might 印了兩次（16 格、15 個字）；重複的只留一筆。
       ['blocks', '積木（複數）', 'He built a tower with wooden blocks.'],
       ['chick', '小雞', 'A yellow chick followed the hen.'],
       ['climb', '攀爬', 'Monkeys climb trees quickly.'],
