@@ -186,6 +186,40 @@ export function installDebugApi(ctx) {
     },
 
     /**
+     * 等級與經驗（C2）。
+     *
+     * level 是戰鬥中即時算的（打到一半升級就會變），startLevel 是開打時的；
+     * knockback 是等級給的擊退倍率——「力量買的是容錯」那條原則，
+     * 驗的就是它有沒有真的生效、而且沒有減少要打的字母數。
+     */
+    levelState() {
+      const s = ctx.getState();
+      if (!s) return null;
+      return {
+        level: s.level,
+        startLevel: s.startLevel,
+        xp: s.xp,
+        totalXp: s.totalXp,
+        maxHp: s.maxHp,
+        knockback: Number(s.levelKnockback.toFixed(3)),
+        relearns: s.stats.relearns,
+        longKills: s.stats.longKills,
+        // 還沒被打掉的重學字還剩幾個
+        relearnLeft: s.relearnSet ? s.relearnSet.size : 0
+      };
+    },
+
+    /** 升級橫幅現在寫著什麼（沒在顯示時是空字串）。 */
+    levelUpBanner() {
+      const s = ctx.scene;
+      if (!s || !s.levelUpText) return { visible: false, text: '' };
+      return {
+        visible: (s.levelUpRemainMs || 0) > 0,
+        text: s.levelUpText.text || ''
+      };
+    },
+
+    /**
      * 敵人身上的減速光環在不在。
      *
      * 連到 5 的獎勵是「敵人速度 −50%、3 秒」，但打得順的時候時間本來就充裕，

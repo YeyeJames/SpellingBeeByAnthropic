@@ -11,11 +11,49 @@
 const express = require('express');
 const { getDB } = require('../db');
 const GroupProgress = require('../models/GroupProgress');
+const User = require('../models/User');
+const WordProgress = require('../models/WordProgress');
 const { requireAuth } = require('../middleware/auth');
 const wordBank = require('../data/word-bank');
 
 const router = express.Router();
 router.use(requireAuth);
+
+/*
+ * 等級與經驗的公式跟前端用同一個檔案（public/js/shared/levels.js）。
+ *
+ * 理由跟 practice.js 的答案判定一樣：畫面上經驗條要即時漲，不能等伺服器；
+ * 但真正算數的是這裡。兩邊各寫一次遲早會不一致，而症狀最難解釋——
+ * 打完看到「升到 7 級」，重新整理又變回 6 級。
+ *
+ * ES module 在 CommonJS 只能用動態 import，載入結果快取起來。
+ */
+let levelsPromise = null;
+function levels() {
+  if (!levelsPromise) levelsPromise = import('../../public/js/shared/levels.js');
+  return levelsPromise;
+}
+
+/**
+ * 這個帳號在這一組裡「以前錯過」的字。
+ *
+ * 打對這些字給五倍經驗（§6），所以名單要在開打前就送下去，戰鬥中才飄得出
+ * 那個 +20。判定用 wordProgress 的 timesIncorrect——錯過就算，
+ * 不管是在練習還是遊戲裡錯的。
+ *
+ * boxLevel 已經很高（複習系統認為學會了）的字就不算了：那些不再是「不會的字」，
+ * 繼續給五倍等於獎勵刷已經會的東西，正是 §0 要避免的。
+ */
+const RELEARN_MASTERED_BOX = 4;
+
+async function relearnIdsFor(userId, groupId) {
+  const wordIds = wordBank.wordsByGroup(groupId).map((w) => w.id);
+  if (!wordIds.length) return [];
+  const rows = await WordProgress.getForUser(userId, wordIds);
+  return rows
+    .filter((r) => (r.timesIncorrect || 0) > 0 && (r.boxLevel || 0) < RELEARN_MASTERED_BOX)
+    .map((r) => r.wordId);
+}
 
 /** 這一組現在開不開得起來。遊戲頁載入時問這一支。 */
 router.get('/access', async (req, res, next) => {
@@ -25,14 +63,27 @@ router.get('/access', async (req, res, next) => {
     const group = wordBank.listGroups().find((g) => g.id === groupId);
     if (!group) return res.status(404).json({ error: '找不到這一組單字' });
 
-    const progress = await GroupProgress.getForGroup(req.user._id, groupId);
+    const [progress, relearn, { levelFromXp, levelRewards }] = await Promise.all([
+      GroupProgress.getForGroup(req.user._id, groupId),
+      relearnIdsFor(req.user._id, groupId),
+      levels()
+    ]);
+    const totalXp = req.user.xp || 0;
+    const lv = levelFromXp(totalXp);
     res.json({
       group: { id: group.id, label: group.label, count: group.count },
       unlocked: progress.unlocked,
       practiceCompletions: progress.practiceCompletions,
       completionsNeeded: progress.completionsNeeded,
       unlockAfter: GroupProgress.UNLOCK_AFTER_COMPLETIONS,
-      bestScore: progress.bestScore
+      bestScore: progress.bestScore,
+      /* C2：開打前要知道自己幾級、經驗條在哪、哪些字是重學的 */
+      level: lv.level,
+      xp: totalXp,
+      xpInto: lv.into,
+      xpNeed: lv.need,
+      rewards: levelRewards(lv.level),
+      relearnIds: relearn
     });
   } catch (err) {
     next(err);
@@ -47,7 +98,20 @@ router.get('/access', async (req, res, next) => {
  */
 router.post('/result', async (req, res, next) => {
   try {
-    const { opId, groupId, score, accuracy, won, wordsKilled, wordsMissed } = req.body || {};
+    const {
+      opId,
+      groupId,
+      score,
+      accuracy,
+      won,
+      wordsKilled,
+      wordsMissed,
+      /* C2：經驗值的算式材料。總分不收——收了等於讓前端自己決定升幾級 */
+      correctLetters,
+      wrongLetters,
+      longKills,
+      relearns
+    } = req.body || {};
     if (!opId) return res.status(400).json({ error: '缺少 opId' });
     if (!groupId) return res.status(400).json({ error: '缺少 groupId' });
     if (!wordBank.wordsByGroup(groupId).length) {
@@ -82,6 +146,11 @@ router.post('/result', async (req, res, next) => {
         won: !!won,
         wordsKilled: Math.max(0, Number(wordsKilled) || 0),
         wordsMissed: Math.max(0, Number(wordsMissed) || 0),
+        // 經驗的算式材料也存下來，之後要調曲線才有真實資料可以回頭算
+        correctLetters: Math.max(0, Number(correctLetters) || 0),
+        wrongLetters: Math.max(0, Number(wrongLetters) || 0),
+        longKills: Math.max(0, Number(longKills) || 0),
+        relearns: Math.max(0, Number(relearns) || 0),
         finishedAt: new Date()
       });
     } catch (err) {
@@ -92,11 +161,61 @@ router.post('/result', async (req, res, next) => {
       throw err;
     }
 
+    /*
+     * 經驗值由伺服器自己算，不收前端算好的總分。
+     *
+     * 而且每一項材料都夾在「這一組打得出來的上限」之內：
+     *   - 字母數不可能超過整組所有字母的總長度
+     *   - 擊殺數不可能超過字數
+     *   - 重學數不可能超過伺服器自己那份名單的長度
+     * 最後那條特別重要——它是五倍經驗的來源，不夾住的話，
+     * 前端送一個 relearns: 9999 就能一次升到破表。
+     */
+    const groupWords = wordBank.wordsByGroup(groupId);
+    const maxLetters = groupWords.reduce((a, w) => a + String(w.english || '').length, 0);
+    const ownRelearn = await relearnIdsFor(req.user._id, groupId);
+
+    const safeKills = clamp(Number(wordsKilled) || 0, 0, groupSize);
+    const stats = {
+      correctLetters: clamp(Number(correctLetters) || 0, 0, maxLetters),
+      kills: safeKills,
+      longKills: clamp(Number(longKills) || 0, 0, safeKills),
+      relearns: clamp(Number(relearns) || 0, 0, Math.min(safeKills, ownRelearn.length)),
+      wordCount: groupSize,
+      won: !!won,
+      /*
+       * 完美是伺服器自己判的，不是前端說了算：
+       * 打完整組、一個字都沒漏、一個字母都沒打錯。
+       */
+      perfect:
+        !!won &&
+        (Number(wordsMissed) || 0) === 0 &&
+        (Number(wrongLetters) || 0) === 0
+    };
+
+    const { xpForBattle, levelFromXp, levelRewards } = await levels();
+    const beforeXp = req.user.xp || 0;
+    const beforeLevel = levelFromXp(beforeXp).level;
+    const xpGained = xpForBattle(stats);
+    const afterXp = await User.addXp(req.user._id, xpGained);
+    const after = levelFromXp(afterXp);
+
     const progress = await GroupProgress.recordGameResult(req.user._id, groupId, {
       score: safeScore,
       accuracy: safeAccuracy
     });
-    res.json({ progress });
+    res.json({
+      progress,
+      /* 結算畫面要說「這一場賺了多少經驗、有沒有升級」 */
+      xpGained,
+      xp: afterXp,
+      level: after.level,
+      xpInto: after.into,
+      xpNeed: after.need,
+      leveledUp: after.level > beforeLevel,
+      levelsGained: Math.max(0, after.level - beforeLevel),
+      rewards: levelRewards(after.level)
+    });
   } catch (err) {
     next(err);
   }

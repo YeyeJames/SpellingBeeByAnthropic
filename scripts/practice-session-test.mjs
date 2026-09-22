@@ -117,6 +117,26 @@ function fakeCollection(name) {
       }
       return { matchedCount: 0 };
     },
+    /*
+     * 遊戲模式加經驗用的是 findOneAndUpdate（$inc 要原子，兩場同時回報時
+     * 讀-改-寫會讓其中一場的經驗憑空消失）。這個假的一開始沒有這個方法，
+     * 結果整支測試以 500「findOneAndUpdate is not a function」失敗——
+     * 那不是程式錯，是這個測試替身不完整。
+     *
+     * driver 6 的回傳是文件本身（不是 { value }），這裡照它的形狀回。
+     */
+    findOneAndUpdate: async (query = {}, update = {}, opts = {}) => {
+      const hit = rows.find((d) => matches(d, query));
+      if (!hit) {
+        if (!opts.upsert) return null;
+        const created = applyUpdate({ ...query, _id: new ObjectId() }, update);
+        rows.push(created);
+        return created;
+      }
+      const before = { ...hit };
+      applyUpdate(hit, update);
+      return opts.returnDocument === 'before' ? before : hit;
+    },
     deleteOne: async () => ({ deletedCount: 0 }),
     createIndex: async () => 'ok'
   };

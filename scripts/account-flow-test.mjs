@@ -269,6 +269,76 @@ console.log('\n9) 分數記在各自的帳號底下');
     JSON.stringify(sisterScores.body.totals));
 }
 
+/* ── 9.5 經驗值也是各記各的，而且由伺服器說了算（C2） ───── */
+console.log('\n9.5) 等級與經驗');
+{
+  const { xpForBattle, levelFromXp } = await import('../public/js/shared/levels.js');
+  const wordBank = require('../server/data/word-bank.js');
+  const groupSize = wordBank.wordsByGroup(GROUP).length;
+
+  const before = await call('GET', `/api/game/access?group=${GROUP}`, { as: sister });
+  check('開場是 1 級', before.body.level === 1, `Lv${before.body.level}`);
+  check('access 會帶重學名單下來（新帳號是空的）',
+    Array.isArray(before.body.relearnIds) && before.body.relearnIds.length === 0,
+    JSON.stringify(before.body.relearnIds));
+
+  const body = {
+    opId: 'xp-1', groupId: GROUP, score: 100, accuracy: 1, won: true,
+    wordsKilled: groupSize, wordsMissed: 0,
+    correctLetters: 40, wrongLetters: 0, longKills: 2, relearns: 0
+  };
+  const r = await call('POST', '/api/game/result', { as: sister, body });
+  const expected = xpForBattle({
+    correctLetters: 40, kills: groupSize, longKills: 2, relearns: 0,
+    wordCount: groupSize, won: true, perfect: true
+  });
+  check('伺服器算出來的經驗跟共用公式一致', r.body.xpGained === expected,
+    `${r.body.xpGained} vs ${expected}`);
+  check('等級跟著累計經驗走', r.body.level === levelFromXp(r.body.xp).level,
+    `Lv${r.body.level}、${r.body.xp} XP`);
+
+  /*
+   * 重學數要被夾住。
+   *
+   * 那是五倍經驗的來源：不夾的話，前端送一個 relearns: 9999 就能一次升到破表。
+   * 這個帳號的名單是空的，所以上限是 0。
+   */
+  const cheatRelearn = await call('POST', '/api/game/result', {
+    as: sister,
+    body: { ...body, opId: 'xp-cheat-relearn', relearns: 9999 }
+  });
+  check('灌水的重學數會被夾成 0（名單是空的）',
+    cheatRelearn.body.xpGained === expected,
+    `${cheatRelearn.body.xpGained} vs ${expected}`);
+
+  /*
+   * 字母數也要夾，但夾的上限是「整組所有字母的長度」，不是這一場打了幾個。
+   * 所以灌水之後經驗會變多——只是不會變成無限大。
+   * （第一版把兩個夾在同一次請求裡測，結果分不出是哪一個在動。）
+   */
+  const maxLetters = wordBank
+    .wordsByGroup(GROUP)
+    .reduce((a, w) => a + String(w.english || '').length, 0);
+  const ceiling = xpForBattle({
+    correctLetters: maxLetters, kills: groupSize, longKills: 2, relearns: 0,
+    wordCount: groupSize, won: true, perfect: true
+  });
+  const cheatLetters = await call('POST', '/api/game/result', {
+    as: sister,
+    body: { ...body, opId: 'xp-cheat-letters', correctLetters: 999999 }
+  });
+  check('灌水的字母數會被夾到整組的字母總長',
+    cheatLetters.body.xpGained === ceiling,
+    `${cheatLetters.body.xpGained} vs 上限 ${ceiling}（整組 ${maxLetters} 個字母）`);
+
+  // 重送同一場不可以再加一次經驗
+  const beforeDup = cheatLetters.body.xp;
+  const dup = await call('POST', '/api/game/result', { as: sister, body });
+  check('重送不會再加一次經驗', dup.body.duplicate === true, JSON.stringify(dup.body.duplicate));
+  const after = await call('GET', `/api/game/access?group=${GROUP}`, { as: sister });
+  check('重送之後累計經驗沒變', after.body.xp === beforeDup, `${beforeDup} → ${after.body.xp}`);
+}
+
 /* ── 10. 刪帳號 ─────────────────────────────────────────── */
 console.log('\n10) 刪帳號');
 {

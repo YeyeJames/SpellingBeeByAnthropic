@@ -17,6 +17,14 @@ async function createUser(nickname) {
     activeTheme: DEFAULT_THEME,
     audioPrefs: { bgmVolume: 0.5, sfxVolume: 0.8, muted: false },
     coins: 0,
+    /*
+     * 遊戲模式的等級與經驗（C2）。
+     *
+     * 只存累計經驗，等級一律由 shared/levels.js 的曲線算出來——
+     * 兩個都存的話遲早會對不起來，而那種不一致最難查：
+     * 經驗條看起來滿了，等級卻沒動。
+     */
+    xp: 0,
     stats: {
       totalWordsPracticed: 0,
       totalCorrect: 0,
@@ -31,6 +39,28 @@ async function createUser(nickname) {
   };
   const result = await collection().insertOne(doc);
   return { ...doc, _id: result.insertedId };
+}
+
+/**
+ * 加經驗值，回傳更新後的累計。
+ *
+ * 用 $inc 而不是讀出來加一加再寫回去：兩場同時回報（重送、多分頁）時，
+ * 讀-改-寫會讓其中一場的經驗憑空消失。等級不存，由累計經驗算出來。
+ *
+ * 舊帳號沒有 xp 欄位，$inc 會自己補上，不用另外做資料遷移。
+ */
+async function addXp(id, amount) {
+  const gain = Math.max(0, Math.round(Number(amount) || 0));
+  if (!gain) {
+    const user = await findById(id);
+    return user ? user.xp || 0 : 0;
+  }
+  const r = await collection().findOneAndUpdate(
+    { _id: new ObjectId(id) },
+    { $inc: { xp: gain } },
+    { returnDocument: 'after', projection: { xp: 1 } }
+  );
+  return (r && (r.value ? r.value.xp : r.xp)) || gain;
 }
 
 async function findByNickname(nickname) {
@@ -152,6 +182,7 @@ module.exports = {
   touchLastLogin,
   updateAudioPrefs,
   applyAttemptResult,
+  addXp,
   addOwnedItem,
   equipItem,
   unequipAccessory,

@@ -15,6 +15,7 @@
  */
 
 import { BALANCE, knockbackMsFor } from './core/balance.js';
+import { XP, levelRewards } from '../shared/levels.js';
 
 /**
  * 毫秒寫成小孩看得懂的秒數：1500 →「1.5 秒」、620 →「0.62 秒」。
@@ -85,6 +86,22 @@ export function buildRules(difficulty = BALANCE.defaultDifficulty) {
         `打掉一隻蟲　　　　+${h.perKill}`,
         `${h.longWordFrom} 個字母以上的長單字　再 +${h.longWordBonus}`,
         `狂蜂狀態中拿到的蜂蜜全部 ×${c.frenzyHoneyFactor}。`
+      ]
+    },
+    {
+      icon: '⬆️',
+      title: '等級與經驗值',
+      lines: [
+        '左上角血條下面那條紫色的細線就是經驗條，滿了就升一級。',
+        `打對一個字母 +${XP.perCorrectLetter}　打掉一隻蟲 +${XP.perKill}　${XP.longWordFrom} 個字母以上再 +${XP.longWordBonus}`,
+        /*
+         * 這一行是整個經驗設計的重點，所以在說明裡也要講得最清楚。
+         * 就算他不看說明，戰鬥中那句「學回來了！+20 XP」也會告訴他同一件事。
+         */
+        `⭐ 以前打錯過的字，這次打對 +${XP.relearnBonus}　——一隻普通的蟲 ${XP.perKill} 分，這種 ${XP.perKill + XP.relearnBonus} 分，差五倍。`,
+        `打完整組再加「字數 ×${XP.perWordOnClear}」；完全沒失誤的話整場經驗 ×${XP.perfectFactor}。`,
+        `每升一級，打對字母把蟲推回去的距離 +${Math.round(levelRewards(2).knockbackFactor * 100 - 100)}%；練到 ${levelRewards(1).nextHpAt} 級多一顆血。`,
+        '等級只會讓同樣的字更好打，不會讓你少打字母。'
       ]
     },
     {

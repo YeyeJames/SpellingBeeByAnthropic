@@ -19,6 +19,7 @@ import { samplePerf } from './perf.js';
 import { createEffects } from './effects.js';
 import { ENEMY_KINDS, enemyKindFor } from './core/enemy-kind.js';
 import { createRng } from './core/rng.js';
+import { levelFromXp, levelRewards } from '../shared/levels.js';
 
 const SCAFFOLD_NOTE = '（靜音或裝置沒有語音時才顯示）';
 
@@ -126,6 +127,20 @@ const TRAIL_BAD_COLOR = '#f87171';
 
 /* 敵人減速中的光環。冰藍色，跟橫幅同一個色系，看得出是同一件事 */
 const SLOW_AURA_COLOR = 0x67e8f9;
+
+/*
+ * 等級與經驗條（C2）。
+ *
+ * 進度感是這一段要補的東西：他打贏一場之後，系統本來什麼都不會改變。
+ * 經驗條放在血條旁邊，因為那是他唯一會固定瞄的角落。
+ */
+const XP_BAR_COLOR = 0x8b5cf6;
+const XP_BAR_BG = 0x2c2340;
+/* 升級橫幅。比 Combo 的久一點——升級比較少發生，也比較值得停一下 */
+const LEVEL_UP_MS = 2000;
+const LEVEL_UP_FADE_MS = 500;
+/* 重學回來的字：飄一行特別的字，讓他發現「這種字特別賺」 */
+const RELEARN_COLOR = '#a78bfa';
 
 /* 事件帶的是代號，代價表的鍵是字串，這張表把兩者對起來 */
 const LISTEN_COST_KEY = {
@@ -491,6 +506,32 @@ export function createBattleScene(ctx) {
       this.lastTrailWord = -1;
       this.lastTrailStatus = '';
 
+      /*
+       * 等級與經驗條。
+       *
+       * 放在血條那一側，跟拼字那一排上下排好——那個角落是他本來就會瞄的地方。
+       * 經驗條刻意做得比能量條細：它是「長期」的東西，不該跟「這個字打到哪了」
+       * 搶注意力。
+       */
+      this.levelText = this.add
+        .text(0, 0, 'Lv 1', {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '18px',
+          color: '#c4b5fd'
+        })
+        .setOrigin(0, 0.5);
+      this.xpBarBg = this.add.rectangle(0, 0, 10, 8, XP_BAR_BG).setOrigin(0, 0.5);
+      this.xpBarFill = this.add.rectangle(0, 0, 10, 8, XP_BAR_COLOR).setOrigin(0, 0.5);
+      this.lastLevelShown = -1;
+      this.lastXpRatio = -1;
+
+      /* 升級橫幅 */
+      this.levelUpText = this.add
+        .text(0, 0, '', { fontFamily: 'system-ui, sans-serif', fontSize: '34px', color: '#c4b5fd' })
+        .setOrigin(0.5)
+        .setAlpha(0);
+      this.levelUpRemainMs = 0;
+
       this.energyBg = this.add.rectangle(0, 0, 10, 14, 0x000000, 0.35).setOrigin(0, 0.5);
       this.energyFill = this.add.rectangle(0, 0, 10, 14, 0x6ee7b7).setOrigin(0, 0.5);
 
@@ -634,6 +675,18 @@ export function createBattleScene(ctx) {
        * 對齊很重要：兩排東西左邊切齊，讀起來才是「同一組狀態」。
        */
       this.trailText.setPosition(width * 0.06 - 11, hudY + 34);
+      /*
+       * 等級與經驗條：拼字那一排再下面一層，左緣一樣切齊。
+       * 三排上下對齊讀起來才是「同一組狀態」：命、拼到哪、練到幾級。
+       */
+      const xpLeft = width * 0.06 - 11;
+      this.levelText.setPosition(xpLeft, hudY + 66);
+      const xpBarLeft = xpLeft + 58;
+      const xpBarW = Math.min(180, Math.max(90, width * 0.12));
+      this.xpBarBg.setPosition(xpBarLeft, hudY + 66).setSize(xpBarW, 8);
+      this.xpBarFill.setPosition(xpBarLeft, hudY + 66).setSize(1, 8);
+      this.xpBarWidth = xpBarW;
+      this.levelUpText.setPosition(width * 0.5, height * 0.26);
 
       const barW = Math.min(520, width * 0.4);
       this.energyBg.setPosition(width * 0.5 - barW / 2, hudY).setSize(barW, 16);
@@ -665,6 +718,8 @@ export function createBattleScene(ctx) {
 
       this.listenText.setFontSize(Math.round(18 * ui));
       this.trailText.setFontSize(Math.round(24 * ui));
+      this.levelText.setFontSize(Math.round(18 * ui));
+      this.levelUpText.setFontSize(Math.round(34 * ui));
       this.wordText.setPosition(width * 0.5, height * 0.3);
       this.scaffoldNote.setPosition(width * 0.5, height * 0.3 + 40 * ui);
       // 貼在題目上方：看得到，又不跟下面那疊提示文字搶位置
@@ -732,6 +787,7 @@ export function createBattleScene(ctx) {
         this.updatePenaltyDash(delta);
         this.updateListenBanner(delta);
         this.updateTrailFlash(delta);
+        this.updateLevelUpBanner(delta);
         this.updateWaitingLine(state, delta);
         this.updateBonusBanner(state, delta);
         this.updateParallax(delta);
@@ -929,6 +985,46 @@ export function createBattleScene(ctx) {
            * 結束訊息），不需要在這裡另外演出；登記一筆是因為對帳表只認事件，
            * 不登記會被誤判成「只有聲音沒有畫面」。
            */
+          case EV.RELEARNED: {
+            /*
+             * 以前錯過、這次打對。
+             *
+             * 這是 §6 的重點：普通的蟲 5 XP，這種 25 XP。他不需要懂這個設計，
+             * 他只要發現「有些字打掉特別賺」，然後自己去找那些字。
+             * 所以這一行一定要飄得夠醒目，而且要講出「學回來了」這件事，
+             * 不能只飄一個數字——數字他不會知道是為什麼。
+             */
+            this.effects.floatText(`學回來了！+${ev.b} XP`, this.enemy.x, this.enemy.y - 122, {
+              color: RELEARN_COLOR,
+              scale: 1.35,
+              fan: false
+            });
+            vfx(ev);
+            break;
+          }
+          case EV.LEVEL_UP:
+            this.levelUpText.setText(`⬆️ 升到 ${ev.a} 級！`);
+            this.levelUpRemainMs = LEVEL_UP_MS;
+            this.cameras.main.flash(140, 160, 130, 250, false);
+            /*
+             * 每 5 級 +1 血，升到的那一級要講出來。
+             *
+             * 不講的話他只會看到一個數字變大，不知道自己實際上多了什麼——
+             * 而「我變強了」才是繼續打下去的理由。
+             */
+            {
+              const before = levelRewards(ev.a - 1);
+              const now = levelRewards(ev.a);
+              if (now.bonusHp > before.bonusHp) {
+                this.effects.floatText('❤️ 生命上限 +1', this.enemy.x, this.enemy.y - 160, {
+                  color: '#fca5a5',
+                  scale: 1.3,
+                  fan: false
+                });
+              }
+            }
+            vfx(ev);
+            break;
           case EV.COMBO_UP:
           case EV.HP_LOST:
             vfx(ev);
@@ -1020,6 +1116,18 @@ export function createBattleScene(ctx) {
       // easeOutCubic：一開始衝得快、收尾慢下來，像被撞了一下往前滑
       const eased = 1 - (1 - k) ** 3;
       this.penaltyLag = this.penaltyLagFrom * (1 - eased);
+    }
+
+    /** 升級橫幅：亮一下就淡掉。比 Combo 久一點——升級比較少發生。 */
+    updateLevelUpBanner(delta) {
+      if (this.levelUpRemainMs <= 0) return;
+      this.levelUpRemainMs -= delta;
+      if (this.levelUpRemainMs <= 0) {
+        this.levelUpRemainMs = 0;
+        this.levelUpText.setAlpha(0);
+        return;
+      }
+      this.levelUpText.setAlpha(Math.min(1, this.levelUpRemainMs / LEVEL_UP_FADE_MS));
     }
 
     /** 重聽提示：亮一下就淡掉，不擋住題目。 */
@@ -1147,6 +1255,9 @@ export function createBattleScene(ctx) {
       // 上一場的減速光環不可以留到新的一場
       this.lastSlowed = false;
       this.slowAura.setFillStyle(SLOW_AURA_COLOR, 0);
+      // 升級橫幅同理，上一場的不可以留下來
+      this.levelUpRemainMs = 0;
+      this.levelUpText.setAlpha(0);
       // 拼字那一排也要歸零，否則新的一場開場會掛著上一場最後那幾個字母
       this.trailBadMs = 0;
       this.lastTrailTyped = -1;
@@ -1233,6 +1344,24 @@ export function createBattleScene(ctx) {
 
       const ratio = state.target.length ? state.typed / state.target.length : 0;
       this.energyFill.setSize(Math.max(1, this.energyBarWidth * ratio), 16);
+
+      /*
+       * 等級與經驗條。
+       *
+       * 經驗條在戰鬥中就會漲——打完一整場才結算的話，中間那二十分鐘完全
+       * 沒有進度感，而進度感正是 C2 要補的東西。
+       * 跟其他文字一樣，只有值真的變了才 setText。
+       */
+      if (state.level !== this.lastLevelShown) {
+        this.lastLevelShown = state.level;
+        this.levelText.setText(`Lv ${state.level}`);
+      }
+      const lv = levelFromXp(state.totalXp);
+      const xpRatio = lv.need > 0 ? lv.into / lv.need : 0;
+      if (Math.abs(xpRatio - this.lastXpRatio) > 0.002) {
+        this.lastXpRatio = xpRatio;
+        this.xpBarFill.setSize(Math.max(1, this.xpBarWidth * xpRatio), 8);
+      }
 
       /*
        * 已經拼對的字母。

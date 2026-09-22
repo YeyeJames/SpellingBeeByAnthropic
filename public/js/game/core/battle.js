@@ -13,6 +13,7 @@
 import { BALANCE, crossMsFor, knockbackMsFor } from './balance.js';
 import { createRng, shuffleInPlace } from './rng.js';
 import { isTypeableChar, isSeparator } from './charset.js';
+import { XP, levelFromXp, levelRewards } from '../../shared/levels.js';
 
 /* 事件類型。用數字而不是字串，是為了讓事件緩衝區可以完全不配置記憶體。 */
 export const EV = {
@@ -28,7 +29,22 @@ export const EV = {
   LISTEN: 10,
   BATTLE_END: 11,
   /* Combo 里程碑：a = 第幾階（1 衝刺 / 2 蜜糖 / 3 狂蜂） */
-  COMBO_BONUS: 12
+  COMBO_BONUS: 12,
+  /*
+   * 升級。a = 新的等級。
+   *
+   * 等級在戰鬥中就會漲：打完一整場才顯示的話，中間那二十分鐘完全沒有
+   * 進度感，而進度感正是 C2 要補的東西。伺服器收到成績後會用同一條公式
+   * 重算一次，以它為準。
+   */
+  LEVEL_UP: 13,
+  /*
+   * 以前錯過、這次打對的字。a = wordIndex，b = 給了多少經驗。
+   *
+   * 這是 §6 的重點：一隻普通的蟲 5 XP，一個重學回來的字 25 XP。
+   * 事件獨立一個型別，畫面才演得出「這一隻特別值錢」。
+   */
+  RELEARNED: 14
 };
 
 export const EV_NAME = Object.fromEntries(Object.entries(EV).map(([k, v]) => [v, k]));
@@ -82,7 +98,26 @@ export function createBattle({
   seed = 1,
   difficulty = BALANCE.defaultDifficulty,
   order = 'sequential',
-  maxHp = BALANCE.maxHp
+  maxHp = BALANCE.maxHp,
+  /*
+   * 開打時的等級與累計經驗。
+   *
+   * 等級會改變戰鬥本身（擊退倍率、血量上限），所以它必須是「開場設定」的
+   * 一部分、而且要進錄影檔——不進的話，同一份錄影在他升級之後重播就會
+   * 跑出不一樣的結果，確定性與「剛剛怪怪的」那顆按鈕同時失效。
+   *
+   * 預設 1 級 = 擊退 1.0 倍、沒有額外血量，跟 C2 之前完全一樣，
+   * 所以舊的錄影檔重播出來的指紋不會變。
+   */
+  level = 1,
+  xp = 0,
+  /*
+   * 以前錯過的字（wordId 的集合）。打對這些字給 relearnBonus 經驗。
+   *
+   * 名單由伺服器在開打前給（它才知道 wordProgress），前端只負責照著算，
+   * 這樣戰鬥中就能即時飄分。伺服器收到成績時會用自己那份名單重算。
+   */
+  relearnIds = null
 } = {}) {
   if (!Array.isArray(words) || words.length === 0) {
     throw new Error('createBattle 需要至少一個單字');
@@ -92,13 +127,38 @@ export function createBattle({
   const queue = words.map((_, i) => i);
   if (order === 'random') shuffleInPlace(queue, rng);
 
+  /*
+   * 等級加成在這裡一次算好。
+   *
+   * 每一步再去查一次表也可以，但那等於把「等級」變成戰鬥迴圈裡的依賴；
+   * 開場算好放進 state 之後，戰鬥邏輯只看到兩個數字，跟 C2 之前一樣單純。
+   */
+  const rewards = levelRewards(level);
+  const effectiveMaxHp = maxHp + rewards.bonusHp;
+  /*
+   * 名單轉成 Set 才查得快，但外面傳進來的可能是陣列（錄影檔就是陣列）。
+   * 空名單用 null 表示，戰鬥迴圈裡一個判斷就跳過，不必建空物件。
+   */
+  const relearnSet =
+    relearnIds && relearnIds.size !== 0 && relearnIds.length !== 0
+      ? relearnIds instanceof Set
+        ? relearnIds
+        : new Set(relearnIds)
+      : null;
+
   const state = {
     // 設定（建立後不再變動）
     words,
     seed,
     difficulty,
     order,
-    maxHp,
+    maxHp: effectiveMaxHp,
+    /* 開場的等級與加成。等級會在戰鬥中上升，startLevel 保留開場那一個， */
+    /* 因為擊退倍率與血量上限是開場就定好的——中途變動會讓重播對不起來。 */
+    startLevel: level,
+    startXp: xp,
+    levelKnockback: rewards.knockbackFactor,
+    relearnSet,
 
     // 亂數狀態：一起算進指紋，才能證明兩次跑法完全一致
     rng,
@@ -110,10 +170,17 @@ export function createBattle({
     timeMs: 0,
 
     // 戰況
-    hp: maxHp,
+    hp: effectiveMaxHp,
     combo: 0,
     maxCombo: 0,
     honey: 0,
+    /*
+     * 經驗值。xp 是這一場賺到的，totalXp 是累計（開場那筆 + 這一場）。
+     * 分開存是因為結算畫面要說「這一場賺了多少」，而經驗條畫的是累計。
+     */
+    xp: 0,
+    totalXp: xp,
+    level,
     status: 'running', // running | won | lost
 
     // 目前這個字
@@ -140,7 +207,10 @@ export function createBattle({
       backspaces: 0,
       wordsKilled: 0,
       wordsMissed: 0,
-      listens: 0
+      listens: 0,
+      // 經驗值要伺服器能自己重算，所以把算式的每一項都獨立記下來
+      longKills: 0,
+      relearns: 0
     },
 
     // 事件緩衝區（渲染端每個影格讀完就歸零）
@@ -156,6 +226,7 @@ function startNextWord(state) {
   if (state.queueHead >= state.queue.length) {
     state.status = 'won';
     state.wordIndex = -1;
+    awardClearXp(state);
     emit(state, EV.BATTLE_END, 1);
     return;
   }
@@ -180,9 +251,41 @@ function startNextWord(state) {
   emit(state, EV.WORD_START, wi);
 }
 
-/** 狂蜂狀態期間擊退三倍。 */
+/**
+ * 擊退倍率 = 狂蜂狀態 × 等級加成。
+ *
+ * 兩者相乘而不是相加：狂蜂是「這幾秒特別強」，等級是「我本來就比較強」，
+ * 相乘才會讓高等級的狂蜂真的更猛，也才符合「力量買的是容錯」——
+ * 不管幾級，要打的字母數一個都沒少。
+ */
 function knockbackFactor(state) {
-  return state.frenzyMs > 0 ? BALANCE.combo.frenzyKnockbackFactor : 1;
+  const frenzy = state.frenzyMs > 0 ? BALANCE.combo.frenzyKnockbackFactor : 1;
+  return frenzy * state.levelKnockback;
+}
+
+/**
+ * 加經驗，順便處理升級。
+ *
+ * 升級在戰鬥中就會發生——打完一整場才結算的話，中間那二十分鐘完全沒有
+ * 進度感，而進度感正是 C2 要補的東西。
+ */
+function addXp(state, amount) {
+  if (amount <= 0) return;
+  state.xp += amount;
+  state.totalXp += amount;
+  const nextLevel = levelFromXp(state.totalXp).level;
+  /*
+   * 升級只改「顯示用」的等級，不改 levelKnockback 與 maxHp。
+   *
+   * 那兩個是開場就定好的（見 createBattle）：中途變動會讓同一份錄影檔在
+   * 不同時間重播跑出不同結果，確定性與「剛剛怪怪的」那顆按鈕會同時失效。
+   * 這一場的加成下一場才生效——對玩的人來說也比較好懂：
+   * 「我升級了，下一場更強」，而不是打到一半突然變順。
+   */
+  while (state.level < nextLevel) {
+    state.level += 1;
+    emit(state, EV.LEVEL_UP, state.level);
+  }
 }
 
 /** 狂蜂狀態期間蜂蜜兩倍。 */
@@ -214,6 +317,27 @@ function applyComboMilestone(state) {
   }
 }
 
+/**
+ * 打完整組的經驗：完成獎勵 + 完美倍率。
+ *
+ * 這一段一定要跟伺服器的 xpForBattle() 算出完全一樣的數字。
+ * 少了它，畫面上會顯示 173 XP、伺服器卻記 300——而那種不一致的症狀
+ * 最難解釋：打完看到一個數字，重新整理之後變成另一個。
+ *
+ * （第一版就是這樣漏掉的：前端只逐字加，完成獎勵與完美倍率只寫在伺服器那邊。）
+ */
+function awardClearXp(state) {
+  addXp(state, state.words.length * XP.perWordOnClear);
+  const s = state.stats;
+  const perfect = s.wordsMissed === 0 && s.wrongLetters === 0;
+  if (!perfect) return;
+  /*
+   * 倍率套在「這一場賺到的全部經驗」上，所以算的是差額再補進去。
+   * 用 Math.round 跟 xpForBattle() 同一個做法，才不會差一分。
+   */
+  addXp(state, Math.round(state.xp * XP.perfectFactor) - state.xp);
+}
+
 /** 把敵人往前推 ms 毫秒的距離（打錯、重聽的代價都走這裡）。 */
 function pushEnemy(state, ms) {
   state.progress += ms / state.crossMs;
@@ -226,6 +350,33 @@ function killWord(state) {
   if (len >= BALANCE.honey.longWordFrom) gained += BALANCE.honey.longWordBonus * hf;
   state.honey += gained;
   state.stats.wordsKilled += 1;
+
+  /*
+   * 經驗值：擊殺 + 長字，兩者都不吃狂蜂倍率。
+   *
+   * 蜂蜜吃倍率是因為它是「這一場的爽度」，經驗不吃是因為它是「長期的成長」——
+   * 讓狂蜂也加倍的話，最划算的玩法會變成「想辦法一直維持狂蜂」，
+   * 而那跟把不會的字學會完全無關。
+   */
+  let xpGained = XP.perKill;
+  const isLong = len >= XP.longWordFrom;
+  if (isLong) xpGained += XP.longWordBonus;
+  if (isLong) state.stats.longKills += 1;
+
+  /*
+   * ⭐ 以前錯過、這次打對。§6 的重點：普通的蟲 5 XP，這種 25 XP。
+   *
+   * 打完就從名單移除，同一場之內重複遇到（漏掉的字會排回隊伍尾端）
+   * 不會再給一次——不然最賺的玩法會變成「故意漏掉再補打」。
+   */
+  const wordId = state.words[state.wordIndex]?.id;
+  if (state.relearnSet && wordId && state.relearnSet.has(wordId)) {
+    state.relearnSet.delete(wordId);
+    state.stats.relearns += 1;
+    xpGained += XP.relearnBonus;
+    emit(state, EV.RELEARNED, state.wordIndex, XP.relearnBonus);
+  }
+  addXp(state, xpGained);
 
   if (state.cleanWord) {
     state.combo += 1;
@@ -332,6 +483,8 @@ export function applyAction(state, action) {
         state.stats.correctLetters += 1;
         const letterHoney = BALANCE.honey.perCorrectLetter * honeyFactor(state);
         state.honey += letterHoney;
+        // 經驗不吃狂蜂倍率（理由見 killWord）
+        addXp(state, XP.perCorrectLetter);
         // 擊退：往回推，但不會推到畫面外。狂蜂狀態期間三倍
         state.progress -= (knockbackMsFor(state.difficulty) * knockbackFactor(state)) / state.crossMs;
         if (state.progress < 0) state.progress = 0;
@@ -433,6 +586,17 @@ export function fingerprint(state) {
   mix(s.wordsKilled);
   mix(s.wordsMissed);
   mix(s.listens);
+  /*
+   * 經驗值也要進指紋。
+   *
+   * 它不影響這一場的物理，但它是重播必須重現的結果之一——漏掉的話，
+   * 「重播出來的指紋一樣」就不再代表「這一場真的一模一樣」了。
+   * 等級加成（擊退、血量）本來就會透過 progress 與 hp 反映出來。
+   */
+  mix(s.longKills);
+  mix(s.relearns);
+  mix(state.xp);
+  mix(state.level);
   return h >>> 0;
 }
 
@@ -443,8 +607,15 @@ export function snapshot(state) {
     timeMs: Math.round(state.timeMs),
     status: state.status,
     hp: state.hp,
+    maxHp: state.maxHp,
     combo: state.combo,
     honey: state.honey,
+    // 等級與經驗：HUD 的經驗條與升級演出都看這幾個
+    level: state.level,
+    startLevel: state.startLevel,
+    xp: state.xp,
+    totalXp: state.totalXp,
+    levelKnockback: Number(state.levelKnockback.toFixed(3)),
     progress: Number(state.progress.toFixed(4)),
     crossMs: Math.round(state.crossMs),
     wordIndex: state.wordIndex,

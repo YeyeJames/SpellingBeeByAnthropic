@@ -26,6 +26,19 @@ export function createRecorder(setup) {
       difficulty: setup.difficulty,
       order: setup.order,
       maxHp: setup.maxHp,
+      /*
+       * 等級與重學名單也要存。
+       *
+       * 它們會改變這一場的結果（等級影響擊退與血量上限，名單影響經驗），
+       * 不存的話，同一份錄影在他升級之後重播就會跑出不一樣的東西——
+       * 而「剛剛怪怪的」那顆按鈕的全部價值，就是重播出來要跟他看到的一樣。
+       *
+       * 舊的錄影檔沒有這兩個欄位，replayLog 會退回 1 級與空名單，
+       * 也就是 C2 之前的行為，所以舊檔重播的指紋不會變。
+       */
+      level: setup.level || 1,
+      xp: setup.xp || 0,
+      relearnIds: setup.relearnIds ? [...setup.relearnIds] : [],
       wordIds: setup.wordIds.slice()
     },
     // 每筆 [tick, kind, payload]，用陣列而不是物件，錄影檔才不會大得誇張
@@ -69,7 +82,11 @@ export function replayLog(log, words, { maxTicks = 60 * 120 * 30 } = {}) {
     seed: log.setup.seed,
     difficulty: log.setup.difficulty,
     order: log.setup.order,
-    maxHp: log.setup.maxHp
+    maxHp: log.setup.maxHp,
+    // 舊錄影檔沒有這幾個欄位，退回 C2 之前的行為（1 級、空名單）
+    level: log.setup.level || 1,
+    xp: log.setup.xp || 0,
+    relearnIds: log.setup.relearnIds || null
   });
 
   const entries = log.entries;

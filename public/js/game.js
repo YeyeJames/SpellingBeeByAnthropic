@@ -10,6 +10,8 @@
 
 import { loadPhaser } from './game/load-phaser.js';
 import { createBattle, applyAction } from './game/core/battle.js';
+import { BALANCE } from './game/core/balance.js';
+import { levelFromXp } from './shared/levels.js';
 import { createRecorder, recordAction, serializeLog } from './game/core/recorder.js';
 import { createInput, isTouchDevice } from './game/input.js';
 import { createInputQueue, enqueueInput, drainInput, clearInputQueue } from './game/input-queue.js';
@@ -82,6 +84,13 @@ const ctx = {
   groupLabel: '',
   // 進遊戲之前這一組的最高分，結算拿它比「破紀錄了沒」
   bestBefore: 0,
+  /*
+   * 等級、累計經驗、以前錯過的字（C2）。
+   * 由 /api/game/access 帶下來；拿不到就是 1 級、空名單，等同 C2 之前的行為。
+   */
+  level: 1,
+  xp: 0,
+  relearnIds: null,
   paused: false,
   scene: null,
   phaserGame: null,
@@ -310,7 +319,17 @@ function startBattle() {
     words: ctx.words,
     seed: ctx.seed,
     difficulty: ctx.difficulty,
-    order: ctx.order
+    order: ctx.order,
+    /*
+     * 等級與重學名單來自 /api/game/access。
+     *
+     * 拿不到（離線、沒登入、資料庫在睡）就是 1 級、空名單——也就是 C2 之前
+     * 的行為。遊戲本來就刻意做成「資料庫掛了也打得開」，等級不該是例外：
+     * 少了成長很可惜，打不開是災難。
+     */
+    level: ctx.level,
+    xp: ctx.xp,
+    relearnIds: ctx.relearnIds
   });
   /*
    * 換一場之前先把上一場收進這次開機的檔案櫃。
@@ -323,7 +342,16 @@ function startBattle() {
     seed: ctx.seed,
     difficulty: ctx.difficulty,
     order: ctx.order,
-    maxHp: ctx.state.maxHp,
+    /*
+     * 錄的是「基礎血量」，不是加成後的。
+     *
+     * ctx.state.maxHp 已經含了等級給的血；連同 level 一起錄下去的話，
+     * 重播時加成會被套兩次。錄基礎值，等級的部分由 level 在重播時自己算。
+     */
+    maxHp: BALANCE.maxHp,
+    level: ctx.level,
+    xp: ctx.xp,
+    relearnIds: ctx.relearnIds,
     wordIds: ctx.words.map((w) => w.id)
   });
   ctx.paused = false;
@@ -620,22 +648,62 @@ function showPostgame(state, won) {
   const best = ctx.bestBefore || 0;
   const isBest = state.honey > best;
 
+  /*
+   * 每一列是 { 標題, 數字, 要不要highlight, 後綴 }。
+   *
+   * highlight 與「破紀錄」原本是同一個旗標，結果經驗值那幾列也被寫上
+   * 「（破紀錄！）」——經驗每一場都在漲，那三個字放在它旁邊完全沒有意義。
+   * 分開之後，要亮的就亮，該講的話各自講各自的。
+   */
   const rows = [
-    ['🍯 蜂蜜', String(state.honey), isBest],
-    ['🐝 打掉的字', `${s.wordsKilled} 個`, false],
-    ['💨 漏掉的字', `${s.wordsMissed} 個`, false],
-    ['🎯 字母正確率', `${accuracy}%`, false]
+    { label: '🍯 蜂蜜', value: String(state.honey), hot: isBest, note: isBest ? '破紀錄！' : '' },
+    { label: '🐝 打掉的字', value: `${s.wordsKilled} 個` },
+    { label: '💨 漏掉的字', value: `${s.wordsMissed} 個` },
+    { label: '🎯 字母正確率', value: `${accuracy}%` }
   ];
-  if (best > 0) rows.push([isBest ? '🏆 原本最高' : '🏆 最高紀錄', String(best), false]);
+  if (best > 0) {
+    rows.push({ label: isBest ? '🏆 原本最高' : '🏆 最高紀錄', value: String(best) });
+  }
+
+  /*
+   * 經驗值與等級（C2）。
+   *
+   * 「賺到多少經驗」要跟「離下一級還差多少」放在一起——只寫賺了多少，
+   * 他不會知道那算多還是少；寫出還差多少，下一場就有了一個具體的目標。
+   */
+  const lv = levelFromXp(state.totalXp);
+  const leveled = state.level > state.startLevel;
+  rows.push({ label: '⬆️ 這場經驗', value: `+${state.xp} XP`, hot: leveled });
+  rows.push({
+    label: leveled ? `🎉 升到 ${state.level} 級` : `📈 等級 ${state.level}`,
+    value: `還差 ${Math.max(0, lv.need - lv.into)} XP`,
+    hot: leveled,
+    note: leveled ? `升了 ${state.level - state.startLevel} 級` : ''
+  });
+  /*
+   * 重學回來的字單獨一列。
+   *
+   * 這是整個經驗設計想要他多做的行為（一個 25 XP，普通的字 5 XP），
+   * 所以做到了就要在結算上被看見。一個都沒有的時候不列——
+   * 列一個 0 出來只是噪音。
+   */
+  if (s.relearns > 0) {
+    rows.push({
+      label: '⭐ 學回來的字',
+      value: `${s.relearns} 個`,
+      hot: true,
+      note: '以前錯過的'
+    });
+  }
 
   const box = document.getElementById('postgame-stats');
   if (box) {
     box.innerHTML = rows
       .map(
-        ([label, value, hot]) =>
-          `<div class="stat-row${hot ? ' is-best' : ''}"><span>${escapeHtml(label)}${
-            hot ? '（破紀錄！）' : ''
-          }</span><b>${escapeHtml(value)}</b></div>`
+        (r) =>
+          `<div class="stat-row${r.hot ? ' is-best' : ''}"><span>${escapeHtml(r.label)}${
+            r.note ? `（${escapeHtml(r.note)}）` : ''
+          }</span><b>${escapeHtml(r.value)}</b></div>`
       )
       .join('');
   }
@@ -673,7 +741,7 @@ async function reportResult(state, won) {
   const s = state.stats;
   const letters = s.correctLetters + s.wrongLetters;
   try {
-    await fetch('/api/game/result', {
+    const res = await fetch('/api/game/result', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
@@ -684,12 +752,37 @@ async function reportResult(state, won) {
         accuracy: letters > 0 ? s.correctLetters / letters : 0,
         won,
         wordsKilled: s.wordsKilled,
-        wordsMissed: s.wordsMissed
+        wordsMissed: s.wordsMissed,
+        /*
+         * 經驗值的算式材料。刻意不送前端算好的總分——
+         * 送了等於讓瀏覽器自己決定要升幾級。伺服器用同一個
+         * shared/levels.js 重算，而且每一項都夾在這一組的上限之內。
+         */
+        correctLetters: s.correctLetters,
+        wrongLetters: s.wrongLetters,
+        longKills: s.longKills,
+        relearns: s.relearns
       })
     });
+    if (res.ok) {
+      const data = await res.json();
+      /*
+       * 以伺服器為準。
+       *
+       * 前端在戰鬥中是用同一條公式即時算的，正常情況下兩邊一樣；
+       * 但「重送的那一場」伺服器會回 duplicate 且不再加經驗，
+       * 這時候就必須聽它的，否則重整一次經驗又會對不上。
+       */
+      if (typeof data.xp === 'number') {
+        ctx.xp = data.xp;
+        ctx.level = Number(data.level) || ctx.level;
+      }
+      return data;
+    }
   } catch (err) {
     /* 記不到分數就算了，不要擋住結算畫面 */
   }
+  return null;
 }
 
 /** 有真人錄音的單字 id。拿不到就回空集合，代表全部用機器語音。 */
@@ -749,6 +842,10 @@ async function boot() {
      * bestScore 已經把這一場算進去了，拿它來比永遠都是平手。
      */
     ctx.bestBefore = Number(access.bestScore) || 0;
+    // C2：等級與重學名單。離線或拿不到時維持 1 級、空名單
+    ctx.level = Number(access.level) || 1;
+    ctx.xp = Number(access.xp) || 0;
+    ctx.relearnIds = Array.isArray(access.relearnIds) ? access.relearnIds : null;
 
     const [words] = await Promise.all([fetchWords(), loadPhaser()]);
     // Phase 1 只要少量單字就夠驗證手感，不用一次上 25 個
