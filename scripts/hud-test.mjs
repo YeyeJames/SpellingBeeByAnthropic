@@ -347,7 +347,18 @@ console.log('\n6.8) Combo 三階看得見');
   check('效果真的發動了', shown.dashMs > 0, `${shown.dashMs}ms`);
   check('橫幅說出是什麼效果', shown.banner.includes('蜂群衝刺'), shown.banner);
   check('橫幅看得見', shown.bannerAlpha > 0.5, String(shown.bannerAlpha));
-  check('效果進行中有常駐標示', shown.label.includes('衝刺中'), shown.label || '（空的）');
+  /*
+   * 標示要講出「誰變慢了」。
+   *
+   * 原本寫「🐝 衝刺中」，但變慢的是敵人不是他——兒子試玩時對這個效果
+   * 完全沒有感覺，文案讀成「我在衝刺」也是原因之一。
+   * 這裡只認「敵人」與「慢」，不綁死整句文案。
+   */
+  check(
+    '效果進行中有常駐標示，而且寫出是敵人變慢',
+    shown.label.includes('敵人') && shown.label.includes('慢'),
+    shown.label || '（空的）'
+  );
 
   // 效果結束後標示要收掉，不然他會以為還在加成
   await page.waitForFunction(() => window.__spellbee.state().dashMs === 0, null, { timeout: 10000 });

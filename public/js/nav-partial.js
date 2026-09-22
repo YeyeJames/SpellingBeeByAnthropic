@@ -168,6 +168,17 @@ export function refreshNavCoins(delta) {
   if (coinsEl) coinsEl.textContent = `🪙 ${currentCoins}`;
 }
 
+/*
+ * 目前的金幣總數。
+ *
+ * 這個數字比 currentUser.coins 準：它會在答對的當下先樂觀加上去，
+ * 伺服器回來再校正。練習結算畫面要寫「存款總共幾枚」，用 currentUser 的話，
+ * 最後幾題還在佇列裡沒送出去，寫出來的數字會比他剛剛看到的還小。
+ */
+export function getNavCoins() {
+  return currentCoins;
+}
+
 export function setNavCoins(amount) {
   currentCoins = amount;
   if (coinsEl) coinsEl.textContent = `🪙 ${currentCoins}`;

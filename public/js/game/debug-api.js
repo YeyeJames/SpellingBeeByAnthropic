@@ -186,6 +186,19 @@ export function installDebugApi(ctx) {
     },
 
     /**
+     * 敵人身上的減速光環在不在。
+     *
+     * 連到 5 的獎勵是「敵人速度 −50%、3 秒」，但打得順的時候時間本來就充裕，
+     * 慢一半根本感覺不出來。光環是唯一看得見的證據，所以要驗得到。
+     */
+    slowAura() {
+      const s = ctx.scene;
+      if (!s || !s.slowAura) return { visible: false, alpha: 0 };
+      const alpha = s.slowAura.fillAlpha ?? 0;
+      return { visible: alpha > 0.01, alpha: Number(alpha.toFixed(3)) };
+    },
+
+    /**
      * 那一排的座標，以及第一顆血點的座標。
      * 用來驗「真的在血條下面、真的在畫面內」——比截圖比對耐得住字型變動。
      */

@@ -26,7 +26,7 @@
     "test:hud": "node scripts/hud-test.mjs",
     "test:miss": "node scripts/miss-reveal-test.mjs",
     "test:practice": "node scripts/practice-session-test.mjs",
-    "test:all": "node scripts/validate-words.mjs && node scripts/practice-session-test.mjs && node scripts/account-flow-test.mjs && node scripts/home-page-test.mjs && node scripts/theme-test.mjs && node scripts/game-gate-test.mjs && node scripts/determinism.mjs && node scripts/input-test.mjs && node scripts/audio-test.mjs && node scripts/speech-test.mjs && node scripts/calibrate-test.mjs && node scripts/group-test.mjs && node scripts/hud-test.mjs && node scripts/rules-test.mjs && node scripts/feedback-test.mjs && node scripts/trail-test.mjs && node scripts/analyze-test.mjs && node scripts/miss-reveal-test.mjs && node scripts/enemy-queue-test.mjs && node scripts/bgm-test.mjs && node scripts/layout-test.mjs && node scripts/slow-cpu-test.mjs && node scripts/parity-test.mjs && node scripts/sim.mjs",
+    "test:all": "node scripts/validate-words.mjs && node scripts/practice-session-test.mjs && node scripts/account-flow-test.mjs && node scripts/home-page-test.mjs && node scripts/theme-test.mjs && node scripts/game-gate-test.mjs && node scripts/determinism.mjs && node scripts/input-test.mjs && node scripts/audio-test.mjs && node scripts/speech-test.mjs && node scripts/calibrate-test.mjs && node scripts/group-test.mjs && node scripts/hud-test.mjs && node scripts/rules-test.mjs && node scripts/feedback-test.mjs && node scripts/trail-test.mjs && node scripts/playtest-fixes-test.mjs && node scripts/analyze-test.mjs && node scripts/miss-reveal-test.mjs && node scripts/enemy-queue-test.mjs && node scripts/bgm-test.mjs && node scripts/layout-test.mjs && node scripts/slow-cpu-test.mjs && node scripts/parity-test.mjs && node scripts/sim.mjs",
     "test:layout": "node scripts/layout-test.mjs",
     "test:slowcpu": "node scripts/slow-cpu-test.mjs",
     "test:queue": "node scripts/enemy-queue-test.mjs",
@@ -38,6 +38,7 @@
     "test:theme": "node scripts/theme-test.mjs",
     "test:feedback": "node scripts/feedback-test.mjs",
     "test:trail": "node scripts/trail-test.mjs",
+    "test:playtest": "node scripts/playtest-fixes-test.mjs",
     "analyze": "node scripts/analyze-log.mjs",
     "test:analyze": "node scripts/analyze-test.mjs",
     "test:speech": "node scripts/speech-test.mjs"

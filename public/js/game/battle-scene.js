@@ -124,6 +124,9 @@ const TRAIL_BAD_MS = 260;
 const TRAIL_COLOR = '#f5b301';
 const TRAIL_BAD_COLOR = '#f87171';
 
+/* 敵人減速中的光環。冰藍色，跟橫幅同一個色系，看得出是同一件事 */
+const SLOW_AURA_COLOR = 0x67e8f9;
+
 /* 事件帶的是代號，代價表的鍵是字串，這張表把兩者對起來 */
 const LISTEN_COST_KEY = {
   [LISTEN_KIND.REPLAY]: 'replay',
@@ -443,6 +446,19 @@ export function createBattleScene(ctx) {
 
       // 敵人包成 Container：移動容器時裡面的裂痕必然跟著走
       this.enemy = this.add.container(0, 0);
+      /*
+       * 減速光環。連到 5 的獎勵是「敵人速度 −50%、3 秒」。
+       *
+       * 橫幅會把這句話寫出來，但接下來三秒畫面上什麼都沒變——唯一的提示是
+       * 右上角一個 16px 的小字。他打得順的時候時間本來就很充裕，
+       * 速度慢一半根本感覺不出來，於是那三秒等於沒發生。
+       *
+       * 所以把效果畫在敵人身上：他的眼睛本來就盯著那隻蟲。
+       * 畫在本體後面、而且不動 tint——tint 是受擊閃白在用的，兩邊搶會互相蓋掉。
+       */
+      this.slowAura = this.add.circle(0, 0, 52, SLOW_AURA_COLOR, 0);
+      this.enemy.add(this.slowAura);
+      this.lastSlowed = false;
       this.enemyBody = this.makeEnemyBody(ENEMY_KINDS[0].key);
       this.enemyKind = '';
       this.enemy.add(this.enemyBody);
@@ -1091,9 +1107,22 @@ export function createBattleScene(ctx) {
         }
       }
 
+      /*
+       * 減速中：敵人身上罩一層冰藍光環，還會呼吸。
+       * 用遊戲時間當相位，暫停時會跟著停（跟危險線同一個做法）。
+       */
+      const slowed = state.dashMs > 0;
+      if (slowed) {
+        this.slowAura.setFillStyle(SLOW_AURA_COLOR, 0.22 + 0.16 * Math.sin(state.timeMs * 0.013));
+      } else if (this.lastSlowed) {
+        this.slowAura.setFillStyle(SLOW_AURA_COLOR, 0);
+      }
+      this.lastSlowed = slowed;
+
       // 只有在狀態真的改變時才動 DOM／文字，避免每格配置字串
       let label = '';
-      if (state.dashMs > 0) label = '🐝 衝刺中';
+      // 「衝刺中」會被讀成「我在衝刺」，但變慢的是敵人——直接寫誰慢了
+      if (state.dashMs > 0) label = '🐌 敵人慢一半';
       else if (state.frenzyMs > 0) label = '🔥 狂蜂中';
       else if (state.sweetActive) label = '🍯 蜜糖時間';
       else if (state.sweetNext) label = '🍯 下個字加倍';
@@ -1115,6 +1144,14 @@ export function createBattleScene(ctx) {
       this.penaltyLag = 0;
       this.lastEffectLabel = null;
       this.effectLabel.setText('');
+      // 上一場的減速光環不可以留到新的一場
+      this.lastSlowed = false;
+      this.slowAura.setFillStyle(SLOW_AURA_COLOR, 0);
+      // 拼字那一排也要歸零，否則新的一場開場會掛著上一場最後那幾個字母
+      this.trailBadMs = 0;
+      this.lastTrailTyped = -1;
+      this.lastTrailWord = -1;
+      this.lastTrailStatus = '';
     }
 
     /** 敵人被擊中時的擠壓與閃白，自己算不用 tween。 */

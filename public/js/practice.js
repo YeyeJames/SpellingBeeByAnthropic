@@ -1,6 +1,6 @@
 import { api } from './api.js';
 import { requireLogin } from './auth.js';
-import { mountNav, refreshNavCoins, setNavCoins } from './nav-partial.js';
+import { mountNav, refreshNavCoins, setNavCoins, getNavCoins } from './nav-partial.js';
 import {
   playWordAudio,
   speakSentence,
@@ -317,7 +317,7 @@ async function fetchReviewCount() {
 async function showQuestion() {
   const word = session.words[session.index];
   progressLabel.textContent = `${session.index + 1} / ${session.words.length}`;
-  sessionCoinBadge.textContent = `🪙 ${session.sessionCoins}`;
+  sessionCoinBadge.textContent = `本回 🪙 ${session.sessionCoins}`;
   answerInput.value = '';
   answerInput.disabled = false;
   submitBtn.disabled = false;
@@ -369,7 +369,7 @@ function submitAnswer() {
   const coinsAwarded = correct ? 10 + Math.floor(session.streak / 5) * 5 : 0;
 
   session.sessionCoins += coinsAwarded;
-  sessionCoinBadge.textContent = `🪙 ${session.sessionCoins}`;
+  sessionCoinBadge.textContent = `本回 🪙 ${session.sessionCoins}`;
   if (coinsAwarded) refreshNavCoins(coinsAwarded);
 
   if (correct) {
@@ -416,8 +416,28 @@ async function nextQuestion() {
 }
 
 function finishSession() {
-  // 總結畫面用本地資料立刻顯示；作答紀錄由背景佇列負責送出
-  summaryText.textContent = `這次練習了 ${session.words.length} 個單字，總共賺到 ${session.sessionCoins} 枚金幣！`;
+  /*
+   * 練習結束，背景音樂也要結束。
+   *
+   * 原本只有 startBgm() 沒有對應的 stop，所以做完一組回到清單，音樂還在
+   * 那邊循環播放——他第一次玩就問「怎麼背景音樂還在」。音樂是「正在練習」
+   * 的訊號，練完還在響，這個訊號就沒有意義了。
+   */
+  sound.stopBgm();
+
+  /*
+   * 這一次賺到多少，以及總共存了多少。
+   *
+   * 本來只寫「總共賺到 N 枚」——但那個 N 是**這一次**的，每次練完都歸零重算。
+   * 他練了三次、每次都看到差不多的數字，就問「錢怎麼還是只有 300」。
+   * 「總共」這兩個字放在只算一場的數字前面，等於在騙他。
+   * 兩個數字一起寫出來，累積的那個才看得到自己在變大。
+   */
+  const total = getNavCoins();
+  summaryText.textContent =
+    typeof total === 'number'
+      ? `這次練習了 ${session.words.length} 個單字，賺到 ${session.sessionCoins} 枚金幣！存款總共 ${total} 枚。`
+      : `這次練習了 ${session.words.length} 個單字，賺到 ${session.sessionCoins} 枚金幣！`;
 
   /*
    * 整組做完才算練過一次——解鎖遊戲靠的就是這個計數。

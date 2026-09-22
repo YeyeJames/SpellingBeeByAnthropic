@@ -77,7 +77,15 @@
     <div class="panel container hidden" id="practice-panel">
       <div class="practice-topbar">
         <span id="progress-label" class="display-font">1 / 25</span>
-        <span class="coin-badge" id="session-coin-badge">🪙 0</span>
+        <!--
+          「這一回賺到的」，不是存款總數。
+
+          原本兩邊都寫成「🪙 N」：上面導覽列那個是存款總數，這個只算這一回、
+          每次練習都從 0 開始。長得一模一樣，他就把這個當成存款，
+          練了三次看到的數字都差不多，於是問「錢怎麼還是只有 300」。
+          加上「本回」兩個字，兩個數字才分得開。
+        -->
+        <span class="coin-badge" id="session-coin-badge">本回 🪙 0</span>
       </div>
       <div id="game-container"></div>
       <!-- 聽力輔助：跟真實比賽一樣，選手可以要求再唸一次、放慢、或用在句子裡 -->

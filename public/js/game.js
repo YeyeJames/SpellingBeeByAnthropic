@@ -80,6 +80,8 @@ const ctx = {
   difficulty: storedDifficulty() || 'normal',
   order: storedOrder() || 'sequential',
   groupLabel: '',
+  // 進遊戲之前這一組的最高分，結算拿它比「破紀錄了沒」
+  bestBefore: 0,
   paused: false,
   scene: null,
   phaserGame: null,
@@ -104,6 +106,7 @@ const ctx = {
   /** 一場結束。畫面端在 BATTLE_END 時呼叫。 */
   onBattleEnd(state, won) {
     reportResult(state, won);
+    showPostgame(state, won);
   },
 
   getState: () => ctx.state,
@@ -260,6 +263,15 @@ const ctx = {
   },
 
   restart(opts = {}) {
+    /*
+     * 結算畫面要收掉。
+     *
+     * 重開有兩條路——結算上的「再打一場」與工具列的「重開一場」。
+     * 只在前者收的話，從工具列重開會讓結算蓋在新的一場上面，整場看不見也打不到。
+     */
+    const post = document.getElementById('postgame');
+    if (post) post.hidden = true;
+    setChromeAbovePostgame(false);
     ctx.seed = opts.seed != null ? opts.seed >>> 0 : (Math.random() * 0xffffffff) >>> 0;
     if (opts.difficulty) ctx.difficulty = opts.difficulty;
     if (opts.order) ctx.order = opts.order;
@@ -561,6 +573,95 @@ async function fetchGroupAccess(group) {
 }
 
 /**
+ * 結算畫面。
+ *
+ * 他第一次打完的第一句話是「然後要怎麼回去」——原本打完只有畫布中央
+ * 一行字，出口是上方工具列那顆小小的「← 回練習」，而那一排是刻意做小的
+ * （平常不會看）。成就感最高的那一刻卻是唯一沒有出口的地方。
+ *
+ * 所以這裡做三件事：講結果、講成績、把下一步直接攤開。
+ */
+/*
+ * 結算蓋出來的時候，把下面那條工具列抬到它上面。
+ *
+ * 結算是整片 position:fixed inset:0，會把工具列整條蓋住——而工具列上有
+ * 「剛剛怪怪的」，那是他覺得哪裡不對時按的錄影下載鍵。打完一場正是最想按
+ * 那一顆的時刻，卻剛好是它被蓋住的時刻。靜音與回練習同理。
+ *
+ * 只動結算這一個畫面：開場那一片本來就該擋住工具列（那時候按「重開一場」
+ * 會在戰鬥還沒建立的情況下重開）。
+ */
+function setChromeAbovePostgame(on) {
+  const chrome = document.getElementById('game-chrome');
+  if (chrome) chrome.style.zIndex = on ? '25' : '';
+}
+
+function showPostgame(state, won) {
+  const el = document.getElementById('postgame');
+  if (!el || !state) return;
+
+  el.classList.toggle('is-lost', !won);
+  document.getElementById('postgame-title').textContent = won
+    ? '🎉 全部打完了！'
+    : '💥 蜂巢被攻破了';
+  document.getElementById('postgame-group').textContent = ctx.groupLabel
+    ? `${ctx.groupLabel}・${ORDER_LABELS[ctx.order] || ''}`
+    : '';
+
+  const s = state.stats;
+  const letters = s.correctLetters + s.wrongLetters;
+  const accuracy = letters > 0 ? Math.round((s.correctLetters / letters) * 100) : 0;
+  /*
+   * 破紀錄要單獨標出來。
+   *
+   * 「再打一場」需要一個理由，而「上次 820，這次 910」就是那個理由——
+   * 比任何文案都有效。第一次玩沒有舊紀錄，那就不要假裝有。
+   */
+  const best = ctx.bestBefore || 0;
+  const isBest = state.honey > best;
+
+  const rows = [
+    ['🍯 蜂蜜', String(state.honey), isBest],
+    ['🐝 打掉的字', `${s.wordsKilled} 個`, false],
+    ['💨 漏掉的字', `${s.wordsMissed} 個`, false],
+    ['🎯 字母正確率', `${accuracy}%`, false]
+  ];
+  if (best > 0) rows.push([isBest ? '🏆 原本最高' : '🏆 最高紀錄', String(best), false]);
+
+  const box = document.getElementById('postgame-stats');
+  if (box) {
+    box.innerHTML = rows
+      .map(
+        ([label, value, hot]) =>
+          `<div class="stat-row${hot ? ' is-best' : ''}"><span>${escapeHtml(label)}${
+            hot ? '（破紀錄！）' : ''
+          }</span><b>${escapeHtml(value)}</b></div>`
+      )
+      .join('');
+  }
+
+  /*
+   * 紀錄往上推。
+   *
+   * 不推的話，同一次開機打第二場時比的還是「進遊戲之前」那個舊紀錄——
+   * 他會在明明沒有超過剛剛那場的情況下又看到一次「破紀錄」。
+   */
+  if (isBest) ctx.bestBefore = state.honey;
+
+  const again = document.getElementById('postgame-again');
+  if (again) {
+    again.onclick = () => {
+      el.hidden = true;
+      ctx.sfx?.unlock();
+      // 換一顆新種子：同一組不會每次都照同樣的順序打
+      ctx.restart();
+    };
+  }
+  el.hidden = false;
+  setChromeAbovePostgame(true);
+}
+
+/**
  * 打完一場，把分數記在這個帳號底下。
  *
  * 失敗就算了——分數沒記到很可惜，但絕對不該讓結算畫面卡住或跳錯誤。
@@ -641,6 +742,13 @@ async function boot() {
       showLocked(access);
       return;
     }
+    /*
+     * 開打前的最高分先記下來。
+     *
+     * 結算要說「破紀錄了」，就得知道紀錄是多少——而打完之後伺服器回的
+     * bestScore 已經把這一場算進去了，拿它來比永遠都是平手。
+     */
+    ctx.bestBefore = Number(access.bestScore) || 0;
 
     const [words] = await Promise.all([fetchWords(), loadPhaser()]);
     // Phase 1 只要少量單字就夠驗證手感，不用一次上 25 個

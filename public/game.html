@@ -142,6 +142,33 @@
   </div>
 
   <!--
+    一場結束之後。
+
+    原本打完什麼都沒有：畫布中央寫一行「全部打完了！」，然後就停在那裡。
+    他第一次打完的反應是「然後要怎麼回去」——唯一的出口是上面工具列那個
+    小小的「← 回練習」，而那一排的樣式註解自己就寫著「平常不會看，所以小一點」。
+    打完是這一場最有成就感的一刻，卻是整個流程裡唯一沒有出口的地方。
+
+    所以結算獨立成一個畫面，跟開場同一套版面，而且把下一步直接列出來。
+  -->
+  <div id="postgame" hidden>
+    <strong id="postgame-title"></strong>
+    <p id="postgame-group"></p>
+    <div id="postgame-stats"></div>
+    <p class="pregame-hint">接下來要做什麼？</p>
+    <!--
+      樣式跟開場那兩顆一樣，但不共用 class——btn-order 的意思是「選出題順序」，
+      鎖定畫面那顆也是為了同樣的理由自己一個 class。
+      共用的話 querySelectorAll('.btn-order') 會連結算的按鈕一起撈進去
+      （hud-test 第一次跑就是這樣掛的）。
+    -->
+    <div id="postgame-actions">
+      <button type="button" id="postgame-again" class="btn-postgame">🔁 再打一場</button>
+      <a class="btn-postgame" id="postgame-practice" href="/practice.html">🎧 回練習挑別組</a>
+    </div>
+  </div>
+
+  <!--
     玩法說明。
     內容由 js/game/rules.js 從 balance.js 現場算出來——數字寫死在這裡的話，
     平衡一調說明就變成謊言，而且不會有任何錯誤，他只會照著過時的說明玩。
