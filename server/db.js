@@ -25,7 +25,35 @@ async function connectDB() {
   db = client.db();
   audioBucket = new GridFSBucket(db, { bucketName: 'audio' });
   await ensureIndexes(db);
+  await seedShopItems(db);
   return db;
+}
+
+/**
+ * 把程式碼裡那份商店清單寫進資料庫。
+ *
+ * 商店品項本來要手動跑 `npm run seed` 才會進資料庫，而 Render 上從來沒有
+ * 人跑過——兒子第一次玩就先跑去點商店想看有什麼，看到的是一片空白
+ * （shopItemCount 是 0）。商店是賺金幣的唯一理由，第一次點進去空白，
+ * 他學到的是「這裡沒東西」。
+ *
+ * 靜態資料不該需要額外的部署步驟：單字庫不用 seed 就能用，商店也一樣。
+ * 跟建索引放在一起，理由相同——兩者都是「這個資料庫要能用，就必須有」。
+ *
+ * upsert 是冪等的，每次啟動跑一次沒有副作用；失敗也不讓伺服器起不來，
+ * 商店空著比整個 app 打不開好得多。
+ */
+async function seedShopItems(database) {
+  try {
+    const { SHOP_ITEMS } = require('./data/shop-items');
+    await Promise.all(
+      SHOP_ITEMS.map((item) =>
+        database.collection('shopItems').updateOne({ key: item.key }, { $set: item }, { upsert: true })
+      )
+    );
+  } catch (err) {
+    console.error('⚠️ 商店品項寫入失敗（商店會是空的，其他功能不受影響）:', err.message);
+  }
 }
 
 async function ensureIndexes(database) {
@@ -79,4 +107,8 @@ function getClient() {
   return client;
 }
 
-module.exports = { connectDB, getDB, getAudioBucket, getClient };
+/*
+ * seedShopItems 對外開放是為了讓測試呼叫「真的那一個」。
+ * 測試自己抄一份 upsert 迴圈的話，程式壞了測試照樣會過。
+ */
+module.exports = { connectDB, getDB, getAudioBucket, getClient, seedShopItems };
