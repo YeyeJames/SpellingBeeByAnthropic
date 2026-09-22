@@ -1,6 +1,7 @@
 import { api } from './api.js';
 import { onSyncState } from './outbox.js';
 import { readShared, writeShared } from './local-store.js';
+import { updateCachedUser } from './auth.js';
 import * as sound from './sound-manager.js';
 
 let coinsEl = null;
@@ -46,6 +47,31 @@ export async function mountNav(user, activePage) {
 
   const activeLink = mountPoint.querySelector(`[data-nav="${activePage}"]`);
   if (activeLink) activeLink.classList.add('active');
+
+  /*
+   * 背景驗證回來之後，金幣要跟著校正。
+   *
+   * requireLogin() 為了不擋畫面，是先用快取把頁面畫出來、同時在背景
+   * 重抓一次 user。但以前沒有人聽那個結果，所以快取只要舊了，
+   * 導覽列就會一路顯示舊的數字直到下次重新整理——錢看起來就像變少了。
+   *
+   * 只在「伺服器比畫面多」時才蓋過去。
+   *
+   * 這趟請求是頁面剛載入的那一刻發出的，回來時可能已經過時了：Render 的
+   * 執行個體在睡覺時，api.js 會重試 503 長達二十秒，那段時間他早就答完
+   * 好幾題了。無條件覆蓋會把這幾題剛賺到的錢抹掉——又變成「錢變少」，
+   * 只是換一個原因。
+   *
+   * 扣錢的情況不靠這裡：商店買東西是由商店自己拿伺服器的回應呼叫
+   * setNavCoins()，那是明確的、當下的更新，不受這個條件影響。
+   */
+  window.addEventListener('user-refreshed', (e) => {
+    const fresh = e.detail;
+    if (!fresh || typeof fresh.coins !== 'number') return;
+    if (fresh.coins > currentCoins) setNavCoins(fresh.coins);
+    const nameEl = mountPoint.querySelector('[data-nav-nickname]');
+    if (nameEl && fresh.nickname) nameEl.textContent = fresh.nickname;
+  });
 
   // 同步狀態：讓家長看得出來練習紀錄有沒有真的存到伺服器
   const syncEl = mountPoint.querySelector('[data-sync-status]');
@@ -179,7 +205,14 @@ export function getNavCoins() {
   return currentCoins;
 }
 
+/**
+ * 伺服器確認過的金幣總數。
+ *
+ * 一定要一併寫回快取：換頁時 requireLogin() 是直接拿快取畫出來的，
+ * 不寫的話，他在這一頁看到 700 多，跳到下一頁又變回這一頁載入時的舊值。
+ */
 export function setNavCoins(amount) {
   currentCoins = amount;
   if (coinsEl) coinsEl.textContent = `🪙 ${currentCoins}`;
+  updateCachedUser({ coins: amount });
 }

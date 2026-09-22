@@ -52,6 +52,22 @@ async function loadItems() {
 
 function renderItems(items) {
   shopGrid.innerHTML = '';
+  /*
+   * 一件商品都沒有的時候要說話。
+   *
+   * 原本是直接畫一個空的格線——什麼都沒有、也沒有任何說明。商店品項是
+   * 要跑 `npm run seed` 才會進資料庫的，忘了跑（或換了資料庫）就會變這樣。
+   * 兒子第一次玩就是先跑去點商店想看有什麼；那一下要是看到一片空白，
+   * 他學到的是「這裡沒東西」，之後就不會再點了——而商店正是賺金幣的理由。
+   */
+  if (!items.length) {
+    const note = document.createElement('p');
+    note.className = 'muted';
+    note.style.gridColumn = '1 / -1';
+    note.textContent = '商店還沒有上架任何東西，晚點再來看看！';
+    shopGrid.appendChild(note);
+    return;
+  }
   items.forEach((item) => {
     const card = document.createElement('div');
     card.className = 'shop-card';

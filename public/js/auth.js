@@ -17,6 +17,24 @@ export function clearCachedUser() {
 }
 
 /**
+ * 就地改幾個欄位進快取。
+ *
+ * requireLogin() 為了不擋畫面，換頁時是直接回傳快取的 user；但練習途中
+ * 金幣是在記憶體裡加的，從來沒寫回快取。結果就是：練到 700 多，一跳到
+ * 單字庫又變回 680——那是這一頁載入時的舊值。錢**變少**對小孩來說
+ * 不是顯示問題，是「我的錢不見了」。
+ *
+ * 所以伺服器一確認新的金幣數，就順手更新快取，下一頁才會從對的數字開始。
+ */
+export function updateCachedUser(patch) {
+  const cached = getCachedUser();
+  if (!cached || !patch) return cached;
+  const next = { ...cached, ...patch };
+  writeShared(CACHE_KEY, next);
+  return next;
+}
+
+/**
  * 取得目前登入的使用者。
  * 只有「確定沒登入」(401) 才回傳 null；其他錯誤（伺服器掛掉、資料庫連不上）
  * 一律往外丟，讓頁面把錯誤顯示出來，而不是被誤判成「沒登入」。

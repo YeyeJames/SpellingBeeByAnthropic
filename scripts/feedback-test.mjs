@@ -126,9 +126,21 @@ console.log('\n2) 打錯的代價：紅字 + 蟲真的往前滑');
     `${before.progress} → ${after.progress}`
   );
 
-  // 0.32 秒內要追上
-  await page.waitForTimeout(700);
-  check('追上了（衝刺結束）', (await lag()) === 0, String(await lag()));
+  /*
+   * 0.32 秒內要追上。
+   *
+   * 兩個地方以前會偶發假失敗：
+   *   - 固定睡 700ms。衝刺是用時間算的，但整套測試一起跑時無頭瀏覽器的
+   *     影格會變稀疏，最後一格有時候就落在 700ms 之後。改成等條件成立。
+   *   - check() 原本呼叫 lag() 兩次——判斷一次、印出來又一次。兩次之間
+   *     值會變，所以出現過「判斷失敗但印出來是 0」這種看不懂的紀錄。
+   *     取樣一次，判斷與印出用同一個值。
+   */
+  await page
+    .waitForFunction(() => window.__spellbee.penaltyLag() === 0, null, { timeout: 3000 })
+    .catch(() => {});
+  const settled = await lag();
+  check('追上了（衝刺結束）', settled === 0, String(settled));
 }
 
 /* ── 3. 重聽的懲罰 ─────────────────────────────────────── */
