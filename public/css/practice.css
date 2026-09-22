@@ -19,6 +19,60 @@
   align-self: center;
 }
 
+/* 預設（窄螢幕）：一欄。這一條必須排在 media query 之前——
+   同樣的選擇器、同樣的特異度時，後面的會贏。 */
+.setup-columns {
+  display: flex;
+  flex-direction: column;
+}
+
+/*
+ * 電腦上把選組畫面攤開成兩欄。
+ *
+ * 原本整頁是一條 640px 置中的窄欄，28 組排成 4 欄要 8 列，於是
+ * 「開始練習」永遠被擠到摺線以下——每次都要先捲頁才按得到，
+ * 而那是這一頁唯一真正要按的東西。左右兩側卻是大片空白。
+ *
+ * 只有選組畫面變寬。練習中與結算畫面維持 640px：那兩頁的主角是
+ * 一個輸入框和一段文字，拉寬只會讓眼睛左右跑。
+ */
+@media (min-width: 900px) {
+  /*
+   * 外層那個 .container 有 max-width: 720px——**那才是真正的天花板**。
+   * 只放寬 #setup-panel 完全沒有用，它再怎麼寬也擠不出父層。
+   * （第一次改就是漏了這個，量出來還是 704px。）
+   *
+   * 直接放掉外層的限制就好，不必挑「現在顯示的是哪一個面板」：
+   * 練習中與結算那兩個面板自己有 max-width: 640px 與置中，
+   * 外層放寬不會影響它們。
+   */
+  body.fullscreen-page > .container {
+    max-width: none;
+  }
+
+  #setup-panel {
+    max-width: min(1180px, 96vw);
+  }
+
+  .setup-columns {
+    display: grid;
+    grid-template-columns: 1fr 268px;
+    gap: 0 1.6rem;
+    align-items: start;
+  }
+
+  /*
+   * 右欄黏在上面。組別很多時左邊會捲動，但「開始練習」要一直看得到——
+   * 這一條就是整個改動的重點。
+   */
+  .setup-side {
+    position: sticky;
+    top: 0;
+    padding-left: 1.4rem;
+    border-left: 1px solid var(--color-border);
+  }
+}
+
 /*
  * 內容放得下就置中，放不下就靠上——而且靠上時最上面那一段要捲得到。
  *
@@ -67,6 +121,21 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
   gap: 0.6rem;
+}
+
+/* 兩欄版面下右欄的按鈕要疊成一直排，才塞得進 268px */
+@media (min-width: 900px) {
+  .setup-side .setup-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .setup-side .order-picker {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .setup-side .order-picker label {
+    justify-content: flex-start;
+  }
 }
 
 /* 分隔「競賽單字」與「課本每週單字」，橫跨整排 */

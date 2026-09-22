@@ -37,6 +37,13 @@
       <!-- 小孩覺得「剛剛怪怪的」就按這個，我拿到錄影檔就能完整重現 -->
       <button type="button" id="btn-replay-file" class="chrome-btn">剛剛怪怪的</button>
       <button type="button" id="btn-mute" class="chrome-btn">🔊 聲音</button>
+      <!--
+        把單字寫在畫面上。
+        預設跟著「靜音或這台裝置沒有英文語音」自動決定，但一定要有一顆
+        看得到的按鈕：沒有喇叭的電腦上，原本唯一的解法是去按「靜音」，
+        那完全沒有道理，也沒有人猜得到。
+      -->
+      <button type="button" id="btn-show-word" class="chrome-btn">👁 顯示單字</button>
       <a class="chrome-link" href="/selftest">聲音檢查</a>
       <span id="seed-label" class="chrome-seed"></span>
       <span class="chrome-hint">↑再聽 ↓慢唸 →例句 · Esc 暫停 · F1 說明 · F2 靜音 · F3 除錯</span>
@@ -92,6 +99,18 @@
     <p id="pregame-count"></p>
     <!-- 最容易誤會的三件事，每一場都會看到一次 -->
     <div id="pregame-rules"></div>
+
+    <!--
+      開打前就要能決定聲音與顯示單字。
+      放在遊戲外框那一排是不夠的：等他找到按鈕，第一隻蟲已經撞進蜂巢了。
+      這兩顆不會開始遊戲，純粹是開關。
+    -->
+    <p class="pregame-hint">開始前先設定</p>
+    <div id="pregame-toggles">
+      <button type="button" id="pregame-mute" class="btn-toggle">🔊 聲音</button>
+      <button type="button" id="pregame-show-word" class="btn-toggle">🙈 不顯示單字</button>
+    </div>
+
     <p class="pregame-hint">要照課本順序，還是打亂？</p>
     <div id="pregame-order">
       <button type="button" class="btn-order" data-order="sequential">照順序</button>

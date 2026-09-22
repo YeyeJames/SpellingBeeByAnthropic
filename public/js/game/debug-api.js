@@ -107,7 +107,10 @@ export function installDebugApi(ctx) {
     },
 
     setMuted(v) {
-      return ctx.sfx?.setMuted(v);
+      const r = ctx.sfx?.setMuted(v);
+      // 靜音會改變「顯示單字」那顆按鈕的狀態（靜音時它是鎖住的），要一起重畫
+      ctx.refreshAudioButtons?.();
+      return r;
     },
 
     masterGain() {
@@ -116,6 +119,11 @@ export function installDebugApi(ctx) {
 
     showsWord() {
       return ctx.shouldShowWord();
+    },
+
+    /** 測試用：true/false 明確指定，null 交還給自動規則（靜音或沒語音才顯示）。 */
+    setShowWord(v) {
+      return ctx.setShowWord(v);
     },
 
     /** 這一場的題庫（已經濾掉含空白／連字號、打不出來的詞條）。 */

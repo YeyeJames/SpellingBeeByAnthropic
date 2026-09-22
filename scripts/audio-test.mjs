@@ -150,6 +150,101 @@ console.log('\n3) 靜音要真的安靜，而且單字改成顯示在畫面上')
   check('取消靜音後音量回來', restored > 0, String(restored));
 }
 
+/* ── 3.5 沒有喇叭的電腦 ─────────────────────────────────── */
+/*
+ * 回報：診所的電腦沒有喇叭，想用靜音模式測手感，結果一個字都看不到。
+ *
+ * 原本的規則是「靜音或這台裝置沒有英文語音才顯示單字」。規則本身沒錯，
+ * 但它把「看得到字」藏在一個講的是**聲音**的按鈕後面——Windows 上一定
+ * 裝得有語音，所以自動規則判定不用顯示；而他聽不到任何東西，畫面上又是
+ * 一片空白，唯一的解法竟然是去按「靜音」。沒有人猜得到。
+ *
+ * 這一段要開一個**獨立的頁面**：上面那些測試都帶 show=1，而那個參數
+ * 會蓋過一切（無頭瀏覽器沒有語音，不強制顯示就看不到題目），
+ * 在那種頁面上這顆按鈕怎麼按都不會變——第一次就是這樣假性失敗的。
+ */
+console.log('\n3.5) 沒喇叭也要能看得到單字');
+{
+  const ctx2 = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  // 重現診所電腦：有安裝英文語音、沒有靜音
+  await ctx2.addInitScript(() => {
+    localStorage.setItem('sb:v2:shared:gameMuted', JSON.stringify('0'));
+    localStorage.setItem('sb:v2:shared:gameDifficulty', JSON.stringify('easy'));
+    localStorage.removeItem('sb:v2:shared:gameShowWord');
+    const voices = [{ voiceURI: 'en1', lang: 'en-US', name: 'Stub', default: true, localService: true }];
+    Object.defineProperty(window, 'speechSynthesis', {
+      configurable: true,
+      value: {
+        speaking: false,
+        pending: false,
+        onvoiceschanged: null,
+        getVoices: () => voices,
+        cancel() {},
+        speak(u) { setTimeout(() => u.onend && u.onend(), 40); }
+      }
+    });
+  });
+  const page2 = await ctx2.newPage();
+
+  // 不帶 order= 才會停在開場畫面
+  await page2.goto(`${BASE}/game?group=p1&n=50&difficulty=easy`, { waitUntil: 'domcontentloaded' });
+  await page2.waitForSelector('#pregame:not([hidden])', { timeout: 15000 });
+
+  /*
+   * 開場畫面就要能選。只放在遊戲外框那一排是不夠的——
+   * 等他找到按鈕，第一隻蟲已經撞進蜂巢了。
+   */
+  check('開場畫面上就有聲音開關', (await page2.locator('#pregame-mute').count()) === 1);
+  check('開場畫面上就有顯示單字開關', (await page2.locator('#pregame-show-word').count()) === 1);
+
+  const read = () =>
+    page2.evaluate(() => ({
+      shows: window.__spellbee.showsWord(),
+      pregame: document.getElementById('pregame-show-word').textContent.trim(),
+      chrome: document.getElementById('btn-show-word').textContent.trim(),
+      disabled: document.getElementById('pregame-show-word').disabled
+    }));
+
+  const before = await read();
+  check('有語音又沒靜音時，預設不顯示單字（這就是他遇到的狀態）', before.shows === false, JSON.stringify(before));
+
+  await page2.click('#pregame-show-word');
+  await page2.waitForTimeout(200);
+  const on = await read();
+  check('按一下就看得到單字了', on.shows === true, JSON.stringify(on));
+  /*
+   * 按鈕上寫的要是**現在的狀態**，不是「按下去會變成什麼」。
+   * 寫成動作的話小孩會完全反過來理解。
+   */
+  check('按鈕寫的是現況', on.pregame.includes('👁'), on.pregame);
+  check('開場與外框那兩顆講同一件事', on.pregame === on.chrome, `${on.pregame} / ${on.chrome}`);
+
+  // 設定要能帶進戰鬥，不是只在開場畫面有效
+  await page2.click('[data-order="sequential"]');
+  await page2.waitForFunction(() => window.__spellbee && window.__spellbee.ready, null, { timeout: 15000 });
+  await page2.waitForTimeout(500);
+  const inBattle = await page2.evaluate(() => ({
+    shows: window.__spellbee.showsWord(),
+    alpha: window.__spellbeeScene.wordText.alpha,
+    text: window.__spellbeeScene.wordText.text
+  }));
+  check('開打之後單字真的畫出來了', inBattle.alpha === 1 && inBattle.text.length > 0,
+    JSON.stringify(inBattle));
+
+  /*
+   * 靜音又不顯示 = 完全沒得玩，而「靜音也要能玩」是硬性要求。
+   * 多按一下就會進到那個狀態，畫面上又不會有任何說明——
+   * 所以靜音時這顆要鎖住，而不是讓他按了沒反應。
+   */
+  await page2.evaluate(() => window.__spellbee.setMuted(true));
+  await page2.waitForTimeout(200);
+  const muted = await read();
+  check('靜音時一定顯示單字', muted.shows === true, JSON.stringify(muted));
+  check('而且關不掉（按鈕鎖住，不是按了沒反應）', muted.disabled === true, String(muted.disabled));
+
+  await ctx2.close();
+}
+
 /* ── 4. 三個聽力鍵 ──────────────────────────────────────── */
 console.log('\n4) 再聽／慢唸／例句都要有聲音，而且各自付出代價');
 {

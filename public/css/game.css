@@ -141,6 +141,13 @@ body {
   border-color: #47597a;
 }
 
+/* 顯示單字開著的時候要看得出來是「開著」，不然他分不清按鈕寫的是現況還是動作 */
+.chrome-btn.is-on {
+  background: #1f3a2e;
+  color: #6ee7b7;
+  border-color: #2f6b52;
+}
+
 .chrome-btn {
   background: #1e293b;
   color: #cbd5e1;
@@ -567,6 +574,69 @@ body.is-touch #listen-buttons {
   display: flex;
   gap: 0.8rem;
   margin-top: 0.6rem;
+}
+
+/*
+ * 矮螢幕（iPad 橫向叫出鍵盤只剩 430px 高）上，開場畫面現在多了兩排
+ * （設定標題 + 兩顆開關），「照順序／打亂」會被擠出畫面——
+ * 而那兩顆就是開始鍵，被擠掉等於整個遊戲開不了。
+ * 所以矮螢幕全面縮一級，並把三行濃縮規則收起來（F1 隨時查得到）。
+ */
+@media (max-height: 620px) {
+  #pregame {
+    gap: 0.25rem;
+    padding: 0.8rem 1.2rem;
+  }
+  #pregame strong {
+    font-size: 1.5rem;
+  }
+  #pregame-rules {
+    display: none;
+  }
+  .pregame-hint {
+    margin-top: 0.5rem !important;
+    font-size: 0.9rem;
+  }
+  #pregame-toggles {
+    margin-top: 0.2rem;
+  }
+  .btn-toggle {
+    padding: 0.35rem 0.8rem;
+    font-size: 0.85rem;
+  }
+  .btn-order {
+    padding: 0.5rem 1.1rem;
+    font-size: 0.95rem;
+  }
+}
+
+/* 開打前的開關。長得跟下面「開始」那兩顆不一樣，免得他以為按了就開始 */
+#pregame-toggles {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
+
+.btn-toggle {
+  background: #171f30;
+  color: #94a3b8;
+  border: 1px dashed #3b4a68;
+  border-radius: 999px;
+  padding: 0.5rem 1.1rem;
+  font-size: 0.98rem;
+  cursor: pointer;
+}
+
+.btn-toggle:hover {
+  background: #1e293b;
+}
+
+/* 開著的時候要看得出來，不然分不清按鈕寫的是現況還是動作 */
+.btn-toggle.is-on {
+  background: #1f3a2e;
+  color: #6ee7b7;
+  border-style: solid;
+  border-color: #2f6b52;
 }
 
 .btn-order,

@@ -32,32 +32,46 @@
     <div class="panel container" id="setup-panel">
       <h1>🎧 聽寫練習</h1>
 
-      <p class="setup-label">選擇要練習哪一組</p>
-      <div id="part-picker" class="part-picker"></div>
+      <!--
+        電腦上分兩欄：左邊選組別，右邊放設定與按鈕。
 
-      <p class="setup-label">出題順序</p>
-      <div class="order-picker">
-        <label><input type="radio" name="order" value="sequential" checked /> 📖 照順序</label>
-        <label><input type="radio" name="order" value="random" /> 🎲 隨機</label>
-      </div>
+        原本是一長條 640px 置中，28 組排成 4 欄要 8 列，
+        「開始練習」被擠到摺線以下——每次都要先捲頁才按得到，
+        而那是這一頁唯一真正要按的東西。兩欄之後左右的空白也用上了。
+        窄螢幕會自己收回成一欄（見 practice.css）。
+      -->
+      <div class="setup-columns">
+        <div class="setup-main">
+          <p class="setup-label">選擇要練習哪一組</p>
+          <div id="part-picker" class="part-picker"></div>
+        </div>
 
-      <p class="setup-label">朗讀方式</p>
-      <div class="order-picker">
-        <label><input type="radio" name="readMode" value="word" checked /> 🔤 只唸單字</label>
-        <label><input type="radio" name="readMode" value="competition" /> 🏆 競賽模式</label>
-      </div>
-      <p class="setup-hint">競賽模式會像真實比賽一樣：唸單字 → 用在例句中 → 再唸一次單字</p>
+        <div class="setup-side">
+          <p class="setup-label">出題順序</p>
+          <div class="order-picker">
+            <label><input type="radio" name="order" value="sequential" checked /> 📖 照順序</label>
+            <label><input type="radio" name="order" value="random" /> 🎲 隨機</label>
+          </div>
 
-      <div class="setup-actions">
-        <button class="btn gold" id="start-practice-btn" type="button">▶️ 開始練習</button>
-        <button class="btn secondary hidden" id="review-practice-btn" type="button">📋 複習到期單字</button>
-        <!--
-          遊戲那邊有「← 回練習」，這邊本來卻沒有路回去，等於只能單向走。
-          而且要把選好的組帶過去——不然他得在遊戲裡再選一次。
-        -->
-        <button class="btn secondary" id="go-game-btn" type="button">🐝 玩遊戲</button>
+          <p class="setup-label">朗讀方式</p>
+          <div class="order-picker">
+            <label><input type="radio" name="readMode" value="word" checked /> 🔤 只唸單字</label>
+            <label><input type="radio" name="readMode" value="competition" /> 🏆 競賽模式</label>
+          </div>
+          <p class="setup-hint">競賽模式會像真實比賽一樣：唸單字 → 用在例句中 → 再唸一次單字</p>
+
+          <div class="setup-actions">
+            <button class="btn gold" id="start-practice-btn" type="button">▶️ 開始練習</button>
+            <button class="btn secondary hidden" id="review-practice-btn" type="button">📋 複習到期單字</button>
+            <!--
+              遊戲那邊有「← 回練習」，這邊本來卻沒有路回去，等於只能單向走。
+              而且要把選好的組帶過去——不然他得在遊戲裡再選一次。
+            -->
+            <button class="btn secondary" id="go-game-btn" type="button">🐝 玩遊戲</button>
+          </div>
+          <p class="error-text" id="setup-error"></p>
+        </div>
       </div>
-      <p class="error-text" id="setup-error"></p>
     </div>
 
     <div class="panel container hidden" id="practice-panel">

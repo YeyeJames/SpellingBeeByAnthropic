@@ -43,6 +43,7 @@ function initialSeed() {
 
 const DIFFICULTY_KEY = 'gameDifficulty';
 const ORDER_KEY = 'gameOrder';
+const SHOW_WORD_KEY = 'gameShowWord';
 
 /**
  * 出題順序。
@@ -94,6 +95,11 @@ const ctx = {
   battleId: newId(),
   // 這次開機以來已經打完的每一場錄影（當下這一場在 ctx.log）
   sessionLogs: [],
+  /*
+   * 要不要把單字寫在畫面上。
+   * null = 照自動規則（靜音或沒語音就顯示）；true/false = 他自己按過按鈕。
+   */
+  showWord: readShared(SHOW_WORD_KEY) === null ? null : readShared(SHOW_WORD_KEY) === '1',
 
   /** 一場結束。畫面端在 BATTLE_END 時呼叫。 */
   onBattleEnd(state, won) {
@@ -125,8 +131,42 @@ const ctx = {
    */
   shouldShowWord() {
     if (params.get('show') === '1') return true;
+    /*
+     * 明確按過按鈕就聽他的。
+     *
+     * 自動規則（靜音或沒語音才顯示）本身是對的，但它把「看得到字」藏在
+     * 一個講的是聲音的按鈕後面——沒有喇叭的電腦上，他看到的是一片空白，
+     * 而唯一的解法是去按「靜音」，那完全沒有道理，也沒有人猜得到。
+     */
+    if (ctx.showWord === true) return true;
+    /*
+     * 靜音的時候不接受「不顯示」。
+     *
+     * 「靜音也要能玩」是硬性要求，而單字是唯一只存在於聲音裡的資訊——
+     * 靜音又不顯示等於完全沒得玩。這不是假設：多按一下就會進到那個狀態，
+     * 而畫面上不會有任何說明，他只會覺得遊戲壞了。
+     */
+    if (ctx.sfx?.isMuted()) return true;
+    if (ctx.showWord === false) return false;
+    return !ctx.voicesAvailable;
+  },
+
+  /** 自動規則現在會給什麼答案（按鈕的預設值從這裡來）。 */
+  autoShowWord() {
     if (ctx.sfx?.isMuted()) return true;
     return !ctx.voicesAvailable;
+  },
+
+  /**
+   * 設定要不要顯示單字。
+   * @param v true/false 是明確指定，null 是交還給自動規則
+   */
+  setShowWord(v) {
+    ctx.showWord = v === null ? null : !!v;
+    if (v === null) writeShared(SHOW_WORD_KEY, null);
+    else writeShared(SHOW_WORD_KEY, ctx.showWord ? '1' : '0');
+    ctx.refreshAudioButtons?.();
+    return ctx.showWord;
   },
 
   /**
@@ -684,18 +724,66 @@ async function boot() {
       });
     }
 
-    const muteBtn = document.getElementById('btn-mute');
-    function refreshMuteBtn() {
-      if (muteBtn) muteBtn.textContent = ctx.sfx.isMuted() ? '🔇 已靜音' : '🔊 聲音';
+    /*
+     * 聲音與顯示單字這兩個開關，**開場畫面與遊戲外框各有一組**。
+     *
+     * 只放在外框那一排是不夠的：等他找到按鈕，第一隻蟲已經撞進蜂巢了。
+     * 兩組按鈕改同一份狀態，所以每次變更都要把兩邊一起重畫——
+     * 不然他會看到兩顆按鈕講相反的話。
+     */
+    const muteBtns = ['btn-mute', 'pregame-mute'].map((id) => document.getElementById(id));
+    const showWordBtns = ['btn-show-word', 'pregame-show-word'].map((id) => document.getElementById(id));
+
+    /*
+     * 按鈕上寫的是**現在的狀態**，不是「按下去會變成什麼」。
+     * 小孩看按鈕是看現況，寫成動作他會反過來理解。
+     */
+    function refreshAudioButtons() {
+      const muted = !!ctx.sfx?.isMuted();
+      muteBtns.forEach((b) => {
+        if (!b) return;
+        b.textContent = muted ? '🔇 已靜音' : '🔊 聲音';
+        b.classList.toggle('is-on', !muted);
+      });
+      const shows = ctx.shouldShowWord();
+      showWordBtns.forEach((b) => {
+        if (!b) return;
+        b.textContent = shows ? '👁 顯示單字' : '🙈 不顯示單字';
+        b.classList.toggle('is-on', shows);
+        /*
+         * 靜音時這顆關不掉（見 shouldShowWord）。與其讓他按了沒反應，
+         * 不如直接變灰並說明原因——按了沒反應比按不下去更讓人困惑。
+         */
+        b.disabled = muted;
+        b.title = muted ? '靜音的時候一定要顯示單字，不然聽不到也看不到' : '';
+      });
     }
-    refreshMuteBtn();
-    muteBtn?.addEventListener('refresh', refreshMuteBtn);
-    muteBtn?.addEventListener('click', () => {
+    ctx.refreshAudioButtons = refreshAudioButtons;
+    refreshAudioButtons();
+
+    function toggleMute() {
       ctx.sfx.unlock();
       const muted = ctx.sfx.setMuted(!ctx.sfx.isMuted());
       if (muted) stopSpeaking();
-      refreshMuteBtn();
-    });
+      refreshAudioButtons();
+      return muted;
+    }
+
+    function toggleShowWord() {
+      // 從目前實際的狀態往反方向切，不管那個狀態是自動來的還是他自己設的
+      ctx.setShowWord(!ctx.shouldShowWord());
+    }
+
+    muteBtns.forEach((b) => b?.addEventListener('click', toggleMute));
+    // F2 走的是 input.js 的 onToggleMute，它會 dispatch 這個事件回來重畫
+    document.getElementById('btn-mute')?.addEventListener('refresh', refreshAudioButtons);
+
+    showWordBtns.forEach((b) =>
+      b?.addEventListener('click', () => {
+        toggleShowWord();
+        ctx.input?.focusForTyping();
+      })
+    );
 
     // 換人玩就按這個。網址帶 calibrate=1 重新進來，流程跟第一次一樣
     document.getElementById('btn-recalibrate')?.addEventListener('click', () => {
