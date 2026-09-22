@@ -27,6 +27,10 @@
 
 const { WEEKS } = require('./words/weeks');
 
+/*
+ * 2026-09 對照課本照片逐格核過：100 個字、拼字與順序全數相符。
+ * 課本這份清單是嚴格照字母排的，validate-words.mjs 有一條在守這個順序。
+ */
 const CONTEST_WORDS = [
   // ── Part 1 ──────────────────────────────────────────────
   { id: 'p1-account', part: 1, english: 'account', chinese: '帳戶；說明', exampleSentence: 'I opened a bank account to save my money.' },
