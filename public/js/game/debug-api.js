@@ -170,6 +170,39 @@ export function installDebugApi(ctx) {
     },
 
     /**
+     * 血條下面那一排「已經拼對的字母」。
+     *
+     * flashing 是打錯時的紅色閃爍還在不在——那是「這一下沒算進去」的唯一提示，
+     * 只看文字內容檢查不到它（打錯時文字本來就不該變）。
+     */
+    typedTrail() {
+      const s = ctx.scene;
+      if (!s || !s.trailText) return { text: '', flashing: false, color: '' };
+      return {
+        text: s.trailText.text || '',
+        flashing: (s.trailBadMs || 0) > 0,
+        color: s.trailText.style?.color || ''
+      };
+    },
+
+    /**
+     * 那一排的座標，以及第一顆血點的座標。
+     * 用來驗「真的在血條下面、真的在畫面內」——比截圖比對耐得住字型變動。
+     */
+    trailGeometry() {
+      const s = ctx.scene;
+      if (!s || !s.trailText || !s.hpDots?.length) return null;
+      return {
+        x: Math.round(s.trailText.x),
+        y: Math.round(s.trailText.y),
+        hpX: Math.round(s.hpDots[0].x),
+        hpY: Math.round(s.hpDots[0].y),
+        viewW: Math.round(s.scale.width),
+        viewH: Math.round(s.scale.height)
+      };
+    },
+
+    /**
      * 懲罰衝刺：畫面位置落後邏輯位置多少（progress 單位）。
      * 大於 0 代表蟲正在往前滑；歸零代表已經追上。
      */

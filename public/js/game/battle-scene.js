@@ -106,6 +106,24 @@ const LISTEN_LABELS = {
   [LISTEN_KIND.SLOW]: '🐢 放慢唸',
   [LISTEN_KIND.SENTENCE]: '📖 例句'
 };
+/*
+ * 已經拼對的字母，列在血條下面。
+ *
+ * 打錯字母不會清掉已經打對的部分（見 battle.js，清空重來對小孩來說
+ * 是前功盡棄）。但這件好事在畫面上完全看不出來：他按錯一下，畫面閃紅、
+ * 蟲往前衝，然後呢？那個錯的字母到底算不算數、他現在該從第幾個字母
+ * 接下去——沒有任何東西回答得了。於是他只能從頭猜起。
+ *
+ * 所以把「目前已經拼對的」直接寫出來。只寫打對的部分，後面不補格子：
+ * 補了等於告訴他這個字有幾個字母，而這是聽寫遊戲，長度也是題目的一部分。
+ * 結尾那個底線是「下一個打這裡」。
+ */
+const TRAIL_CARET = '_';
+/* 打錯時整排閃一下紅：意思是「這一下沒算進去，你還在原地」 */
+const TRAIL_BAD_MS = 260;
+const TRAIL_COLOR = '#f5b301';
+const TRAIL_BAD_COLOR = '#f87171';
+
 /* 事件帶的是代號，代價表的鍵是字串，這張表把兩者對起來 */
 const LISTEN_COST_KEY = {
   [LISTEN_KIND.REPLAY]: 'replay',
@@ -438,6 +456,25 @@ export function createBattleScene(ctx) {
         this.hpDots.push(this.add.circle(0, 0, 11, 0xf5b301));
       }
 
+      /*
+       * 已經拼對的字母。等寬字型，貼在血條正下方。
+       *
+       * 等寬是必要的：他是照著這一排數「我打到第幾個」的，比例字型下
+       * i 跟 m 寬度差一倍，數起來會錯。
+       */
+      this.trailText = this.add
+        .text(0, 0, TRAIL_CARET, {
+          fontFamily: 'ui-monospace, monospace',
+          fontSize: '24px',
+          color: TRAIL_COLOR
+        })
+        .setOrigin(0, 0.5);
+      this.trailBadMs = 0;
+      this.lastTrailColor = TRAIL_COLOR;
+      this.lastTrailTyped = -1;
+      this.lastTrailWord = -1;
+      this.lastTrailStatus = '';
+
       this.energyBg = this.add.rectangle(0, 0, 10, 14, 0x000000, 0.35).setOrigin(0, 0.5);
       this.energyFill = this.add.rectangle(0, 0, 10, 14, 0x6ee7b7).setOrigin(0, 0.5);
 
@@ -576,6 +613,11 @@ export function createBattleScene(ctx) {
 
       const hudY = height * 0.12;
       this.hpDots.forEach((dot, i) => dot.setPosition(width * 0.06 + i * 30, hudY));
+      /*
+       * 血條正下方，左緣對齊第一顆血點的左緣（圓心往左一個半徑）。
+       * 對齊很重要：兩排東西左邊切齊，讀起來才是「同一組狀態」。
+       */
+      this.trailText.setPosition(width * 0.06 - 11, hudY + 34);
 
       const barW = Math.min(520, width * 0.4);
       this.energyBg.setPosition(width * 0.5 - barW / 2, hudY).setSize(barW, 16);
@@ -606,6 +648,7 @@ export function createBattleScene(ctx) {
       this.statusText.setFontSize(Math.round(30 * ui));
 
       this.listenText.setFontSize(Math.round(18 * ui));
+      this.trailText.setFontSize(Math.round(24 * ui));
       this.wordText.setPosition(width * 0.5, height * 0.3);
       this.scaffoldNote.setPosition(width * 0.5, height * 0.3 + 40 * ui);
       // 貼在題目上方：看得到，又不跟下面那疊提示文字搶位置
@@ -672,6 +715,7 @@ export function createBattleScene(ctx) {
         this.updateMissReveal(delta);
         this.updatePenaltyDash(delta);
         this.updateListenBanner(delta);
+        this.updateTrailFlash(delta);
         this.updateWaitingLine(state, delta);
         this.updateBonusBanner(state, delta);
         this.updateParallax(delta);
@@ -748,6 +792,14 @@ export function createBattleScene(ctx) {
               { color: '#f87171', scale: 1.15, fan: false }
             );
             this.startPenaltyDash(state, BALANCE.wrongLetterPenaltyMs);
+            /*
+             * 那一排拼對的字母閃紅。
+             *
+             * 打錯不會清掉已經打對的部分，所以那一排「不動」才是對的——
+             * 但不動也代表他看不出按鍵到底有沒有讀到。閃一下就把兩件事
+             * 同時講完了：這一下沒算進去，而你還站在原地，從底線繼續打。
+             */
+            this.trailBadMs = TRAIL_BAD_MS;
             vfx(ev);
             break;
           case EV.WORD_KILLED: {
@@ -967,6 +1019,24 @@ export function createBattleScene(ctx) {
     }
 
     /**
+     * 拼對的字母那一排打錯時閃紅，然後回到原本的顏色。
+     *
+     * 用時間算而不是影格數算：同一段紅色在 30fps 的舊平板與 120Hz 的螢幕上
+     * 要一樣長，不然慢機器會紅到下一次按鍵都還沒退。
+     */
+    updateTrailFlash(delta) {
+      if (this.trailBadMs <= 0) return;
+      this.trailBadMs -= delta;
+      const bad = this.trailBadMs > 0;
+      if (!bad) this.trailBadMs = 0;
+      const color = bad ? TRAIL_BAD_COLOR : TRAIL_COLOR;
+      if (color !== this.lastTrailColor) {
+        this.lastTrailColor = color;
+        this.trailText.setColor(color);
+      }
+    }
+
+    /**
      * 排隊中的敵人。
      *
      * 純畫面：邏輯上永遠只有一隻在推進（見 create 裡的說明）。
@@ -1126,6 +1196,29 @@ export function createBattleScene(ctx) {
 
       const ratio = state.target.length ? state.typed / state.target.length : 0;
       this.energyFill.setSize(Math.max(1, this.energyBarWidth * ratio), 16);
+
+      /*
+       * 已經拼對的字母。
+       *
+       * 跟上面那幾個一樣，只有值真的變了才 setText——每影格組一次字串
+       * 等於每秒配置一兩百個物件，GC 遲早會在某個隨機時間點介入掉格。
+       * 比的是三個數字而不是組出來的鍵：組鍵本身就是在配置字串，
+       * 那等於為了省配置而每影格配置一次。
+       */
+      if (
+        state.typed !== this.lastTrailTyped ||
+        state.wordIndex !== this.lastTrailWord ||
+        state.status !== this.lastTrailStatus
+      ) {
+        this.lastTrailTyped = state.typed;
+        this.lastTrailWord = state.wordIndex;
+        this.lastTrailStatus = state.status;
+        this.trailText.setText(
+          state.status === 'running'
+            ? state.target.slice(0, state.typed).toUpperCase() + TRAIL_CARET
+            : ''
+        );
+      }
 
       /*
        * 只有值真的變了才 setText。
