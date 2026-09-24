@@ -87,6 +87,8 @@ async function ensureIndexes(database) {
 
   // 每個帳號在每一組上只有一列進度
   await database.collection('groupProgress').createIndex({ userId: 1, groupId: 1 }, { unique: true });
+  // 戰役進度：一個帳號一列
+  await database.collection('campaignProgress').createIndex({ userId: 1 }, { unique: true });
 }
 
 function getDB() {

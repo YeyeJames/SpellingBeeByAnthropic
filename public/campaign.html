@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>戰役 - 拼字蜂</title>
+  <link rel="icon" href="/assets/icons/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/css/theme.css" />
+  <link rel="stylesheet" href="/css/base.css" />
+  <link rel="stylesheet" href="/css/components.css" />
+  <link rel="stylesheet" href="/css/campaign.css" />
+  <!-- modulepreload:start 由 npm run gen-preload 產生，請勿手動編輯 -->
+  <link rel="modulepreload" href="/js/campaign.js" />
+  <link rel="modulepreload" href="/js/api.js" />
+  <link rel="modulepreload" href="/js/ui-status.js" />
+  <link rel="modulepreload" href="/js/auth.js" />
+  <link rel="modulepreload" href="/js/theme.js" />
+  <link rel="modulepreload" href="/js/local-store.js" />
+  <link rel="modulepreload" href="/js/nav-partial.js" />
+  <link rel="modulepreload" href="/js/outbox.js" />
+  <link rel="modulepreload" href="/js/sound-manager.js" />
+  <!-- modulepreload:end -->
+</head>
+<body data-theme="sports" class="page-loading">
+  <div data-nav-mount></div>
+
+  <div class="container">
+    <div class="panel container">
+      <div class="campaign-head">
+        <h1>🗺️ 蜂巢戰役</h1>
+        <!--
+          「打到第幾關」是這一頁最重要的一個數字——那是他會拿去跟同學講的東西
+          （設計文件 §2 方案 A 的第一條優點）。所以放在標題旁邊，不是藏在下面。
+        -->
+        <span class="campaign-progress" id="campaign-progress">—</span>
+      </div>
+      <div class="campaign-bar"><div class="campaign-bar-fill" id="campaign-bar"></div></div>
+      <p class="campaign-next" id="campaign-next"></p>
+      <p class="error-text" id="campaign-error"></p>
+      <div id="campaign-chapters"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/js/campaign.js"></script>
+  <script>
+    // 保險：萬一 JS 模組完全載入失敗，仍要把內容顯示出來，避免永遠卡在載入畫面
+    /* page-loading-failsafe */
+    setTimeout(function () { document.body.classList.remove("page-loading"); }, 30000);
+  </script>
+</body>
+</html>

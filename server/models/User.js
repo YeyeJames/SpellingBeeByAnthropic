@@ -148,7 +148,9 @@ const OWNED_COLLECTIONS = [
   'wordProgress',
   'groupProgress',
   'groupCompletions',
-  'gameResults'
+  'gameResults',
+  // 戰役進度也是這個帳號自己的：哥哥打到第 30 關不代表弟弟也打到
+  'campaignProgress'
 ];
 
 async function deleteUser(id) {

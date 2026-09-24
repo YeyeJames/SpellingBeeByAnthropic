@@ -16,7 +16,7 @@ let currentCoins = 0;
  * 舊 HTML 裡沒有的元素——按鈕直接變成死的，要重新整理一次才會好。
  * 那種問題在自己的機器上永遠看不到（快取是空的），只有使用者會遇到。
  */
-const NAV_CACHE_KEY = 'navHtml2';
+const NAV_CACHE_KEY = 'navHtml3';
 
 function fetchNavHtml() {
   return fetch('/partials/nav.html')

@@ -1,0 +1,162 @@
+/* 戰役地圖頁（C3） */
+
+.campaign-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.campaign-head h1 {
+  margin: 0;
+}
+
+/*
+ * 「打到第幾關」放在標題旁邊。
+ * 那是他會拿去跟同學講的數字（設計文件 §2），不該藏在下面。
+ */
+.campaign-progress {
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--color-accent);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.campaign-bar {
+  height: 10px;
+  background: var(--color-bg-raised);
+  border-radius: 999px;
+  overflow: hidden;
+  margin: 0.7rem 0 0.5rem;
+}
+
+.campaign-bar-fill {
+  height: 100%;
+  width: 0;
+  background: var(--color-accent);
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+.campaign-next {
+  margin: 0 0 1.2rem;
+  color: var(--color-text-muted);
+}
+
+.chapter + .chapter {
+  margin-top: 1.8rem;
+}
+
+.chapter-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+  font-size: 1.1rem;
+  margin: 0 0 0.2rem;
+}
+
+.chapter-count {
+  font-size: 0.9rem;
+  font-weight: 400;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.chapter-blurb {
+  margin: 0 0 0.7rem;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.level-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.55rem;
+}
+
+.level-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.6rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-raised);
+  text-decoration: none;
+  color: inherit;
+  min-height: 84px;
+}
+
+.level-no {
+  font-weight: 700;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.level-sub {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+  flex: 1 1 auto;
+}
+
+.level-meta {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.level-stars {
+  font-size: 0.85rem;
+  color: var(--color-accent);
+  letter-spacing: 0.08em;
+}
+
+/* 過了的：綠色，一眼看得出「這些是我的戰績」 */
+.level-cell.is-cleared {
+  border-color: #2f6b52;
+  background: #16261f;
+}
+
+/*
+ * 下一關要最明顯。
+ * 一百個格子裡，他真正需要找到的只有這一個。
+ */
+.level-cell.is-next {
+  border-color: var(--color-accent);
+  background: #2a2413;
+  box-shadow: 0 0 0 1px var(--color-accent) inset;
+}
+
+.level-cell.is-next .level-no {
+  color: var(--color-accent);
+}
+
+/* 鎖著的：淡掉但字還讀得到——他要看得見前面有什麼在等著 */
+.level-cell.is-locked {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* 王關：加一條邊，跟一般關卡分開 */
+.level-cell.is-boss {
+  border-width: 2px;
+  border-color: #7c5a1a;
+}
+
+.level-cell.is-boss.is-cleared {
+  border-color: #2f6b52;
+}
+
+@media (max-width: 480px) {
+  .level-grid {
+    grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  }
+  .level-sub {
+    font-size: 0.72rem;
+  }
+}

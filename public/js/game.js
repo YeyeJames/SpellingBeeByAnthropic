@@ -94,6 +94,14 @@ const ctx = {
   /* 裝備（C5）。拿不到就是全裸，也就是 C5 之前的行為 */
   equipped: null,
   honey: 0,
+  /*
+   * 戰役關卡（C3）。?level=N 時才有值；其餘情況是 null，
+   * 也就是原本「直接打某一組」的玩法，完全不受影響。
+   */
+  campaignLevel: Number(params.get('level')) || null,
+  campaignInfo: null,
+  levelLimit: null,
+  levelLocked: false,
   paused: false,
   scene: null,
   phaserGame: null,
@@ -118,6 +126,8 @@ const ctx = {
   /** 一場結束。畫面端在 BATTLE_END 時呼叫。 */
   onBattleEnd(state, won) {
     reportResult(state, won);
+    // 戰役關卡另外記一筆：過了就解開下一關（C3）
+    if (ctx.campaignLevel) reportLevelClear(state, won);
     showPostgame(state, won);
   },
 
@@ -518,6 +528,49 @@ function downloadLog() {
   URL.revokeObjectURL(a.href);
 }
 
+/**
+ * 這一關要打哪些字（C3）。
+ *
+ * 回 null 代表拿不到（沒登入、離線、關卡鎖著），呼叫端會退回一般的
+ * group/part 流程——遊戲的底線是「資料庫掛了也打得開」，戰役不該是例外。
+ * 關卡鎖著時把訊息顯示出來，不然他只會看到一場莫名其妙的普通戰鬥。
+ */
+async function fetchLevelWordIds(level) {
+  try {
+    const res = await fetch(`/api/campaign/level/${encodeURIComponent(level)}`, {
+      credentials: 'same-origin'
+    });
+    if (res.status === 403) {
+      const data = await res.json().catch(() => ({}));
+      showLevelLocked(data);
+      return null;
+    }
+    if (!res.ok) return null;
+    const data = await res.json();
+    ctx.campaignInfo = data.level || null;
+    // 關卡指定的出題順序蓋過記住的偏好——第 2 章的重點就是「這次是亂的」
+    if (data.order) ctx.order = data.order;
+    ctx.levelLimit = data.limit || null;
+    return data.wordIds || null;
+  } catch (err) {
+    return null;
+  }
+}
+
+/** 從單字庫撈出指定的那些 id，順序照伺服器給的。 */
+async function wordsFromIds(ids) {
+  const res = await fetch('/api/wordbank?part=all');
+  if (!res.ok) throw new Error(`拿不到單字庫（${res.status}）`);
+  const data = await res.json();
+  const byId = new Map(data.words.map((w) => [w.id, w]));
+  const picked = ids.map((id) => byId.get(id)).filter((w) => w && w.typeable !== false);
+  if (!picked.length) throw new Error('這一關沒有可以打的字');
+  ctx.groupLabel = ctx.campaignInfo
+    ? `第 ${ctx.campaignInfo.level} 關・${ctx.campaignInfo.subtitle}`
+    : '戰役';
+  return picked;
+}
+
 async function fetchWords() {
   /*
    * 這個端點不需要登入、也不碰資料庫（單字庫是寫死的靜態資料），
@@ -527,6 +580,19 @@ async function fetchWords() {
    * ?part=all 拿全部。測試要連打數百個字母時用得到——
    * 一場打得完就不必中途重開，統計才不會被重置切斷。
    */
+  /*
+   * 戰役關卡（C3）：?level=N。
+   *
+   * 哪幾組、幾個字、什麼順序全部由伺服器決定（見 routes/campaign.js）——
+   * 前端自己挑的話，他打第 3 關卻送「第 100 關過了」上來，整條戰役就沒意義了。
+   * 拿不到（離線、資料庫在睡）就退回原本的 group/part 那條路，
+   * 遊戲本來就設計成資料庫掛掉也打得開。
+   */
+  if (ctx.campaignLevel) {
+    const ids = await fetchLevelWordIds(ctx.campaignLevel);
+    if (ids) return wordsFromIds(ids);
+  }
+
   const group = params.get('group');
   const part = params.get('part') || '1';
   let query = '';
@@ -693,6 +759,19 @@ function showPostgame(state, won) {
   }
 
   /*
+   * 戰役關卡（C3）：星等。
+   * 由伺服器判（打贏 1 顆、正確率 ≥90% 2 顆、零失誤 3 顆），所以先留位置。
+   */
+  if (ctx.campaignLevel) {
+    rows.push({
+      label: `🗺️ 第 ${ctx.campaignLevel} 關`,
+      value: '結算中…',
+      id: 'postgame-level',
+      hot: won
+    });
+  }
+
+  /*
    * 經驗值與等級（C2）。
    *
    * 「賺到多少經驗」要跟「離下一級還差多少」放在一起——只寫賺了多少，
@@ -743,6 +822,21 @@ function showPostgame(state, won) {
    */
   if (isBest) ctx.bestBefore = state.honey;
 
+  /*
+   * 戰役關卡打完，出口要回地圖不是回練習——他是從地圖來的。
+   * 不是戰役關卡就維持原樣（回練習挑別組）。
+   */
+  const practiceLink = document.getElementById('postgame-practice');
+  if (practiceLink) {
+    if (ctx.campaignLevel) {
+      practiceLink.textContent = '🗺️ 回戰役地圖';
+      practiceLink.setAttribute('href', '/campaign.html');
+    } else {
+      practiceLink.textContent = '🎧 回練習挑別組';
+      practiceLink.setAttribute('href', '/practice.html');
+    }
+  }
+
   const again = document.getElementById('postgame-again');
   if (again) {
     again.onclick = () => {
@@ -754,6 +848,60 @@ function showPostgame(state, won) {
   }
   el.hidden = false;
   setChromeAbovePostgame(true);
+}
+
+/**
+ * 打完一關（C3）。
+ *
+ * 只送關號與結果，星等與「解不解得開下一關」都由伺服器判斷——
+ * 前端說了算的話，改個網址就能把一百關一次跳完。
+ */
+async function reportLevelClear(state, won) {
+  const s = state.stats;
+  const letters = s.correctLetters + s.wrongLetters;
+  try {
+    const res = await fetch('/api/campaign/clear', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        opId: `${ctx.seed}:${ctx.battleId}`,
+        level: ctx.campaignLevel,
+        won,
+        score: state.honey,
+        accuracy: letters > 0 ? s.correctLetters / letters : 0
+      })
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    updatePostgameLevel(data, won);
+  } catch (err) {
+    /* 記不到就算了，不要擋住結算畫面 */
+  }
+}
+
+/**
+ * 結算畫面上的關卡結果，等伺服器回來才填得出來（星等是它判的）。
+ * 順便把「下一關」的按鈕換上去——打完最想做的就是接著打下一關。
+ */
+function updatePostgameLevel(data, won) {
+  const el = document.getElementById('postgame-level');
+  if (el) {
+    el.textContent = won
+      ? `${'★'.repeat(data.stars || 1)}${'☆'.repeat(3 - (data.stars || 1))}`
+      : '沒過';
+  }
+  if (!won || !data.advanced || !data.nextLevel) return;
+  const again = document.getElementById('postgame-again');
+  if (!again) return;
+  /*
+   * 過關之後「再打一場」就不是他想要的了——他要的是下一關。
+   * 把主要按鈕換成前進，重打同一關還是可以從地圖回去。
+   */
+  again.textContent = `➡️ 第 ${data.nextLevel} 關`;
+  again.onclick = () => {
+    location.href = `/game?level=${data.nextLevel}`;
+  };
 }
 
 /**
@@ -856,6 +1004,28 @@ function showLocked(access) {
   el.hidden = false;
 }
 
+/**
+ * 這一關還沒解開（C3）。
+ *
+ * 借用「組別沒解鎖」那一塊畫面——兩者是同一件事的兩種說法，
+ * 長得一樣他就不用重新認一次。但按鈕要帶去戰役地圖，不是練習頁。
+ */
+function showLevelLocked(data) {
+  const el = document.getElementById('locked-panel');
+  document.body.classList.remove('page-loading');
+  if (!el) return;
+  document.getElementById('locked-group').textContent = `第 ${ctx.campaignLevel} 關`;
+  document.getElementById('locked-detail').textContent =
+    data.nextLevel ? `先去把第 ${data.nextLevel} 關打過。` : '先從第 1 關開始。';
+  const back = el.querySelector('.btn-locked-back');
+  if (back) {
+    back.textContent = '看戰役地圖';
+    back.setAttribute('href', '/campaign.html');
+  }
+  el.hidden = false;
+  ctx.levelLocked = true;
+}
+
 async function boot() {
   const errorEl = document.getElementById('game-error');
   const imeEl = document.getElementById('ime-warning');
@@ -886,8 +1056,15 @@ async function boot() {
     ctx.honey = Number(access.honey) || 0;
 
     const [words] = await Promise.all([fetchWords(), loadPhaser()]);
-    // Phase 1 只要少量單字就夠驗證手感，不用一次上 25 個
-    const limit = Number(params.get('n')) || 20;
+    // 關卡鎖著的話上面已經把說明畫出來了，不要再開一場空的戰鬥
+    if (ctx.levelLocked) return;
+    /*
+     * 一場幾個字。
+     *
+     * 網址的 ?n= 最優先（測試在用），其次是關卡自己的上限（混合關會把
+     * 好幾組加起來，一場打不完），都沒有才用預設。
+     */
+    const limit = Number(params.get('n')) || ctx.levelLimit || 20;
     ctx.words = words.slice(0, limit);
     if (ctx.words.length === 0) throw new Error('單字庫是空的');
 
