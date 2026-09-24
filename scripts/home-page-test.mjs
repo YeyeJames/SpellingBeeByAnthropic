@@ -34,14 +34,28 @@ function check(name, ok, detail = '') {
 
 const browser = await chromium.launch({ executablePath: CHROME });
 
-/** 這台機器沒有資料庫，所以帳號相關的 API 全部用攔截的方式給。 */
-async function openHome() {
+/*
+ * 這台機器沒有資料庫，所以帳號相關的 API 全部用攔截的方式給。
+ *
+ * ⚠️ banks 一定要跟著回。
+ * 這個假資料本來只回 { profiles }，跟真的伺服器（會一起回 banks）不一樣，
+ * 所以「建帳號時選哪一本單字庫」整個壞掉了測試也全綠——
+ * 假的比真的少一個欄位，測到的就是另一支程式。
+ */
+const ONE_BANK = [{ id: 'g3a', label: 'Grade 3A', owner: 'Pierce', ready: true, groupCount: 28, wordCount: 749 }];
+const TWO_BANKS = [
+  ...ONE_BANK,
+  { id: 'allen', label: 'Grade 4D', owner: 'Allen', ready: true, groupCount: 4, wordCount: 75 }
+];
+
+async function openHome({ banks = ONE_BANK } = {}) {
   const context = await browser.newContext({ viewport: { width: 900, height: 900 } });
   const state = {
     profiles: [
       { _id: 'id-brother', nickname: '哥哥', coins: 120 },
       { _id: 'id-sister', nickname: '妹妹', coins: 40 }
     ],
+    banks,
     calls: []
   };
 
@@ -50,7 +64,7 @@ async function openHome() {
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ profiles: state.profiles })
+      body: JSON.stringify({ profiles: state.profiles, banks: state.banks })
     });
   });
   await context.route('**/api/auth/profiles/*', (route) => {
@@ -309,6 +323,86 @@ console.log('\n5) 從練習頁換帳號');
   check('沒有瀏覽器錯誤', errors.length === 0, errors.slice(0, 2).join(' | '));
 
   await context.close();
+}
+
+/* ── 6. 建帳號時選單字庫 ───────────────────────────────────
+ *
+ * 哥哥要建新帳號，看到「用哪一本單字庫」這一行，**底下一片空白**，
+ * 一個選項都沒有。
+ *
+ * 原因：login.js 的頁面初始化只從 /auth/profiles 解構 profiles，沒有接
+ * banks，所以整頁剛載入時 banks 永遠是空陣列；而讀 banks 的
+ * reloadProfiles() 只有在建立／刪除帳號之後才會跑。也就是說這個選擇區
+ * **從來沒有在第一次載入時work過**。
+ *
+ * 而它測不出來，是因為這支測試的假資料只回 { profiles }——比真的伺服器
+ * 少一個欄位，所以測到的是另一支程式。
+ */
+console.log('\n6) 建帳號時要選哪一本單字庫');
+{
+  const { context, page, errors, state } = await openHome({ banks: TWO_BANKS });
+  await page.click('.new-profile');
+  await page.waitForSelector('#new-bank', { timeout: 5000 });
+
+  const ui = await page.evaluate(() => {
+    const box = document.getElementById('new-bank');
+    const label = document.querySelector('label[for="new-bank"]');
+    return {
+      hidden: box.hidden,
+      options: [...box.querySelectorAll('.bank-option')].map((e) => e.innerText.replace(/\s+/g, ' ').trim()),
+      labelVisible: !!(label && label.offsetParent)
+    };
+  });
+
+  check('選擇區看得到', ui.hidden === false, `hidden=${ui.hidden}`);
+  check('兩本課本都列出來', ui.options.length === 2, JSON.stringify(ui.options));
+  check('寫的是誰的課本（他要認得出哪個是自己的）',
+    ui.options.some((t) => t.includes('Pierce')) && ui.options.some((t) => t.includes('Allen')),
+    JSON.stringify(ui.options));
+
+  /*
+   * 預設不選，逼他做一次決定——選錯會一路練到別人的功課，
+   * 而那件事從畫面上看不出來（單字都是英文）。
+   */
+  // 名字要先填，不然擋下來的會是「請輸入名字」，測不到單字庫那一關
+  await page.fill('#new-nickname', 'Allen');
+  await page.click('#new-profile-create');
+  const err = await page.locator('#new-profile-error').innerText().catch(() => '');
+  check('沒選就按建立會被擋下來', err.includes('單字庫'), err || '（沒有訊息）');
+
+  // 選了才過得去，而且送出去的是他選的那一本
+  await page.click('.bank-option:nth-child(2)');
+  await page.click('#new-profile-create');
+  await page.waitForURL('**/practice.html', { timeout: 8000 }).catch(() => {});
+  const reg = state.calls.find((c) => c.kind === 'register');
+  check('選了之後建得成功，而且送的是他選的那一本',
+    reg && reg.body.wordBankId === 'allen', JSON.stringify(reg?.body || null));
+
+  await context.close();
+
+  /*
+   * 反面：只有一本的時候，問題跟選項都不該出現——
+   * 只有一個選項的問題對小孩來說就是一個看不懂的步驟。
+   */
+  const one = await openHome({ banks: ONE_BANK });
+  await one.page.click('.new-profile');
+  await one.page.waitForSelector('#new-profile-step', { timeout: 5000 }).catch(() => {});
+  const oneUi = await one.page.evaluate(() => {
+    const box = document.getElementById('new-bank');
+    const label = document.querySelector('label[for="new-bank"]');
+    return { hidden: box.hidden, labelVisible: !!(label && label.offsetParent) };
+  });
+  check('只有一本時選擇區藏起來', oneUi.hidden === true, `hidden=${oneUi.hidden}`);
+  /*
+   * 這一條是這個 bug 的第二半：標籤本來寫死在 HTML 裡、永遠看得到，
+   * 只有底下的 div 會藏。所以一旦 banks 沒載進來，畫面就是
+   * 「一個問題配一片空白」——他看得到問題，卻沒有東西可以回答。
+   */
+  check('⭐ 問題也要跟著藏（不可以只剩一個問不到答案的問題）',
+    oneUi.labelVisible === false, `labelVisible=${oneUi.labelVisible}`);
+
+  check('沒有瀏覽器錯誤', errors.length === 0, errors.slice(0, 2).join(' | '));
+  await one.context.close();
 }
 
 await browser.close();

@@ -128,15 +128,26 @@ async function enterProfile(nickname) {
 function renderBankPicker() {
   const box = document.getElementById('new-bank');
   const note = document.getElementById('new-bank-note');
+  /*
+   * 標籤要跟著選擇區一起藏。
+   *
+   * 「用哪一本單字庫」這一行本來是寫死在 HTML 裡、永遠看得到的，只有底下
+   * 那個 div 會被藏起來。所以只要 banks 沒載進來，畫面就變成
+   * **一個問題配上一片空白**——他看得到問題，卻沒有任何東西可以回答。
+   * 問題與選項是同一件事，要出現一起出現。
+   */
+  const label = document.querySelector('label[for="new-bank"]');
   if (!box) return;
   box.innerHTML = '';
   if (banks.length <= 1) {
     box.hidden = true;
+    if (label) label.hidden = true;
     if (note) note.textContent = '';
     selectedBank = banks[0]?.id || null;
     return;
   }
   box.hidden = false;
+  if (label) label.hidden = false;
   for (const b of banks) {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -253,11 +264,21 @@ deleteConfirmInput.addEventListener('keydown', (e) => {
 });
 
 runPageInit(async () => {
-  const [{ profiles: list }, user] = await Promise.all([
+  /*
+   * banks 一定要跟 profiles 一起接下來。
+   *
+   * 這裡本來只解構 profiles，而讀 banks 的 reloadProfiles() 只有在
+   * 建立／刪除帳號之後才會跑——也就是說**整頁剛載入時 banks 永遠是空的**。
+   * 結果：哥哥要建新帳號，看到「用哪一本單字庫」這一行，底下一片空白，
+   * 一個選項都沒有（banks.length <= 1 就把選擇區藏起來了）。
+   * 順帶連帳號磚上的「這是誰的課本」也一直沒顯示，同一個原因。
+   */
+  const [{ profiles: list, banks: bankList }, user] = await Promise.all([
     api.get('/auth/profiles'),
     fetchCurrentUser()
   ]);
   profiles = list || [];
+  banks = bankList || [];
   currentUser = user;
   renderProfiles();
 
