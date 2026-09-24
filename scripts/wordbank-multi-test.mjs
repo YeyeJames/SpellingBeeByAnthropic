@@ -80,11 +80,15 @@ console.log('2) ⭐ 兩本課本的 id 不能撞（錄音是跨帳號共用的�
    * Allen 那一本現在還沒有單字，所以拿一份假資料組一本出來測——
    * 等真的單字進來才測就太晚了，那時候撞號已經發生在正式資料庫裡。
    */
+  /*
+   * 用一個**沒有人用過**的前綴組一本假的出來（不是 'a'——那是 Allen 真的在用的，
+   * 撞到的話測出來的「重複」是測試自己造成的，不是程式的問題）。
+   */
   const fake = buildBank({
-    id: 'allen',
-    label: 'Allen 的課本',
-    owner: 'Allen',
-    idPrefix: 'a',
+    id: 'zz-test',
+    label: '測試用課本',
+    owner: '測試',
+    idPrefix: 'zz',
     contestWords: [
       { id: 'p1-account', part: 1, english: 'account', chinese: '帳戶', exampleSentence: 'x' }
     ],
@@ -92,12 +96,12 @@ console.log('2) ⭐ 兩本課本的 id 不能撞（錄音是跨帳號共用的�
   });
 
   const allenIds = fake.words.map((w) => w.id);
-  check('Allen 的 id 有自己的命名空間',
-    allenIds.every((id) => id.startsWith('a-')), allenIds.join(', '));
-  check('故意取一樣的英文字，id 仍然不同',
-    !allenIds.includes('w01-path') && allenIds.includes('a-w01-path'), allenIds.join(', '));
+  check('新課本的 id 有自己的命名空間',
+    allenIds.every((id) => id.startsWith('zz-')), allenIds.join(', '));
+  check('故意取跟 Pierce 一樣的英文字，id 仍然不同',
+    !allenIds.includes('w01-path') && allenIds.includes('zz-w01-path'), allenIds.join(', '));
   check('組 id 也分開了',
-    fake.groups.every((g) => g.id.startsWith('a-')), fake.groups.map((g) => g.id).join(', '));
+    fake.groups.every((g) => g.id.startsWith('zz-')), fake.groups.map((g) => g.id).join(', '));
 
   /*
    * 全庫掃一次：任何兩個字的 id 都不可以一樣。
@@ -112,14 +116,22 @@ console.log('2) ⭐ 兩本課本的 id 不能撞（錄音是跨帳號共用的�
   check('組 id 也沒有重複', dupG.length === 0, dupG.join(', '));
 }
 
-/* ── 3. 還沒有單字的課本 ─────────────────────────────────── */
-console.log('3) 還沒有單字的課本');
+/* ── 3. 課本目錄 ─────────────────────────────────────────── */
+console.log('3) 課本目錄');
 {
   const banks = wordBank.listBanks();
   check('列得出兩本', banks.length === 2, JSON.stringify(banks.map((b) => b.id)));
   const allen = banks.find((b) => b.id === 'allen');
-  check('Allen 那一本標成「還沒好」', allen && allen.ready === false, JSON.stringify(allen?.ready));
+  check('Allen 那一本有字了（Part 1~4 共 75 字）',
+    allen && allen.ready === true && allen.wordCount === 75,
+    `${allen?.wordCount} 字`);
   check('Pierce 那一本是好的', banks.find((b) => b.id === 'g3a')?.ready === true);
+  /*
+   * 空課本仍然要能被表示出來——第二本課本一定會有一段「帳號建好了但
+   * 單字還沒進去」的時間，那時候 ready 必須是 false 而不是爆掉。
+   */
+  const empty = buildBank({ id: 'empty', label: '空的', idPrefix: 'q', contestWords: [], weeks: [] });
+  check('完全沒有單字的課本標成「還沒好」', empty.ready === false && empty.words.length === 0);
   check('認不得的課本 id 退回預設，不會炸',
     wordBank.resolveBankId('沒這本') === 'g3a', wordBank.resolveBankId('沒這本'));
   check('沒給也退回預設', wordBank.resolveBankId(undefined) === 'g3a');
@@ -178,8 +190,17 @@ console.log('4) 每個帳號只看得到自己那一本');
   check('Pierce 看得到 28 組', pGroups.body?.groups?.length === 28,
     String(pGroups.body?.groups?.length));
   const aGroups = await call(aApp, 'GET', '/api/practice/progress');
-  check('Allen 看到 0 組（他那一本還沒有單字）', aGroups.body?.groups?.length === 0,
-    String(aGroups.body?.groups?.length));
+  /*
+   * Allen 現在有 4 個 Part（75 字），每週單字還在等。
+   * 他看到的組數要剛好是自己那一本的，不是 Pierce 的 28 組。
+   */
+  const allenGroups = wordBank.listGroups('allen');
+  check(`Allen 看到自己那一本的 ${allenGroups.length} 組`,
+    aGroups.body?.groups?.length === allenGroups.length,
+    `${aGroups.body?.groups?.length} / ${allenGroups.length}`);
+  check('而且組 id 都是他自己的命名空間',
+    (aGroups.body?.groups || []).every((g) => g.id.startsWith('a-')),
+    (aGroups.body?.groups || []).map((g) => g.id).join(', '));
 
   /*
    * 拿別人課本的組 id 進來要被擋。
@@ -208,8 +229,15 @@ console.log('4) 每個帳號只看得到自己那一本');
    */
   const aCamp = await call(aApp, 'GET', '/api/campaign');
   check('Allen 的戰役不會爆掉', aCamp.status === 200, String(aCamp.status));
-  check('（他那一本還沒有單字，所以是空的）', Array.isArray(aCamp.body?.levels),
+  /*
+   * 戰役的 96 關都是從**每週單字**排出來的，Allen 那一本還沒有，所以是空表。
+   * 重點是不能爆掉，而且進度百分比不可以是 NaN——接到畫面上會變成
+   * width: NaN%，進度條壞掉而且完全看不出為什麼。
+   */
+  check('（每週單字還沒進來，所以戰役是空的）', aCamp.body?.levels?.length === 0,
     `${aCamp.body?.levels?.length} 關`);
+  check('空戰役的進度是 0% 而不是 NaN', aCamp.body?.summary?.percent === 0,
+    JSON.stringify(aCamp.body?.summary?.percent));
 }
 
 console.log(failures === 0 ? '\n全部通過' : `\n${failures} 項失敗`);

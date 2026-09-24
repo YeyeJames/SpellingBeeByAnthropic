@@ -127,15 +127,25 @@ function problem(where, msg) {
  * 週單字**不能**這樣檢查——它們照課本的區塊順序排，本來就不是字母序。
  */
 {
-  const contest = WORDS.filter((w) => w.part).map((w) => w.english);
+  /*
+   * **每一本各自**照字母排，不是全部串起來排。
+   *
+   * 兩本課本的競賽單字是兩份獨立的清單，Pierce 那一本結束在 written、
+   * Allen 那一本從 acquaint 開始，串起來當然會「斷」。
+   * 第一版就是這樣誤報的——檢查的範圍錯了，不是資料錯了。
+   */
   let breaks = 0;
-  for (let i = 1; i < contest.length; i += 1) {
-    if (!(contest[i - 1] < contest[i])) {
-      breaks += 1;
-      problem('競賽單字', `字母順序斷在 ${contest[i - 1]} → ${contest[i]}，其中一個可能抄錯了`);
+  for (const bank of BANKS) {
+    const contest = bank.words.filter((w) => w.part).map((w) => w.english);
+    for (let i = 1; i < contest.length; i += 1) {
+      if (!(contest[i - 1] < contest[i])) {
+        breaks += 1;
+        problem(`競賽單字（${bank.label}）`,
+          `字母順序斷在 ${contest[i - 1]} → ${contest[i]}，其中一個可能抄錯了`);
+      }
     }
   }
-  console.log(`7) 競賽單字照字母排序：${breaks === 0 ? '沒問題' : `${breaks} 處斷掉`}`);
+  console.log(`7) 競賽單字各自照字母排序：${breaks === 0 ? '沒問題' : `${breaks} 處斷掉`}`);
 }
 
 /* ── 7. 兩本課本不可以撞 id ───────────────────────────────
@@ -173,7 +183,7 @@ function problem(where, msg) {
     clash += 1;
     problem('單字庫', `有兩本課本共用同一個 idPrefix（${prefixes.map((x) => JSON.stringify(x)).join(' / ')}）`);
   }
-  console.log(`7) 兩本課本沒有撞 id：${clash === 0 ? '沒問題' : `${clash} 處撞號`}`);
+  console.log(`8) 兩本課本沒有撞 id：${clash === 0 ? '沒問題' : `${clash} 處撞號`}`);
 }
 
 /* ── 8. 每一組的規模 ─────────────────────────────────────── */

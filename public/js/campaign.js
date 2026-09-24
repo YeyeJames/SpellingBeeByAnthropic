@@ -30,6 +30,25 @@ const KIND_ICON = { normal: '', midboss: '🔶', finalboss: '👑' };
 function render(data) {
   const { summary, chapters, levels } = data;
 
+  /*
+   * 關卡表是空的：這一本課本還沒有每週單字（戰役的 96 關都是從週單字排出來的）。
+   *
+   * 不能只是畫一張空白的清單——那看起來就是壞了。要說清楚現在是什麼狀態、
+   * 以及他現在可以做什麼（競賽單字的 Part 已經練得了）。
+   */
+  if (!levels.length) {
+    progressEl.textContent = '尚未開放';
+    barEl.style.width = '0%';
+    nextEl.textContent = '';
+    chaptersEl.innerHTML =
+      '<p class="muted" style="line-height:1.8">' +
+      '這一本單字庫還沒有「每週單字」，而戰役的關卡是從每週單字排出來的，<br />' +
+      '所以戰役還打不了。<br /><br />' +
+      '競賽單字的 Part 已經可以用了——去<a href="/practice.html">練習</a>選一個 Part 開始吧！' +
+      '</p>';
+    return;
+  }
+
   progressEl.textContent = `第 ${summary.cleared} / ${summary.total} 關`;
   barEl.style.width = `${summary.percent}%`;
   nextEl.textContent = summary.next
