@@ -11,6 +11,7 @@
 import { api } from './api.js';
 import * as sound from './sound-manager.js';
 import { newId } from './local-store.js';
+import { battlesToLevel } from './shared/levels.js';
 
 const honeyBadge = document.getElementById('gear-honey');
 const levelBadge = document.getElementById('gear-level');
@@ -73,7 +74,17 @@ function goalLine() {
   if (locked.length) {
     const next = locked[0];
     const gap = next.minLevel - data.level;
-    return `你現在 ${data.level} 級。再升 ${gap} 級（${next.minLevel} 級）就能買第一件裝備：${next.name}。去玩遊戲模式賺經驗吧！`;
+    /*
+     * 「還差 4 級」他看不出是多遠——聽起來像一個禮拜，實際上是兩場。
+     * 所以換算成場數講出來（估計值，見 levels.js 的 TYPICAL_BATTLE_XP）。
+     * 沒有 xp 的話（舊的伺服器）就只講級數，不要硬掰一個場數。
+     */
+    const games = typeof data.xp === 'number'
+      ? battlesToLevel(data.xp, next.minLevel) : 0;
+    const howFar = games
+      ? `再升 ${gap} 級（大約再打 ${games} 場）`
+      : `再升 ${gap} 級`;
+    return `你現在 ${data.level} 級。${howFar}就能買第一件裝備：${next.name}。去玩遊戲模式賺經驗吧！`;
   }
 
   // 買不起但解得開：問題在錢，講差多少

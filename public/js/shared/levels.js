@@ -94,6 +94,42 @@ export function xpForLevel(level) {
   return total;
 }
 
+/*
+ * 一場大概給多少經驗。
+ *
+ * ── 為什麼需要這個數字 ──────────────────────────────────
+ * 商店寫「還差 4 級」，而他看不出 4 級是多遠。實際算過（Grade 3A 課本）：
+ *
+ *   Week 1  （40 字）一般打完 538 XP，全對 807
+ *   Week 2① （30 字）一般打完 351 XP，全對 527
+ *   Part 1  （25 字）一般打完 404 XP，全對 606
+ *
+ * 而 Lv6 → Lv10 是 890 XP——也就是**兩場**。
+ * 「還差 4 級」聽起來像一個禮拜，實際上是一個下午。差別大到會影響他
+ * 要不要去試，所以畫面要幫他把這件事講出來。
+ *
+ * ── 這是估計值，而且刻意抓保守的 ────────────────────────
+ * 取 350：接近最小的那一組（Week 2① 一般打完 351），不是平均。
+ * 估少了他會提早達成（好的意外），估多了他會覺得被騙——
+ * 那個方向的錯誤貴得多。
+ *
+ * 等 analyze-log.mjs 蒐集到足夠的實際紀錄，這個數字要改成用他自己的
+ * 平均值算。在那之前它只能拿來講「大約」，不可以拿來當承諾。
+ */
+export const TYPICAL_BATTLE_XP = 350;
+
+/**
+ * 從現在的累計經驗算起，大約再打幾場會到某一級。
+ *
+ * 回傳的是「大約」，所以最少講 1 場——已經在門檻上但還沒跨過去的時候
+ * 回 0 會變成「再 0 場就好了」，那是騙人的。
+ */
+export function battlesToLevel(totalXp, targetLevel, perBattle = TYPICAL_BATTLE_XP) {
+  const need = xpForLevel(targetLevel) - (Number(totalXp) || 0);
+  if (need <= 0) return 0;
+  return Math.max(1, Math.ceil(need / Math.max(1, perBattle)));
+}
+
 /* ── 等級給什麼（§6「等級給什麼」） ─────────────────────── */
 
 /*

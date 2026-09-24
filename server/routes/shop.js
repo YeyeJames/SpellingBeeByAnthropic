@@ -34,6 +34,8 @@ router.get('/gear', async (req, res, next) => {
     res.json({
       honey,
       level,
+      // 商店要能講「大約再打幾場」，那要原始經驗值，不只是等級
+      xp: req.user.xp || 0,
       slots: SLOTS,
       slotLabels: SLOT_LABELS,
       equipped,

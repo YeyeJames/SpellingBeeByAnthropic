@@ -273,9 +273,11 @@ console.log('5) 一件都買不到的時候（他當時就是這個狀態）');
   const { GEAR: g3, DEFAULT_EQUIPPED: d3 } = await import('../public/js/shared/equipment.js');
   const LV = 6;
   const HONEY = 720;
+  const XP = 550; // Lv6 的下限
   const lowBody = {
     honey: HONEY,
     level: LV,
+    xp: XP,
     slots: ['weapon', 'armor', 'trinket'],
     slotLabels: { weapon: '武器（蜂針）', armor: '護甲（蜂蠟）', trinket: '飾品' },
     equipped: { ...d3 },
@@ -331,6 +333,16 @@ console.log('5) 一件都買不到的時候（他當時就是這個狀態）');
   check('最上面一行講出第一件能買的是什麼',
     g3.filter((g) => g.minLevel === 10).some((g) => ui3.goal.includes(g.name)), ui3.goal);
   check('而且告訴他去哪裡賺', ui3.goal.includes('遊戲模式'), ui3.goal);
+
+  /*
+   * 「還差 4 級」他看不出是多遠——聽起來像一個禮拜，實際上兩三場就到了。
+   * 他現在正在計畫「我要存來買哪一個」，那個距離估錯會直接影響他要不要去試。
+   */
+  const { battlesToLevel } = await import('../public/js/shared/levels.js');
+  const expectGames = battlesToLevel(XP, 10);
+  check('（前提）Lv6 到 Lv10 是幾場的事，不是幾週', expectGames <= 4, `${expectGames} 場`);
+  check('換算成「大約再打幾場」講出來',
+    ui3.goal.includes(`${expectGames} 場`), ui3.goal);
 
   check('沒有 JS 例外', errs3.length === 0, errs3.join(' | '));
   await browser3.close();
