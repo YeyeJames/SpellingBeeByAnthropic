@@ -243,5 +243,98 @@ console.log('4) 裝備區');
   await browser2.close();
 }
 
+/* ── 7. 一件都買不到的時候，畫面要講「那我現在要幹嘛」 ─────────
+ *
+ * 實際看他玩發現的：練完一輪就跑去商店，然後研究了很久。
+ * 那時候他大約 6 級，而第一階裝備要 10 級——十三件裡十一件是鎖的、
+ * 兩件是他身上已經穿著的初始裝，蜂蜜七百多卻一滴都花不掉。
+ *
+ * 畫面當時給的資訊是「🔒 10 級解鎖」，可是**沒有任何地方寫他現在幾級**，
+ * 所以那個 10 他沒辦法拿來算距離，只能盯著看。
+ * 這一段就是釘住這件事：差距要幫他算好，而且最近的目標要寫在最上面。
+ */
+console.log('5) 一件都買不到的時候（他當時就是這個狀態）');
+{
+  const browser3 = await chromium.launch({ executablePath: CHROME, args: ['--no-sandbox'] });
+  const ctx3 = await browser3.newContext();
+  const page3 = await ctx3.newPage();
+  const errs3 = [];
+  page3.on('pageerror', (e) => errs3.push(String(e)));
+
+  const FAKE_USER = {
+    _id: 'u-lowlevel', nickname: '測試', coins: 0, activeTheme: 'sports',
+    ownedItemKeys: [], avatar: { baseCharacter: 'rookie', accessories: [] }
+  };
+  await ctx3.route('**/api/auth/me*', (r) =>
+    r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: FAKE_USER }) }));
+  await ctx3.route('**/api/shop/items*', (r) =>
+    r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [] }) }));
+
+  const { GEAR: g3, DEFAULT_EQUIPPED: d3 } = await import('../public/js/shared/equipment.js');
+  const LV = 6;
+  const HONEY = 720;
+  const lowBody = {
+    honey: HONEY,
+    level: LV,
+    slots: ['weapon', 'armor', 'trinket'],
+    slotLabels: { weapon: '武器（蜂針）', armor: '護甲（蜂蠟）', trinket: '飾品' },
+    equipped: { ...d3 },
+    items: g3.map((g) => ({
+      key: g.key, slot: g.slot, tier: g.tier, name: g.name,
+      description: g.description, cost: g.cost, minLevel: g.minLevel,
+      equipped: d3[g.slot] === g.key,
+      owned: g.tier === 1,
+      unlocked: LV >= g.minLevel,
+      affordable: HONEY >= g.cost,
+      levelNeeded: g.minLevel,
+      canBuy: g.tier !== 1 && LV >= g.minLevel && HONEY >= g.cost
+    }))
+  };
+  await ctx3.route('**/api/shop/gear*', (r) =>
+    r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(lowBody) }));
+  await ctx3.addInitScript((u) => {
+    try {
+      localStorage.removeItem('sb:v2:shared:shopItems');
+      localStorage.setItem('sb:v2:shared:currentUser', JSON.stringify(u));
+    } catch (e) { /* 無痕模式 */ }
+  }, FAKE_USER);
+
+  await page3.goto(`${BASE}/shop.html`, { waitUntil: 'domcontentloaded' });
+  await page3.waitForSelector('#gear-slots .gear-card', { timeout: 8000 }).catch(() => {});
+
+  const ui3 = await page3.evaluate(() => ({
+    level: document.getElementById('gear-level')?.textContent || '',
+    goal: document.getElementById('gear-goal')?.textContent || '',
+    buyable: document.querySelectorAll('#gear-slots .gear-card.is-buyable').length,
+    lockedText: [...document.querySelectorAll('#gear-slots .gear-card.is-locked .gear-status')]
+      .map((e) => e.textContent),
+    btns: [...document.querySelectorAll('#gear-slots .gear-card.is-locked button')]
+      .map((e) => e.textContent)
+  }));
+
+  // 先確認這一份假資料真的重現了他當時的處境，不然下面測的是別的東西
+  check('（前提）這個狀態下一件都買不到', ui3.buyable === 0, String(ui3.buyable));
+
+  check('畫面寫得出他現在幾級', /\b6\b/.test(ui3.level), ui3.level);
+  check('鎖著的卡片寫「還差幾級」而不只是門檻',
+    ui3.lockedText.some((t) => t.includes('還差 4 級')),
+    JSON.stringify(ui3.lockedText.slice(0, 2)));
+  check('按鈕也寫得出距離', ui3.btns.some((t) => t.includes('再 4 級')),
+    JSON.stringify(ui3.btns.slice(0, 2)));
+
+  /*
+   * 最重要的一條：最上面那一行要回答「我現在該做什麼」。
+   * 要有他現在幾級、還差幾級、以及第一件買得到的是什麼。
+   */
+  check('最上面一行講出他現在幾級', ui3.goal.includes('6 級'), ui3.goal);
+  check('最上面一行講出還要升幾級', /再升 4 級/.test(ui3.goal), ui3.goal);
+  check('最上面一行講出第一件能買的是什麼',
+    g3.filter((g) => g.minLevel === 10).some((g) => ui3.goal.includes(g.name)), ui3.goal);
+  check('而且告訴他去哪裡賺', ui3.goal.includes('遊戲模式'), ui3.goal);
+
+  check('沒有 JS 例外', errs3.length === 0, errs3.join(' | '));
+  await browser3.close();
+}
+
 console.log(failures === 0 ? '\n全部通過' : `\n${failures} 項失敗`);
 process.exit(failures === 0 ? 0 : 1);

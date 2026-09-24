@@ -38,8 +38,14 @@
       <div class="shop-head">
         <h1>⚔️ 裝備</h1>
         <span class="honey-badge" id="gear-honey">🍯 0</span>
+        <!--
+          等級要跟蜂蜜擺在一起。裝備鎖的是等級不是錢，畫面上卻只有錢——
+          他看到「🔒 10 級解鎖」卻不知道自己幾級，就沒辦法算還差多少。
+        -->
+        <span class="level-badge" id="gear-level"></span>
       </div>
       <p class="shop-sub">用<strong>遊戲模式</strong>賺到的 🍯 蜂蜜買。裝備只會讓同樣的字更好打，不會幫你少打字母。</p>
+      <p class="gear-goal" id="gear-goal"></p>
       <p class="error-text" id="gear-error"></p>
       <div id="gear-slots"></div>
     </div>

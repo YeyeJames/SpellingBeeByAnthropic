@@ -13,6 +13,8 @@ import * as sound from './sound-manager.js';
 import { newId } from './local-store.js';
 
 const honeyBadge = document.getElementById('gear-honey');
+const levelBadge = document.getElementById('gear-level');
+const goalEl = document.getElementById('gear-goal');
 const slotsEl = document.getElementById('gear-slots');
 const errorEl = document.getElementById('gear-error');
 
@@ -34,14 +36,61 @@ function escapeHtml(str) {
 function statusOf(item) {
   if (item.equipped) return { text: '✅ 裝備中', cls: 'is-equipped' };
   if (item.owned) return { text: '已擁有', cls: 'is-owned' };
-  if (!item.unlocked) return { text: `🔒 ${item.minLevel} 級解鎖`, cls: 'is-locked' };
+  /*
+   * 鎖著的時候寫「還差幾級」，不是只寫門檻。
+   *
+   * 原本只寫「🔒 10 級解鎖」，而畫面上沒有任何地方寫他現在幾級——
+   * 那個數字他無法拿來算距離，只能盯著看。差距要我們幫他算好。
+   */
+  if (!item.unlocked) {
+    const gap = item.minLevel - (data ? data.level : 0);
+    return { text: `🔒 還差 ${gap} 級（${item.minLevel} 級解鎖）`, cls: 'is-locked' };
+  }
   if (!item.affordable) return { text: `🍯 ${item.cost}（還差 ${item.cost - data.honey}）`, cls: 'is-poor' };
   return { text: `🍯 ${item.cost}`, cls: 'is-buyable' };
+}
+
+/*
+ * 「這裡現在有什麼可以做」——一行話寫在最上面。
+ *
+ * 實際看他玩發現的：練完一輪就跑來商店，然後研究了很久。那個畫面上
+ * 十三件裝備有十一件是鎖的、兩件是他身上已經穿著的初始裝，蜂蜜有七百多
+ * 卻一滴都花不掉——他在找的是「我到底要做什麼」，而畫面沒有回答。
+ *
+ * 一件都不能買的時候，不能只是排一堆灰色卡片了事，要把最近的那個目標
+ * 直接講出來：還差幾級、練到了可以買什麼。錢花不掉本來就是設計裡寫過的
+ * 失敗模式（§9.5），等級門檻等於在上面又做了一次，那就得由畫面補回來。
+ */
+function goalLine() {
+  const buyable = data.items.filter((i) => i.canBuy);
+  if (buyable.length) {
+    return `現在有 ${buyable.length} 件買得起：${buyable.map((i) => i.name).join('、')}`;
+  }
+
+  const locked = data.items
+    .filter((i) => !i.owned && !i.unlocked)
+    .sort((a, b) => a.minLevel - b.minLevel);
+  if (locked.length) {
+    const next = locked[0];
+    const gap = next.minLevel - data.level;
+    return `你現在 ${data.level} 級。再升 ${gap} 級（${next.minLevel} 級）就能買第一件裝備：${next.name}。去玩遊戲模式賺經驗吧！`;
+  }
+
+  // 買不起但解得開：問題在錢，講差多少
+  const poor = data.items
+    .filter((i) => !i.owned && i.unlocked && !i.affordable)
+    .sort((a, b) => a.cost - b.cost);
+  if (poor.length) {
+    return `再賺 🍯 ${poor[0].cost - data.honey} 就能買 ${poor[0].name}。`;
+  }
+  return '每一件都到手了，厲害！';
 }
 
 function render() {
   if (!data) return;
   honeyBadge.textContent = `🍯 ${data.honey}`;
+  levelBadge.textContent = `Lv ${data.level}`;
+  goalEl.textContent = goalLine();
   slotsEl.innerHTML = '';
 
   for (const slot of data.slots) {
@@ -86,7 +135,7 @@ function render() {
         btn.textContent = '換上';
         btn.onclick = () => equip(slot, item.key);
       } else if (!item.unlocked) {
-        btn.textContent = `${item.minLevel} 級解鎖`;
+        btn.textContent = `再 ${item.minLevel - data.level} 級`;
         btn.disabled = true;
       } else if (!item.affordable) {
         btn.textContent = '蜂蜜不夠';

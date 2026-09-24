@@ -98,10 +98,44 @@
   white-space: nowrap;
 }
 
+/*
+ * 等級章。跟蜂蜜擺在一起但顏色不同——鎖住裝備的是等級不是錢，
+ * 兩個長一樣的話他會繼續以為問題出在蜂蜜不夠。
+ */
+.level-badge {
+  background: #2a1f42;
+  color: #c4b5fd;
+  border: 1px solid #5b4a8a;
+  border-radius: 999px;
+  padding: 0.3rem 0.9rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .shop-sub {
   margin: 0.2rem 0 1rem;
   color: var(--color-text-muted);
   font-size: 0.92rem;
+}
+
+/*
+ * 「現在該做什麼」那一行。這是他進商店最想知道的事，所以要比商品卡片
+ * 更早被看到——放在最上面、給底色，不要混進一般說明文字裡。
+ */
+.gear-goal {
+  margin: 0 0 1rem;
+  padding: 0.7rem 0.9rem;
+  background: #1f2937;
+  border-left: 4px solid #fbbf24;
+  border-radius: 0 8px 8px 0;
+  color: #e5e7eb;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.gear-goal:empty {
+  display: none;
 }
 
 .gear-slot + .gear-slot {
