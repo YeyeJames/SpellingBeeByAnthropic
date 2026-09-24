@@ -44,6 +44,14 @@
         <h2 style="text-align:center;">新增帳號</h2>
         <label for="new-nickname">名字</label>
         <input type="text" id="new-nickname" maxlength="20" placeholder="輸入名字" />
+        <!--
+          選課本。兩個孩子各有各的單字庫，選錯的話他會一路練到別人的功課——
+          而那件事從畫面上看不出來（單字都是英文，他不會知道那不是自己的）。
+          所以放在建立帳號的時候問，而且是必選。
+        -->
+        <label for="new-bank">用哪一本單字庫</label>
+        <div id="new-bank" class="bank-picker"></div>
+        <p id="new-bank-note" class="muted" style="font-size:0.85rem; margin:0.3rem 0 0;"></p>
         <p class="error-text" id="new-profile-error"></p>
         <div style="display:flex; gap:0.75rem; margin-top:1rem; justify-content:center;">
           <button class="btn secondary" id="new-profile-cancel" type="button">取消</button>

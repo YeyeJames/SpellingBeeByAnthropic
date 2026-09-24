@@ -110,6 +110,13 @@ function groupsForLevel(weekGroups, chapter, indexInChapter) {
 export function buildCampaign(groups = []) {
   const weekGroups = groups.filter((g) => g.kind === 'week');
   const contestGroups = groups.filter((g) => g.kind === 'contest');
+  /*
+   * 還沒有單字的課本（剛開好、還在等抄進來）要回一張空表，不是爆掉。
+   *
+   * 兩個孩子各有各的課本，第二本一定會有一段「帳號建好了但單字還沒進去」
+   * 的時間。那時候看到「還沒有單字」是可以理解的，看到 500 就只會以為壞了。
+   */
+  if (weekGroups.length === 0) return [];
   const byId = new Map(groups.map((g) => [g.id, g]));
   const levels = [];
 

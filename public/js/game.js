@@ -33,6 +33,7 @@ import {
 } from './audio-player.js';
 import { buildRules, buildQuickRules } from './game/rules.js';
 import { readShared, writeShared, newId } from './local-store.js';
+import { getCachedUser } from './auth.js';
 
 const params = new URLSearchParams(location.search);
 
@@ -98,6 +99,14 @@ const ctx = {
    * 戰役關卡（C3）。?level=N 時才有值；其餘情況是 null，
    * 也就是原本「直接打某一組」的玩法，完全不受影響。
    */
+  /*
+   * 用哪一本課本。
+   *
+   * 從本地快取的帳號讀（純 localStorage，不連網、也不會把人導走——
+   * 遊戲頁刻意不強制登入，資料庫掛掉時它還是要打得開）。
+   * 伺服器的回應（access / campaign）帶了就以它為準。
+   */
+  wordBankId: getCachedUser()?.wordBankId || null,
   campaignLevel: Number(params.get('level')) || null,
   campaignInfo: null,
   levelLimit: null,
@@ -528,6 +537,21 @@ function downloadLog() {
   URL.revokeObjectURL(a.href);
 }
 
+/*
+ * 這個帳號用哪一本課本。
+ *
+ * 兩個孩子各有各的單字庫。/api/wordbank 刻意不需要登入（資料庫掛掉時
+ * 遊戲仍然打得開），所以它看不到 req.user——課本只能由這邊帶過去。
+ * 拿不到就不帶，伺服器會給預設那一本，跟以前一樣。
+ */
+function bankParam() {
+  return ctx.wordBankId ? `bank=${encodeURIComponent(ctx.wordBankId)}` : '';
+}
+function bankQuery() {
+  const p = bankParam();
+  return p ? `&${p}` : '';
+}
+
 /**
  * 這一關要打哪些字（C3）。
  *
@@ -548,6 +572,8 @@ async function fetchLevelWordIds(level) {
     if (!res.ok) return null;
     const data = await res.json();
     ctx.campaignInfo = data.level || null;
+    // 伺服器知道他真正用哪一本，以它為準
+    if (data.wordBankId) ctx.wordBankId = data.wordBankId;
     // 關卡指定的出題順序蓋過記住的偏好——第 2 章的重點就是「這次是亂的」
     if (data.order) ctx.order = data.order;
     ctx.levelLimit = data.limit || null;
@@ -559,7 +585,8 @@ async function fetchLevelWordIds(level) {
 
 /** 從單字庫撈出指定的那些 id，順序照伺服器給的。 */
 async function wordsFromIds(ids) {
-  const res = await fetch('/api/wordbank?part=all');
+  // 只拿自己那一本課本的字（bankQuery 見下面）
+  const res = await fetch(`/api/wordbank?part=all${bankQuery()}`);
   if (!res.ok) throw new Error(`拿不到單字庫（${res.status}）`);
   const data = await res.json();
   const byId = new Map(data.words.map((w) => [w.id, w]));
@@ -599,7 +626,7 @@ async function fetchWords() {
   if (group) query = `?group=${encodeURIComponent(group)}`;
   else if (part !== 'all') query = `?part=${encodeURIComponent(part)}`;
 
-  const res = await fetch(`/api/wordbank${query}`);
+  const res = await fetch(`/api/wordbank${query}${query ? '&' : '?'}${bankParam()}`);
   if (!res.ok) throw new Error(`拿不到單字庫（${res.status}）`);
   const data = await res.json();
 
@@ -1048,6 +1075,7 @@ async function boot() {
      * bestScore 已經把這一場算進去了，拿它來比永遠都是平手。
      */
     ctx.bestBefore = Number(access.bestScore) || 0;
+    if (access.wordBankId) ctx.wordBankId = access.wordBankId;
     // C2：等級與重學名單。離線或拿不到時維持 1 級、空名單
     ctx.level = Number(access.level) || 1;
     ctx.xp = Number(access.xp) || 0;

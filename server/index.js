@@ -117,20 +117,37 @@ function main() {
    * 只要組別目錄，不要四百多個字。
    * 練習頁的「選一組」只需要這個，沒必要為了畫幾顆按鈕就載入整個單字庫。
    */
+  /*
+   * ?bank= 指定是哪一本課本（兩個孩子各一本）。
+   *
+   * 這一支不需要登入，所以看不到 req.user，課本只能由呼叫端帶進來。
+   * 不帶就給預設那一本——舊的連結與測試因此照樣能用。
+   */
   app.get('/api/wordbank/groups', (req, res) => {
     res.set('Cache-Control', 'public, max-age=300');
-    res.json({ groups: wordBank.listGroups() });
+    res.json({ groups: wordBank.listGroups(req.query.bank), banks: wordBank.listBanks() });
   });
 
   app.get('/api/wordbank', (req, res) => {
     const { part, group } = req.query;
     // group 是現在的單位（Part 1、Week 1 都是一組）；part 是競賽單字留下來的舊參數
     let words;
+    const bank = req.query.bank;
     if (group) words = wordBank.wordsByGroup(group);
-    else if (part) words = wordBank.wordsByPart(part);
-    else words = wordBank.allWords();
+    else if (part) words = wordBank.wordsByPart(part, bank);
+    /*
+     * 不指定就給**那一本**的全部，而不是所有課本的全部。
+     * 給全部的話，Allen 的遊戲頁會把 Pierce 的字也載進來——
+     * 雖然靠 id 濾得掉，但那等於把另一個孩子的整份題庫送到他的瀏覽器裡。
+     */
+    else words = wordBank.getBank(bank).words;
     res.set('Cache-Control', 'public, max-age=300');
-    res.json({ words, parts: wordBank.PARTS, groups: wordBank.listGroups() });
+    res.json({
+      words,
+      parts: wordBank.getBank(bank).parts,
+      groups: wordBank.listGroups(bank),
+      bank: wordBank.resolveBankId(bank)
+    });
   });
 
   // 這道關卡必須擋在 session 中介層「之前」。

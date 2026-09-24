@@ -21,6 +21,11 @@ import { chromium } from 'playwright-core';
 const CHROME = process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const BASE = process.env.BASE || 'http://127.0.0.1:3100';
 
+/** 請求裡有沒有任何像密碼的東西。這個 app 刻意沒有密碼與 PIN。 */
+function hasSecret(body = {}) {
+  return Object.keys(body).some((k) => /pin|pass|pwd|secret|token/i.test(k));
+}
+
 let failures = 0;
 function check(name, ok, detail = '') {
   if (!ok) failures += 1;
@@ -119,7 +124,7 @@ console.log('1) 點一下名字就進去');
   check('進去之後到的是練習頁（先練再玩）', page.url().includes('/practice.html'), page.url());
 
   const login = state.calls.find((c) => c.kind === 'login');
-  check('送出的只有名字，沒有密碼', login && Object.keys(login.body).join(',') === 'nickname',
+  check('送出的只有名字，沒有密碼', login && !hasSecret(login.body) && !!login.body.nickname,
     JSON.stringify(login?.body));
   check('沒有瀏覽器錯誤', errors.length === 0, errors.slice(0, 2).join(' | '));
   await context.close();
@@ -147,7 +152,14 @@ console.log('\n2) 新增帳號只要一個名字');
   await page.waitForURL('**/practice.html', { timeout: 10000 });
   const reg = state.calls.find((c) => c.kind === 'register');
   check('建好之後直接進練習頁', page.url().includes('/practice.html'), page.url());
-  check('送出的只有名字', reg && Object.keys(reg.body).join(',') === 'nickname', JSON.stringify(reg?.body));
+  /*
+   * 驗的是「沒有密碼」，不是「欄位剛好只有一個」。
+   *
+   * 原本寫死比對鍵的清單，結果多了一個 wordBankId（兩個孩子各一本課本）
+   * 就紅了——但那個欄位完全無害，真正要守的是不可以出現密碼或 PIN。
+   * 比對清單只是恰好抓到，換個角度就會變成擋住正常的演進。
+   */
+  check('送出的沒有密碼', reg && !hasSecret(reg.body) && !!reg.body.nickname, JSON.stringify(reg?.body));
   check('沒有瀏覽器錯誤', errors.length === 0, errors.slice(0, 2).join(' | '));
   await context.close();
 }

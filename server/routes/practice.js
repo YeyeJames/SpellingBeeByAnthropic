@@ -164,7 +164,7 @@ router.get('/progress', async (req, res, next) => {
     res.json({
       progress,
       unlockAfter: GroupProgress.UNLOCK_AFTER_COMPLETIONS,
-      groups: wordBank.listGroups()
+      groups: wordBank.listGroups(req.user.wordBankId)
     });
   } catch (err) {
     next(err);

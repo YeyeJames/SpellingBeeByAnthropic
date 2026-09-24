@@ -27,6 +27,9 @@ const deleteError = document.getElementById('delete-error');
 
 let profiles = [];
 let currentUser = null;
+/* 有哪幾本單字庫（兩個孩子各一本），以及新帳號選了哪一本 */
+let banks = [];
+let selectedBank = null;
 let managing = false; // 管理模式：每個帳號右上角多一顆刪除鈕
 let deleteTarget = null;
 
@@ -41,6 +44,18 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+/*
+ * 帳號磚上標出用的是哪一本課本。
+ *
+ * 兩個孩子的帳號長得一樣，只有名字不同——標出課本才看得出「這個是哥哥的」。
+ * 只有一本的時候不標，那是噪音。
+ */
+function bankLabelFor(profile) {
+  if (banks.length <= 1) return '';
+  const b = banks.find((x) => x.id === (profile.wordBankId || banks[0]?.id));
+  return b ? ` ・ ${escapeHtml(b.label)}` : '';
+}
+
 function renderProfiles() {
   profileGrid.innerHTML = '';
 
@@ -53,7 +68,7 @@ function renderProfiles() {
     tile.innerHTML = `
       <div class="avatar-circle">${escapeHtml(p.nickname.slice(0, 1).toUpperCase())}</div>
       <div class="nickname">${escapeHtml(p.nickname)}</div>
-      <div class="tile-sub">🪙 ${coins}</div>
+      <div class="tile-sub">🪙 ${coins}${bankLabelFor(p)}</div>
       ${isCurrent ? '<div class="current-badge">繼續玩</div>' : ''}
     `;
 
@@ -103,9 +118,51 @@ async function enterProfile(nickname) {
   }
 }
 
+/*
+ * 課本選擇。
+ *
+ * 只有一本的時候不用問——多一個只有一個選項的問題，對小孩來說就是
+ * 一個看不懂的步驟。兩本以上才畫出來，而且預設不選，逼他做一次決定：
+ * 選錯的話他會一路練到別人的功課，而畫面上看不出來（單字都是英文）。
+ */
+function renderBankPicker() {
+  const box = document.getElementById('new-bank');
+  const note = document.getElementById('new-bank-note');
+  if (!box) return;
+  box.innerHTML = '';
+  if (banks.length <= 1) {
+    box.hidden = true;
+    if (note) note.textContent = '';
+    selectedBank = banks[0]?.id || null;
+    return;
+  }
+  box.hidden = false;
+  for (const b of banks) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'bank-option' + (selectedBank === b.id ? ' selected' : '');
+    btn.innerHTML =
+      `<span class="bank-name">${escapeHtml(b.owner || b.label)}</span>` +
+      `<span class="bank-sub">${escapeHtml(b.label)}・${b.ready ? `${b.wordCount} 字` : '還沒有單字'}</span>`;
+    btn.addEventListener('click', () => {
+      selectedBank = b.id;
+      renderBankPicker();
+    });
+    box.appendChild(btn);
+  }
+  const chosen = banks.find((b) => b.id === selectedBank);
+  if (note) {
+    note.textContent = chosen && !chosen.ready
+      ? '⚠️ 這一本還沒有單字，建好帳號之後要先把單字加進去才練得了。'
+      : '';
+  }
+}
+
 function startNewProfile() {
   newNicknameInput.value = '';
   newProfileError.textContent = '';
+  selectedBank = null;
+  renderBankPicker();
   showStep(newProfileStep);
   newNicknameInput.focus();
 }
@@ -116,9 +173,18 @@ async function createProfile() {
     newProfileError.textContent = '請輸入名字';
     return;
   }
+  if (banks.length > 1 && !selectedBank) {
+    newProfileError.textContent = '請選一本單字庫';
+    return;
+  }
   newProfileError.textContent = '';
   try {
-    const { user } = await api.post('/auth/register', { nickname });
+    /*
+     * 只有一本課本的時候不送這個欄位——沒得選就不該有這個問題存在，
+     * 伺服器本來就會退回預設那一本。
+     */
+    const body = selectedBank ? { nickname, wordBankId: selectedBank } : { nickname };
+    const { user } = await api.post('/auth/register', body);
     cacheUser(user);
     window.location.href = '/practice.html';
   } catch (err) {
@@ -160,8 +226,9 @@ async function confirmDelete() {
 }
 
 async function reloadProfiles() {
-  const { profiles: list } = await api.get('/auth/profiles');
+  const { profiles: list, banks: bankList } = await api.get('/auth/profiles');
   profiles = list || [];
+  banks = bankList || [];
   renderProfiles();
 }
 

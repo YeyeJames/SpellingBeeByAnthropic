@@ -86,8 +86,14 @@ router.get('/access', async (req, res, next) => {
   try {
     const groupId = String(req.query.group || '');
     if (!groupId) return res.status(400).json({ error: '缺少 group' });
-    const group = wordBank.listGroups().find((g) => g.id === groupId);
-    if (!group) return res.status(404).json({ error: '找不到這一組單字' });
+    /*
+     * 只能玩自己課本裡的組。
+     *
+     * 兩個孩子各有各的課本，拿別人的組 id 進來要擋掉——不然 Allen 會
+     * 練到 Pierce 的單字，而且進度還會記在他自己名下。
+     */
+    const group = wordBank.listGroups(req.user.wordBankId).find((g) => g.id === groupId);
+    if (!group) return res.status(404).json({ error: '這一組不在你的單字庫裡' });
 
     const [progress, relearn, { levelFromXp, levelRewards }] = await Promise.all([
       GroupProgress.getForGroup(req.user._id, groupId),
@@ -110,6 +116,7 @@ router.get('/access', async (req, res, next) => {
       xpNeed: lv.need,
       rewards: levelRewards(lv.level),
       relearnIds: relearn,
+      wordBankId: wordBank.resolveBankId(req.user.wordBankId),
       /* C5：開打前要知道裝了什麼——戰鬥的擊退、血量、打錯代價都看它 */
       ...(await equippedFor(req.user)),
       honey: req.user.honey || 0

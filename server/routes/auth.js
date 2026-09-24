@@ -21,13 +21,14 @@ const {
 const { isValidNickname } = require('../utils/nickname');
 const { requireAuth } = require('../middleware/auth');
 const { loginLimiter } = require('../middleware/rateLimit');
+const wordBank = require('../data/word-bank');
 
 const router = express.Router();
 
 router.get('/profiles', async (req, res, next) => {
   try {
     const profiles = await listProfiles();
-    res.json({ profiles });
+    res.json({ profiles, banks: wordBank.listBanks() });
   } catch (err) {
     next(err);
   }
@@ -35,7 +36,7 @@ router.get('/profiles', async (req, res, next) => {
 
 router.post('/register', loginLimiter, async (req, res, next) => {
   try {
-    const { nickname } = req.body || {};
+    const { nickname, wordBankId } = req.body || {};
     if (!isValidNickname(nickname)) {
       return res.status(400).json({ error: '暱稱格式不正確（1-20字，可用中英數字）' });
     }
@@ -43,7 +44,14 @@ router.post('/register', loginLimiter, async (req, res, next) => {
     if (existing) {
       return res.status(409).json({ error: '這個暱稱已經有人用了，換一個試試' });
     }
-    const user = await createUser(nickname);
+    /*
+     * 建帳號時就選好用哪一本課本。
+     *
+     * 兩個孩子各有各的單字庫，選錯的話他會一路練到別人的單字——
+     * 而那件事從畫面上看不出來（單字都是英文，他不會知道那不是自己的功課）。
+     * 認不得的 id 會退回預設那一本，不會建出一個指著不存在課本的帳號。
+     */
+    const user = await createUser(nickname, wordBank.resolveBankId(wordBankId));
     req.session.userId = user._id.toString();
     res.status(201).json({ user: sanitizeUser(user) });
   } catch (err) {
@@ -53,6 +61,7 @@ router.post('/register', loginLimiter, async (req, res, next) => {
 
 router.post('/login', loginLimiter, async (req, res, next) => {
   try {
+    // 登入不碰課本——課本是帳號的屬性，選帳號的時候就決定了
     const { nickname } = req.body || {};
     if (!isValidNickname(nickname)) {
       return res.status(400).json({ error: '暱稱格式不正確' });

@@ -12,6 +12,7 @@
  *   5. 例句十二個字以內（太長的句子唸完，敵人已經走到面前了）
  *   6. 例句結尾有標點
  *   7. 競賽單字照字母排序（課本本來就是；抓字首抄錯與插錯位置，抓不到字中間的錯字）
+ *   8. 兩本課本不可以撞 id（撞了的話，一個孩子的錄音會播到另一個孩子的字上面）
  *   8. 每一組都有字，而且能打的字（純 a~z）不能太少
  *
  * 用法：node scripts/validate-words.mjs
@@ -20,7 +21,7 @@
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { WORDS, GROUPS, MAX_GROUP_SIZE, listGroups, wordsByGroup, getWordById } = require('../server/data/word-bank.js');
+const { WORDS, GROUPS, MAX_GROUP_SIZE, listGroups, wordsByGroup, getWordById, listBanks, BANKS } = require('../server/data/word-bank.js');
 
 const MAX_SENTENCE_WORDS = 12;
 const MIN_TYPEABLE_PER_GROUP = 10;
@@ -135,6 +136,44 @@ function problem(where, msg) {
     }
   }
   console.log(`7) 競賽單字照字母排序：${breaks === 0 ? '沒問題' : `${breaks} 處斷掉`}`);
+}
+
+/* ── 7. 兩本課本不可以撞 id ───────────────────────────────
+ *
+ * 兩個孩子各有各的課本。錄音是跨帳號共用的（wordAudio 只用 wordId 當鍵，
+ * 這是刻意的設計——孩子錄過的聲音不該因為換帳號就聽不到），所以兩本課本
+ * 如果都有 `w01-path`，Pierce 錄的聲音會被播到 Allen 那個完全不同的字上面，
+ * 而且不會有任何錯誤訊息。
+ *
+ * 這一條是唯一擋得住「以後又加一本忘了給 idPrefix」的檢查。
+ */
+{
+  console.log('\n單字庫');
+  for (const b of listBanks()) {
+    console.log(
+      `  ${b.label.padEnd(14, ' ')} ${String(b.owner).padEnd(8, ' ')}` +
+        `${String(b.wordCount).padStart(4, ' ')} 字 / ${String(b.groupCount).padStart(2, ' ')} 組` +
+        `${b.ready ? '' : '　⏳ 還沒有單字'}`
+    );
+  }
+
+  const seen = new Map();
+  let clash = 0;
+  for (const w of WORDS) {
+    if (seen.has(w.id)) {
+      clash += 1;
+      problem('單字庫', `id ${w.id} 在「${seen.get(w.id)}」與「${w.bank}」都有——` +
+        '兩本課本撞號，錄音會播到別人的字上面');
+    }
+    seen.set(w.id, w.bank);
+  }
+
+  const prefixes = BANKS.map((b) => b.idPrefix);
+  if (new Set(prefixes).size !== prefixes.length) {
+    clash += 1;
+    problem('單字庫', `有兩本課本共用同一個 idPrefix（${prefixes.map((x) => JSON.stringify(x)).join(' / ')}）`);
+  }
+  console.log(`7) 兩本課本沒有撞 id：${clash === 0 ? '沒問題' : `${clash} 處撞號`}`);
 }
 
 /* ── 8. 每一組的規模 ─────────────────────────────────────── */

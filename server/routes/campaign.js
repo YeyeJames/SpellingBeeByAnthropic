@@ -38,7 +38,7 @@ async function progressFor(userId) {
 router.get('/', async (req, res, next) => {
   try {
     const { buildCampaign, isUnlocked, campaignSummary, CHAPTERS } = await campaignRules();
-    const campaign = buildCampaign(wordBank.listGroups());
+    const campaign = buildCampaign(wordBank.listGroups(req.user.wordBankId));
     const progress = await progressFor(req.user._id);
 
     res.json({
@@ -66,7 +66,7 @@ router.get('/', async (req, res, next) => {
 router.get('/level/:level', async (req, res, next) => {
   try {
     const { buildCampaign, levelAt, isUnlocked } = await campaignRules();
-    const campaign = buildCampaign(wordBank.listGroups());
+    const campaign = buildCampaign(wordBank.listGroups(req.user.wordBankId));
     const level = levelAt(campaign, req.params.level);
     if (!level) return res.status(404).json({ error: '沒有這一關' });
 
@@ -95,6 +95,8 @@ router.get('/level/:level', async (req, res, next) => {
 
     res.json({
       level: { ...level, weaknessPending: usingFallback },
+      // 遊戲頁要用它去 /api/wordbank 拿對的那一本（那支不需要登入，看不到 req.user）
+      wordBankId: wordBank.resolveBankId(req.user.wordBankId),
       // 只送 id 與組別，單字內容遊戲頁本來就會自己去 /api/wordbank 拿
       wordIds: words.map((w) => w.id),
       limit: level.wordLimit,
@@ -115,7 +117,7 @@ router.post('/clear', async (req, res, next) => {
   try {
     const { buildCampaign, levelAt, isUnlocked } = await campaignRules();
     const { level, won, score, accuracy, opId } = req.body || {};
-    const campaign = buildCampaign(wordBank.listGroups());
+    const campaign = buildCampaign(wordBank.listGroups(req.user.wordBankId));
     const row = levelAt(campaign, level);
     if (!row) return res.status(404).json({ error: '沒有這一關' });
 

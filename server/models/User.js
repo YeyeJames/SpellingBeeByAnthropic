@@ -1,6 +1,7 @@
 const { ObjectId } = require('mongodb');
 const { getDB } = require('../db');
 const { calcCoinsForCorrectAnswer } = require('../utils/coins');
+const { DEFAULT_BANK_ID } = require('../data/word-bank');
 
 const DEFAULT_THEME = 'sports';
 
@@ -8,7 +9,7 @@ function collection() {
   return getDB().collection('users');
 }
 
-async function createUser(nickname) {
+async function createUser(nickname, wordBankId) {
   const now = new Date();
   const doc = {
     nickname: nickname.trim(),
@@ -33,6 +34,14 @@ async function createUser(nickname) {
      * 在這之前它只是一場的分數，打完就沒了。
      */
     honey: 0,
+    /*
+     * 用哪一本課本（單字庫）。
+     *
+     * 兩個孩子各有各的課本，內容不同。這個欄位決定他在練習頁、戰役、
+     * 遊戲裡看得到哪些組——設錯的話他會練到別人的單字。
+     * 沒有這個欄位的舊帳號會退回預設那一本（見 word-bank.js 的 resolveBankId）。
+     */
+    wordBankId: wordBankId || DEFAULT_BANK_ID,
     ownedGear: [],
     equipped: { weapon: 'weapon_wood', armor: 'armor_thin', trinket: null },
     stats: {
@@ -120,6 +129,12 @@ async function setEquipped(id, slot, gearKey) {
   return findById(id);
 }
 
+/** 換課本。哪些 id 合法由呼叫端（路由）依 word-bank 判斷。 */
+async function setWordBank(id, wordBankId) {
+  await collection().updateOne({ _id: new ObjectId(id) }, { $set: { wordBankId } });
+  return findById(id);
+}
+
 async function findByNickname(nickname) {
   return collection().findOne({ nicknameLower: nickname.trim().toLowerCase() });
 }
@@ -130,7 +145,7 @@ async function findById(id) {
 
 async function listProfiles() {
   return collection()
-    .find({}, { projection: { nickname: 1, avatar: 1, activeTheme: 1, coins: 1, stats: 1 } })
+    .find({}, { projection: { nickname: 1, avatar: 1, activeTheme: 1, coins: 1, stats: 1, wordBankId: 1 } })
     .sort({ nickname: 1 })
     .toArray();
 }
@@ -245,6 +260,7 @@ module.exports = {
   addHoney,
   buyGear,
   setEquipped,
+  setWordBank,
   addOwnedItem,
   equipItem,
   unequipAccessory,
