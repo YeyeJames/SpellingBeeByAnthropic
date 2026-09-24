@@ -204,18 +204,30 @@ async function loadProgress() {
 }
 
 async function loadGroups() {
+  /*
+   * 組別清單是**這個帳號那一本**的，快取也要分帳號存。
+   *
+   * 本來兩件事都錯：
+   *   1. /api/wordbank/groups 沒帶 bank，伺服器就給預設那一本（Pierce 的）
+   *   2. 快取存在 shared 底下，同一台電腦上兩個孩子共用一份——
+   *      就算 1 修好了，Allen 一進來還是先畫出 Pierce 上次留下的清單
+   * 這支端點不需要登入（看不到 req.user），課本只能由這邊帶過去。
+   */
+  const userId = currentUser && currentUser._id;
+  const bankId = currentUser && currentUser.wordBankId;
   // 先用上次的清單畫出來，更新丟到背景——這一頁常常是離線開的
-  const cached = readShared('groups');
+  const cached = userId ? readUser(userId, 'groups') : null;
   if (Array.isArray(cached) && cached.length) {
     groups = cached;
     renderPartPicker();
   }
   try {
-    const res = await fetch('/api/wordbank/groups');
+    const q = bankId ? `?bank=${encodeURIComponent(bankId)}` : '';
+    const res = await fetch(`/api/wordbank/groups${q}`);
     if (!res.ok) throw new Error(String(res.status));
     const data = await res.json();
     groups = data.groups || [];
-    writeShared('groups', groups);
+    if (userId) writeUser(userId, 'groups', groups);
   } catch (err) {
     if (!groups.length) setupError.textContent = '拿不到單字組別，請檢查網路後重新整理';
   }

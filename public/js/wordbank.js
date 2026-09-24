@@ -5,7 +5,7 @@ import { playWordAudio } from './audio-player.js';
 import { createRecorder } from './recorder.js';
 import { runPageInit } from './ui-status.js';
 import { initOutbox } from './outbox.js';
-import { readShared, writeShared } from './local-store.js';
+import { readUser, writeUser } from './local-store.js';
 
 /**
  * 單字庫是唯讀的：內容寫死在 server/data/word-bank.js，
@@ -29,6 +29,15 @@ const btnRecord = document.getElementById('btn-record');
 const btnRemoveAudio = document.getElementById('btn-remove-audio');
 const btnSaveRecord = document.getElementById('btn-save-record');
 
+/*
+ * 這一頁的快取（單字、組別、上次看的分頁）一律**分帳號**存。
+ *
+ * 本來全部存在 shared 底下，同一台電腦上兩個孩子共用一份。結果 Allen 用
+ * 自己的帳號進來，先畫出來的是 Pierce 上次留下的 749 個字；上次看的分頁
+ * 如果是 Week 1，那個分頁在 Allen 的課本裡根本不存在，畫面就是一片空白。
+ * 快取的 key 裡沒有「是誰的」，就等於假設這台電腦只有一個人在用。
+ */
+let userId = null;
 let allWords = [];
 let allGroups = [];
 let activeGroup = null; // null = 全部
@@ -63,7 +72,7 @@ function renderPartTabs() {
     btn.textContent = group === null ? '全部' : group.label;
     btn.addEventListener('click', () => {
       activeGroup = id;
-      writeShared('wbGroup', id);
+      writeUser(userId, 'wbGroup', id);
       renderPartTabs();
       renderFiltered();
     });
@@ -125,8 +134,10 @@ function refreshWords() {
   return api.get('/words').then(({ words, groups }) => {
     allWords = words;
     allGroups = groups || [];
-    writeShared('words', words);
-    writeShared('wbGroups', allGroups);
+    writeUser(userId, 'words', words);
+    writeUser(userId, 'wbGroups', allGroups);
+    // 記住的分頁不在這一本裡（課本換過、或資料改過），就回到「全部」，不要畫一片空白
+    if (activeGroup && !allGroups.some((g) => g.id === activeGroup)) activeGroup = null;
     renderPartTabs();
     renderFiltered();
   });
@@ -135,8 +146,8 @@ function refreshWords() {
 /** 有快取就立刻畫出來並直接返回，更新丟到背景 */
 async function loadWords() {
   listErrorEl.textContent = '';
-  const cached = readShared('words');
-  const cachedGroups = readShared('wbGroups');
+  const cached = readUser(userId, 'words');
+  const cachedGroups = readUser(userId, 'wbGroups');
   /*
    * 舊版快取的單字沒有 group 欄位。直接拿來畫會變成整頁都篩不到東西，
    * 而且使用者完全看不出是快取的問題——所以認不得就當作沒有快取。
@@ -258,7 +269,8 @@ runPageInit(async () => {
   const user = await requireLogin();
   if (!user) return;
   initOutbox(user._id);
-  const savedGroup = readShared('wbGroup');
+  userId = user._id;
+  const savedGroup = readUser(userId, 'wbGroup');
   activeGroup = savedGroup === undefined || savedGroup === '' ? null : savedGroup;
   renderPartTabs();
   await Promise.all([mountNav(user, 'wordbank'), loadWords()]);

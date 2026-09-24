@@ -45,18 +45,34 @@ router.post('/session', async (req, res, next) => {
     const order = req.body.order === 'sequential' ? 'sequential' : 'random';
     const reviewOnly = !!req.body.reviewOnly;
 
+    /*
+     * 三條路都要用**帳號自己的**那一本。
+     *
+     * 本來這裡一個都沒看 req.user.wordBankId：
+     *   - part：Word.PARTS 與 listWordsByPart(part) 都是預設那一本，
+     *     所以 Allen 選「Part 1」拿到的是 **Pierce 的 Part 1**
+     *   - group：沒有守門，別人課本的組 id 帶進來照樣給
+     *   - 複習：listWords() 現在只回一本，不帶 bankId 會變成只在
+     *     Pierce 那一本裡找 Allen 的到期單字——一個都找不到
+     */
+    const bankId = wordBank.resolveBankId(req.user.wordBankId);
+    const bank = wordBank.getBank(bankId);
+
     let candidates;
     let label;
     if (reviewOnly) {
       // 複習模式跨組，把所有到期的單字都撈進來
       const dueProgress = await WordProgress.getReviewQueue(req.user._id);
       const dueIds = new Set(dueProgress.map((p) => p.wordId));
-      candidates = (await Word.listWords()).filter((w) => dueIds.has(w._id));
+      candidates = (await Word.listWords(bankId)).filter((w) => dueIds.has(w._id));
       if (!candidates.length) {
         return res.status(400).json({ error: '目前沒有需要複習的單字，太棒了！' });
       }
       label = 'review';
     } else if (group) {
+      if (!wordBank.listGroups(bankId).some((g) => g.id === group)) {
+        return res.status(404).json({ error: '這一組不在你的單字庫裡' });
+      }
       candidates = await Word.listWordsByGroup(group);
       if (!candidates.length) {
         return res.status(400).json({ error: '找不到這一組單字' });
@@ -64,10 +80,10 @@ router.post('/session', async (req, res, next) => {
       label = group;
     } else {
       // part 是舊參數，保留給既有的連結與紀錄
-      if (!Word.PARTS.includes(part)) {
+      if (!bank.parts.includes(part)) {
         return res.status(400).json({ error: '請選擇要練習哪一組' });
       }
-      candidates = await Word.listWordsByPart(part);
+      candidates = await Word.listWordsByPart(part, bankId);
       label = `part${part}`;
     }
 

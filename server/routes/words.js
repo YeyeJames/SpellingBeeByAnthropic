@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const { ObjectId } = require('mongodb');
 const Word = require('../models/Word');
+const wordBank = require('../data/word-bank');
 const { getAudioBucket } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 
@@ -26,11 +27,32 @@ router.use(requireAuth);
 router.get('/', async (req, res, next) => {
   try {
     const { part, group } = req.query;
+    /*
+     * 一律用**帳號自己的**那一本。
+     *
+     * 這支本來完全沒看 req.user.wordBankId：words 回全部課本攤平、
+     * groups 與 parts 回預設那一本。Allen 建帳號時選了自己的課本，
+     * 進單字庫頁看到的卻是 Pierce 的——選擇有存進去，只是這裡沒人讀。
+     *
+     * 跟 game.js 的守門一樣：別人課本的組 id 帶進來要擋，不是照給。
+     */
+    const bankId = wordBank.resolveBankId(req.user.wordBankId);
+    const groups = wordBank.listGroups(bankId);
     let words;
-    if (group) words = await Word.listWordsByGroup(group);
-    else if (part) words = await Word.listWordsByPart(part);
-    else words = await Word.listWords();
-    res.json({ words, parts: Word.PARTS, groups: Word.listGroups() });
+    if (group) {
+      if (!groups.some((g) => g.id === String(group))) {
+        return res.status(404).json({ error: '這一組不在你的單字庫裡' });
+      }
+      words = await Word.listWordsByGroup(group);
+    } else if (part) {
+      if (!Number.isFinite(Number(part))) {
+        return res.status(400).json({ error: `part 要是數字，收到「${part}」` });
+      }
+      words = await Word.listWordsByPart(part, bankId);
+    } else {
+      words = await Word.listWords(bankId);
+    }
+    res.json({ words, parts: wordBank.getBank(bankId).parts, groups, bank: bankId });
   } catch (err) {
     next(err);
   }

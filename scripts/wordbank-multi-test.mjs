@@ -166,6 +166,7 @@ console.log('4) 每個帳號只看得到自己那一本');
     app.use('/api/practice', require('../server/routes/practice.js'));
     app.use('/api/game', require('../server/routes/game.js'));
     app.use('/api/campaign', require('../server/routes/campaign.js'));
+    app.use('/api/words', require('../server/routes/words.js'));
     return app;
   }
   const call = async (app, method, path, body) => {
@@ -238,6 +239,59 @@ console.log('4) 每個帳號只看得到自己那一本');
     `${aCamp.body?.levels?.length} 關`);
   check('空戰役的進度是 0% 而不是 NaN', aCamp.body?.summary?.percent === 0,
     JSON.stringify(aCamp.body?.summary?.percent));
+
+  /* ── 6. ⭐ 頁面真正在用的那兩支 ───────────────────────────
+   *
+   * Allen 建帳號時選了自己的課本，進單字庫頁看到的卻是 Pierce 的。
+   *
+   * 帳號的 wordBankId 有存進去（上面第 4 節第一條就在驗），第 4、5 節測的
+   * /practice/progress、/game/access、/campaign 也都是對的——
+   * 但**單字庫頁用的 /api/words 跟練習頁用的 /api/practice/session
+   * 從來沒被測過**，而那兩支一個都沒看 req.user.wordBankId：
+   *   - /api/words 回全部課本攤平（824 字），組別寫死預設那一本
+   *   - practice/session 的 part 走預設那一本 → Allen 選「Part 1」
+   *     拿到的是 Pierce 的 Part 1
+   * 跟前兩次（part=all、建帳號選單）同一種錯：旁邊的都測了，
+   * 使用者真正踩到的那一支沒測。
+   */
+  console.log('6) ⭐ 單字庫頁與練習頁拿到的是自己那一本');
+  const allenIds = new Set(wordBank.getBank('allen').words.map((w) => w.id));
+  const pierceIds = new Set(wordBank.getBank('g3a').words.map((w) => w.id));
+
+  const aWords = await call(aApp, 'GET', '/api/words');
+  check('Allen 的單字庫頁：字數是他那一本的',
+    aWords.body?.words?.length === allenIds.size, `${aWords.body?.words?.length} / ${allenIds.size}`);
+  check('Allen 的單字庫頁：一個 Pierce 的字都沒有',
+    (aWords.body?.words || []).every((w) => allenIds.has(w.id)),
+    (aWords.body?.words || []).filter((w) => !allenIds.has(w.id)).slice(0, 3).map((w) => w.english).join(', '));
+  check('Allen 的單字庫頁：分頁是他自己的組',
+    (aWords.body?.groups || []).length > 0 && aWords.body.groups.every((g) => g.id.startsWith('a-')),
+    (aWords.body?.groups || []).map((g) => g.id).join(', '));
+
+  const pWords = await call(pApp, 'GET', '/api/words');
+  check('Pierce 的單字庫頁照舊是 749 字',
+    pWords.body?.words?.length === pierceIds.size, String(pWords.body?.words?.length));
+
+  const aCrossWords = await call(aApp, 'GET', '/api/words?group=w01');
+  check('Allen 用網址拿 Pierce 的組會被擋', aCrossWords.status === 404, String(aCrossWords.status));
+
+  const aP1 = await call(aApp, 'POST', '/api/practice/session', { part: 1, order: 'sequential' });
+  check('Allen 練 Part 1：拿到的是**他的** Part 1',
+    aP1.status === 201 && (aP1.body?.words || []).length > 0
+      && aP1.body.words.every((w) => allenIds.has(w.id)),
+    `${aP1.status}，第一個字：${aP1.body?.words?.[0]?.english}`);
+  const pP1 = await call(pApp, 'POST', '/api/practice/session', { part: 1, order: 'sequential' });
+  check('Pierce 練 Part 1：拿到的是他自己的',
+    pP1.status === 201 && pP1.body.words.every((w) => pierceIds.has(w.id)),
+    `第一個字：${pP1.body?.words?.[0]?.english}`);
+  check('兩個人的 Part 1 不是同一份',
+    aP1.body?.words?.[0]?.id !== pP1.body?.words?.[0]?.id,
+    `${aP1.body?.words?.[0]?.english} vs ${pP1.body?.words?.[0]?.english}`);
+
+  const aGrp = await call(aApp, 'POST', '/api/practice/session', { group: 'a-p1', order: 'sequential' });
+  check('Allen 用組 id 練自己的組', aGrp.status === 201, String(aGrp.status));
+  const aCrossGrp = await call(aApp, 'POST', '/api/practice/session', { group: 'w01' });
+  check('Allen 用組 id 練 Pierce 的組會被擋', aCrossGrp.status === 404, String(aCrossGrp.status));
 }
 
 console.log(failures === 0 ? '\n全部通過' : `\n${failures} 項失敗`);
