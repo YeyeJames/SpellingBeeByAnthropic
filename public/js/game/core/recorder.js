@@ -39,6 +39,12 @@ export function createRecorder(setup) {
       level: setup.level || 1,
       xp: setup.xp || 0,
       relearnIds: setup.relearnIds ? [...setup.relearnIds] : [],
+      /*
+       * 裝備。跟等級一樣會改變這一場的結果（擊退、血量、打錯的代價…），
+       * 不存的話同一份錄影在他換裝之後重播就會跑出不一樣的東西。
+       * 舊錄影檔沒有這個欄位，replayLog 會退回全裸，也就是 C5 之前的行為。
+       */
+      equipped: setup.equipped ? { ...setup.equipped } : null,
       wordIds: setup.wordIds.slice()
     },
     // 每筆 [tick, kind, payload]，用陣列而不是物件，錄影檔才不會大得誇張
@@ -86,7 +92,8 @@ export function replayLog(log, words, { maxTicks = 60 * 120 * 30 } = {}) {
     // 舊錄影檔沒有這幾個欄位，退回 C2 之前的行為（1 級、空名單）
     level: log.setup.level || 1,
     xp: log.setup.xp || 0,
-    relearnIds: log.setup.relearnIds || null
+    relearnIds: log.setup.relearnIds || null,
+    equipped: log.setup.equipped || null
   });
 
   const entries = log.entries;

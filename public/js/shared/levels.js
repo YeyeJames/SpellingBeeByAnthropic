@@ -151,6 +151,7 @@ export function levelRewards(level) {
  * @param {number} s.correctLetters 打對幾個字母
  * @param {number} s.kills          打掉幾隻
  * @param {number} s.longKills      其中幾隻是長字
+ * @param {number} s.longWordFactor 長字獎勵倍率（戴長字獵手是 2，沒戴是 1）
  * @param {number} s.relearns       幾個是「以前錯過、這次打對」的字
  * @param {number} s.wordCount      這一組總共幾個字
  * @param {boolean} s.won           有沒有打完整組
@@ -166,7 +167,7 @@ export function xpForBattle(s = {}) {
   let xp =
     correctLetters * XP.perCorrectLetter +
     kills * XP.perKill +
-    longKills * XP.longWordBonus +
+    longKills * XP.longWordBonus * Math.max(1, Number(s.longWordFactor) || 1) +
     relearns * XP.relearnBonus;
 
   /*

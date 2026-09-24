@@ -162,5 +162,86 @@ console.log('3) 萬一真的空了，畫面不能留一片空白');
   await browser.close();
 }
 
+/* ── 6. 裝備區畫得出來（C5） ─────────────────────────────── */
+console.log('4) 裝備區');
+{
+  const browser2 = await chromium.launch({ executablePath: CHROME });
+  const ctx2 = await browser2.newContext({ viewport: { width: 1024, height: 900 } });
+  const page2 = await ctx2.newPage();
+  const errs = [];
+  page2.on('pageerror', (e) => errs.push(e.message));
+
+  const FAKE_USER = {
+    _id: 'u-gear', nickname: '測試', coins: 0, activeTheme: 'sports',
+    ownedItemKeys: [], avatar: { baseCharacter: 'rookie', accessories: [] }
+  };
+  await ctx2.route('**/api/auth/me*', (r) =>
+    r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: FAKE_USER }) }));
+  await ctx2.route('**/api/shop/items*', (r) =>
+    r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [] }) }));
+
+  /*
+   * 假一份裝備清單，裡面刻意三種狀態各一件：裝著的、買得起的、等級不夠的。
+   * 那三種狀態長得不一樣才是這一區的重點——他要一眼看出「哪些現在能拿，
+   * 哪些是下一個目標」。
+   */
+  const { GEAR: realGear, DEFAULT_EQUIPPED: def } = await import('../public/js/shared/equipment.js');
+  const gearBody = {
+    honey: 400,
+    level: 10,
+    slots: ['weapon', 'armor', 'trinket'],
+    slotLabels: { weapon: '武器（蜂針）', armor: '護甲（蜂蠟）', trinket: '飾品' },
+    equipped: { ...def },
+    items: realGear.map((g) => ({
+      key: g.key, slot: g.slot, tier: g.tier, name: g.name,
+      description: g.description, cost: g.cost, minLevel: g.minLevel,
+      equipped: def[g.slot] === g.key,
+      owned: g.tier === 1,
+      unlocked: 10 >= g.minLevel,
+      affordable: 400 >= g.cost,
+      levelNeeded: g.minLevel,
+      canBuy: g.tier !== 1 && 10 >= g.minLevel && 400 >= g.cost
+    }))
+  };
+  await ctx2.route('**/api/shop/gear*', (r) =>
+    r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(gearBody) }));
+  await ctx2.addInitScript((u) => {
+    try {
+      localStorage.removeItem('sb:v2:shared:shopItems');
+      localStorage.setItem('sb:v2:shared:currentUser', JSON.stringify(u));
+    } catch (e) { /* 無痕模式 */ }
+  }, FAKE_USER);
+
+  await page2.goto(`${BASE}/shop.html`, { waitUntil: 'domcontentloaded' });
+  await page2.waitForSelector('#gear-slots .gear-card', { timeout: 8000 }).catch(() => {});
+
+  const ui = await page2.evaluate(() => ({
+    honey: document.getElementById('gear-honey')?.textContent || '',
+    slots: document.querySelectorAll('#gear-slots .gear-slot').length,
+    cards: document.querySelectorAll('#gear-slots .gear-card').length,
+    equipped: document.querySelectorAll('#gear-slots .gear-card.is-equipped').length,
+    locked: document.querySelectorAll('#gear-slots .gear-card.is-locked').length,
+    buyable: document.querySelectorAll('#gear-slots .gear-card.is-buyable').length,
+    lockedText: [...document.querySelectorAll('#gear-slots .gear-card.is-locked .gear-status')]
+      .map((e) => e.textContent).slice(0, 2)
+  }));
+
+  check('蜂蜜餘額寫出來了', ui.honey.includes('400'), ui.honey);
+  check('三個欄位都畫出來', ui.slots === 3, String(ui.slots));
+  check('每一件都有一張卡', ui.cards === realGear.length, `${ui.cards} / ${realGear.length}`);
+  check('裝備中的有標出來（武器＋護甲的初始裝）', ui.equipped === 2, String(ui.equipped));
+  check('等級不夠的有淡掉', ui.locked > 0, String(ui.locked));
+  /*
+   * 鎖著的那些一定要寫「幾級解鎖」。
+   * 只寫「不能買」是沒用的資訊——那個數字才是他的下一個目標。
+   */
+  check('鎖著的卡片寫得出還要幾級', ui.lockedText.every((t) => /\d+\s*級/.test(t)),
+    JSON.stringify(ui.lockedText));
+  check('買得起的有標出來', ui.buyable > 0, String(ui.buyable));
+
+  check('裝備區沒有 JS 例外', errs.length === 0, errs.join(' | '));
+  await browser2.close();
+}
+
 console.log(failures === 0 ? '\n全部通過' : `\n${failures} 項失敗`);
 process.exit(failures === 0 ? 0 : 1);

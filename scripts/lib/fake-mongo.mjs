@@ -22,6 +22,31 @@ function matchValue(actual, expected) {
   if (expected && typeof expected === 'object' && '$type' in expected) {
     return expected.$type === 'string' ? typeof actual === 'string' : actual != null;
   }
+  /*
+   * 比較運算子。
+   *
+   * 買裝備是把條件寫進 query 的（honey: {$gte: cost}、ownedGear: {$ne: key}），
+   * 這樣扣款與記帳才是同一個原子操作——先讀出來判斷再寫回去的話，
+   * 連按兩下就會扣兩次錢。這個假的原本只認嚴格相等，於是那個查詢永遠
+   * 配不到任何一筆，測出來是「蜂蜜不夠」。
+   * 那不是程式錯，是這個測試替身不完整。
+   */
+  if (expected && typeof expected === 'object') {
+    if ('$gte' in expected) return Number(actual) >= Number(expected.$gte);
+    if ('$lte' in expected) return Number(actual) <= Number(expected.$lte);
+    if ('$gt' in expected) return Number(actual) > Number(expected.$gt);
+    if ('$lt' in expected) return Number(actual) < Number(expected.$lt);
+    if ('$ne' in expected) {
+      // 陣列欄位的 $ne 是「陣列裡沒有這個元素」
+      if (Array.isArray(actual)) return !actual.some((v) => String(v) === String(expected.$ne));
+      return actual !== expected.$ne;
+    }
+    if ('$in' in expected) {
+      const list = expected.$in.map(String);
+      if (Array.isArray(actual)) return actual.some((v) => list.includes(String(v)));
+      return list.includes(String(actual));
+    }
+  }
   return actual === expected;
 }
 

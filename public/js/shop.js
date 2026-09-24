@@ -7,6 +7,7 @@ import { loadPhaser } from './game/load-phaser.js';
 import { runPageInit } from './ui-status.js';
 import { initOutbox, enqueue, onApplied } from './outbox.js';
 import { readShared, writeShared } from './local-store.js';
+import { initGearShop } from './gear-shop.js';
 
 const shopGrid = document.getElementById('shop-grid');
 const shopError = document.getElementById('shop-error');
@@ -226,5 +227,5 @@ runPageInit(async () => {
   if (!user) return;
   currentUser = user;
   initOutbox(user._id);
-  await Promise.all([mountNav(user, 'shop'), loadItems()]);
+  await Promise.all([mountNav(user, 'shop'), loadItems(), initGearShop()]);
 });

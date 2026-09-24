@@ -91,6 +91,9 @@ const ctx = {
   level: 1,
   xp: 0,
   relearnIds: null,
+  /* 裝備（C5）。拿不到就是全裸，也就是 C5 之前的行為 */
+  equipped: null,
+  honey: 0,
   paused: false,
   scene: null,
   phaserGame: null,
@@ -329,7 +332,8 @@ function startBattle() {
      */
     level: ctx.level,
     xp: ctx.xp,
-    relearnIds: ctx.relearnIds
+    relearnIds: ctx.relearnIds,
+    equipped: ctx.equipped
   });
   /*
    * 換一場之前先把上一場收進這次開機的檔案櫃。
@@ -352,6 +356,7 @@ function startBattle() {
     level: ctx.level,
     xp: ctx.xp,
     relearnIds: ctx.relearnIds,
+    equipped: ctx.equipped,
     wordIds: ctx.words.map((w) => w.id)
   });
   ctx.paused = false;
@@ -624,6 +629,19 @@ function setChromeAbovePostgame(on) {
   if (chrome) chrome.style.zIndex = on ? '25' : '';
 }
 
+/*
+ * 蜂蜜存款那一列，等伺服器回來才填得出來。
+ *
+ * 結算畫面是戰鬥一結束就畫的（不能等網路——等了就變成盯著空白畫面），
+ * 而存款總額只有伺服器知道。所以先留一列寫「同步中…」，回來再補上。
+ * 一直沒回來（離線）就維持原樣，至少這一場賺了多少還是看得到。
+ */
+function updatePostgameHoney(total) {
+  const el = document.getElementById('postgame-honey-total');
+  // 標題已經寫了「蜂蜜存款」，這裡只放數字，不要重複兩次「存款」
+  if (el) el.textContent = `🍯 ${total}`;
+}
+
 function showPostgame(state, won) {
   const el = document.getElementById('postgame');
   if (!el || !state) return;
@@ -656,7 +674,16 @@ function showPostgame(state, won) {
    * 分開之後，要亮的就亮，該講的話各自講各自的。
    */
   const rows = [
-    { label: '🍯 蜂蜜', value: String(state.honey), hot: isBest, note: isBest ? '破紀錄！' : '' },
+    { label: '🍯 這場蜂蜜', value: String(state.honey), hot: isBest, note: isBest ? '破紀錄！' : '' },
+    /*
+     * 蜂蜜存款（C5）。
+     *
+     * 存款總額只有伺服器知道，而結算畫面是戰鬥一結束就畫的（等網路就變成
+     * 盯著空白畫面）。所以先留這一列、等回應回來再填（updatePostgameHoney）。
+     * 沒有它的話，他只看得到單場賺多少，看不出離下一件裝備還有多遠——
+     * 而那正是再打一場的理由。
+     */
+    { label: '🏦 蜂蜜存款', value: '同步中…', id: 'postgame-honey-total' },
     { label: '🐝 打掉的字', value: `${s.wordsKilled} 個` },
     { label: '💨 漏掉的字', value: `${s.wordsMissed} 個` },
     { label: '🎯 字母正確率', value: `${accuracy}%` }
@@ -703,7 +730,7 @@ function showPostgame(state, won) {
         (r) =>
           `<div class="stat-row${r.hot ? ' is-best' : ''}"><span>${escapeHtml(r.label)}${
             r.note ? `（${escapeHtml(r.note)}）` : ''
-          }</span><b>${escapeHtml(r.value)}</b></div>`
+          }</span><b${r.id ? ` id="${r.id}"` : ''}>${escapeHtml(r.value)}</b></div>`
       )
       .join('');
   }
@@ -777,6 +804,15 @@ async function reportResult(state, won) {
         ctx.xp = data.xp;
         ctx.level = Number(data.level) || ctx.level;
       }
+      /*
+       * 蜂蜜存款（C5）。伺服器記完之後把新的總額回來，結算畫面要寫出
+       * 「這一場賺了多少、總共存了多少」——只寫單場的話他看不出自己
+       * 離下一件裝備還有多遠，而那正是再打一場的理由。
+       */
+      if (typeof data.honey === 'number') {
+        ctx.honey = data.honey;
+        updatePostgameHoney(data.honey);
+      }
       return data;
     }
   } catch (err) {
@@ -846,6 +882,8 @@ async function boot() {
     ctx.level = Number(access.level) || 1;
     ctx.xp = Number(access.xp) || 0;
     ctx.relearnIds = Array.isArray(access.relearnIds) ? access.relearnIds : null;
+    ctx.equipped = access.equipped || null;
+    ctx.honey = Number(access.honey) || 0;
 
     const [words] = await Promise.all([fetchWords(), loadPhaser()]);
     // Phase 1 只要少量單字就夠驗證手感，不用一次上 25 個

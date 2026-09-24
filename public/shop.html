@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/css/shop.css" />
   <!-- modulepreload:start 由 npm run gen-preload 產生，請勿手動編輯 -->
   <link rel="modulepreload" href="/js/shop.js" />
+  <link rel="modulepreload" href="/js/gear-shop.js" />
   <link rel="modulepreload" href="/js/api.js" />
   <link rel="modulepreload" href="/js/ui-status.js" />
   <link rel="modulepreload" href="/js/auth.js" />
@@ -26,8 +27,28 @@
   <div data-nav-mount></div>
 
   <div class="container">
+    <!--
+      裝備（C5）。放在造型前面：它會改變遊戲怎麼打，是這一頁的主角。
+
+      兩種幣是刻意分開的——🪙 金幣是練習賺的、買造型，🍯 蜂蜜是遊戲賺的、
+      買裝備。所以標題那一行要把「這一區花的是哪一種」講明白，
+      不然他會以為自己的錢不夠。
+    -->
     <div class="panel container">
-      <h1>🛒 商店</h1>
+      <div class="shop-head">
+        <h1>⚔️ 裝備</h1>
+        <span class="honey-badge" id="gear-honey">🍯 0</span>
+      </div>
+      <p class="shop-sub">用<strong>遊戲模式</strong>賺到的 🍯 蜂蜜買。裝備只會讓同樣的字更好打，不會幫你少打字母。</p>
+      <p class="error-text" id="gear-error"></p>
+      <div id="gear-slots"></div>
+    </div>
+
+    <div class="panel container">
+      <div class="shop-head">
+        <h1>🛒 造型</h1>
+      </div>
+      <p class="shop-sub">用<strong>練習模式</strong>賺到的 🪙 金幣買。</p>
       <p class="error-text" id="shop-error"></p>
       <div id="shop-grid" class="shop-grid"></div>
     </div>

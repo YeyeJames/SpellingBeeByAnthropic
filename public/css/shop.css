@@ -68,3 +68,115 @@
   justify-content: center;
   margin: 0.5rem 0;
 }
+
+/* ── 裝備區（C5） ─────────────────────────────────────── */
+
+.shop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.shop-head h1 {
+  margin: 0;
+}
+
+/*
+ * 蜂蜜餘額。用琥珀色跟金幣分開——兩種幣如果長得一樣，
+ * 他會以為自己的錢比實際多（練習賺的金幣買不到裝備）。
+ */
+.honey-badge {
+  background: #3f2d12;
+  color: #fde047;
+  border: 1px solid #7c5a1a;
+  border-radius: 999px;
+  padding: 0.3rem 0.9rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.shop-sub {
+  margin: 0.2rem 0 1rem;
+  color: var(--color-text-muted);
+  font-size: 0.92rem;
+}
+
+.gear-slot + .gear-slot {
+  margin-top: 1.4rem;
+}
+
+.gear-slot-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  font-size: 1.05rem;
+  margin: 0 0 0.6rem;
+  color: var(--color-text);
+}
+
+/* 現在裝著哪一件要一眼看到——那是「我目前多強」的答案 */
+.gear-slot-now {
+  font-size: 0.9rem;
+  font-weight: 400;
+  color: var(--color-accent);
+}
+
+.gear-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 0.7rem;
+}
+
+.gear-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.7rem 0.8rem;
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+}
+
+.gear-name {
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.gear-desc {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+  /* 說明長短不一，撐開讓每張卡的按鈕對齊在同一條線上 */
+  flex: 1 1 auto;
+}
+
+.gear-status {
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+}
+
+/* 裝備中的那一張要最明顯 */
+.gear-card.is-equipped {
+  border-color: var(--color-accent);
+  background: #1f2a20;
+}
+
+.gear-card.is-equipped .gear-status {
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+/* 鎖著的整張淡掉，但說明還是要讀得到——那是他的下一個目標 */
+.gear-card.is-locked {
+  opacity: 0.62;
+}
+
+.gear-card.is-buyable .gear-status {
+  color: #fde047;
+  font-weight: 700;
+}

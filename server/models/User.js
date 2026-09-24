@@ -25,6 +25,16 @@ async function createUser(nickname) {
      * 經驗條看起來滿了，等級卻沒動。
      */
     xp: 0,
+    /*
+     * 蜂蜜：遊戲模式賺的錢，買裝備用（C5）。
+     *
+     * 跟金幣分開是刻意的：金幣是練習模式賺的、買造型；蜂蜜是遊戲模式賺的、
+     * 買力量。兩邊各有各的用途，那個在戰鬥中一直跳的蜂蜜數字也終於有了去處——
+     * 在這之前它只是一場的分數，打完就沒了。
+     */
+    honey: 0,
+    ownedGear: [],
+    equipped: { weapon: 'weapon_wood', armor: 'armor_thin', trinket: null },
     stats: {
       totalWordsPracticed: 0,
       totalCorrect: 0,
@@ -61,6 +71,53 @@ async function addXp(id, amount) {
     { returnDocument: 'after', projection: { xp: 1 } }
   );
   return (r && (r.value ? r.value.xp : r.xp)) || gain;
+}
+
+/**
+ * 加蜂蜜（遊戲模式打完一場）。跟 addXp 一樣用 $inc，理由也一樣：
+ * 兩場同時回報時，讀-改-寫會讓其中一場的蜂蜜憑空消失。
+ */
+async function addHoney(id, amount) {
+  const gain = Math.max(0, Math.round(Number(amount) || 0));
+  if (!gain) {
+    const user = await findById(id);
+    return user ? user.honey || 0 : 0;
+  }
+  const r = await collection().findOneAndUpdate(
+    { _id: new ObjectId(id) },
+    { $inc: { honey: gain } },
+    { returnDocument: 'after', projection: { honey: 1 } }
+  );
+  return (r && (r.value ? r.value.honey : r.honey)) || gain;
+}
+
+/**
+ * 買一件裝備：扣蜂蜜、記進擁有清單。
+ *
+ * 條件寫進 query 而不是先讀出來再判斷——「蜂蜜夠」與「還沒買過」都由
+ * 資料庫在同一個原子操作裡檢查。先讀再寫的話，連按兩下就會扣兩次錢。
+ * 回傳 null 代表條件不成立（錢不夠或已經買過），呼叫端據此回錯誤訊息。
+ */
+async function buyGear(id, gearKey, cost) {
+  const r = await collection().findOneAndUpdate(
+    {
+      _id: new ObjectId(id),
+      honey: { $gte: cost },
+      ownedGear: { $ne: gearKey }
+    },
+    { $inc: { honey: -cost }, $addToSet: { ownedGear: gearKey } },
+    { returnDocument: 'after' }
+  );
+  return r && (r.value !== undefined ? r.value : r);
+}
+
+/** 換裝。哪些 key 合法由呼叫端（路由）依 equipment.js 判斷。 */
+async function setEquipped(id, slot, gearKey) {
+  await collection().updateOne(
+    { _id: new ObjectId(id) },
+    { $set: { [`equipped.${slot}`]: gearKey } }
+  );
+  return findById(id);
 }
 
 async function findByNickname(nickname) {
@@ -183,6 +240,9 @@ module.exports = {
   updateAudioPrefs,
   applyAttemptResult,
   addXp,
+  addHoney,
+  buyGear,
+  setEquipped,
   addOwnedItem,
   equipItem,
   unequipAccessory,

@@ -209,6 +209,24 @@ export function installDebugApi(ctx) {
       };
     },
 
+    /**
+     * 裝備換算出來的那一組數字（C5）。
+     *
+     * 測試靠它驗「力量買的是容錯，不是答案」：knockback 可以變大，
+     * 但要打的字母數必須完全不變。
+     */
+    gearState() {
+      const s = ctx.getState();
+      if (!s) return null;
+      return {
+        equipped: ctx.equipped ? { ...ctx.equipped } : null,
+        honey: ctx.honey,
+        maxHp: s.maxHp,
+        freeMissesLeft: s.freeMissesLeft,
+        ...s.gear
+      };
+    },
+
     /** 升級橫幅現在寫著什麼（沒在顯示時是空字串）。 */
     levelUpBanner() {
       const s = ctx.scene;

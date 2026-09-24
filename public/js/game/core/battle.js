@@ -14,6 +14,7 @@ import { BALANCE, crossMsFor, knockbackMsFor } from './balance.js';
 import { createRng, shuffleInPlace } from './rng.js';
 import { isTypeableChar, isSeparator } from './charset.js';
 import { XP, levelFromXp, levelRewards } from '../../shared/levels.js';
+import { effectsFor } from '../../shared/equipment.js';
 
 /* 事件類型。用數字而不是字串，是為了讓事件緩衝區可以完全不配置記憶體。 */
 export const EV = {
@@ -117,7 +118,15 @@ export function createBattle({
    * 名單由伺服器在開打前給（它才知道 wordProgress），前端只負責照著算，
    * 這樣戰鬥中就能即時飄分。伺服器收到成績時會用自己那份名單重算。
    */
-  relearnIds = null
+  relearnIds = null,
+  /*
+   * 裝備。{ weapon, armor, trinket }，值是 key 或 null。
+   *
+   * 跟等級一樣會改變戰鬥，所以它也是「開場設定」的一部分、也要進錄影檔。
+   * 不給就是全裸（初始木蜂針＋薄蠟衣），效果全部是 1 倍，
+   * 也就是 C5 之前的行為——舊錄影檔的指紋因此不會變。
+   */
+  equipped = null
 } = {}) {
   if (!Array.isArray(words) || words.length === 0) {
     throw new Error('createBattle 需要至少一個單字');
@@ -134,7 +143,20 @@ export function createBattle({
    * 開場算好放進 state 之後，戰鬥邏輯只看到兩個數字，跟 C2 之前一樣單純。
    */
   const rewards = levelRewards(level);
-  const effectiveMaxHp = maxHp + rewards.bonusHp;
+  /*
+   * 裝備效果一次算好，戰鬥迴圈只看到一組數字——跟等級加成同一個做法。
+   * 迴圈裡完全不需要知道他裝了什麼。
+   */
+  const gear = effectsFor(equipped || {});
+  /*
+   * 血量：基礎 + 等級 + 護甲。
+   * 玻璃蜂針的 hpOverride 蓋掉全部——那是它的賣點（擊退兩倍，但只有一顆血），
+   * 所以要放在最後，不然加成會把它的風險抵銷掉，整件裝備就沒有意義了。
+   */
+  const effectiveMaxHp =
+    gear.hpOverride != null
+      ? Math.max(1, gear.hpOverride)
+      : maxHp + rewards.bonusHp + gear.bonusHp;
   /*
    * 名單轉成 Set 才查得快，但外面傳進來的可能是陣列（錄影檔就是陣列）。
    * 空名單用 null 表示，戰鬥迴圈裡一個判斷就跳過，不必建空物件。
@@ -158,6 +180,10 @@ export function createBattle({
     startLevel: level,
     startXp: xp,
     levelKnockback: rewards.knockbackFactor,
+    /* 裝備換算出來的那一組數字（見 shared/equipment.js 的 effectsFor） */
+    gear,
+    /* 二次機會：這一場還剩幾次「漏字不扣血」 */
+    freeMissesLeft: gear.freeMisses,
     relearnSet,
 
     // 亂數狀態：一起算進指紋，才能證明兩次跑法完全一致
@@ -260,7 +286,12 @@ function startNextWord(state) {
  */
 function knockbackFactor(state) {
   const frenzy = state.frenzyMs > 0 ? BALANCE.combo.frenzyKnockbackFactor : 1;
-  return frenzy * state.levelKnockback;
+  /*
+   * 女王之刺的 comboKnockback：連擊中再多 +20%。
+   * 從 2 連開始算——1 連是「打掉一個字」的常態，不該算成連擊獎勵。
+   */
+  const comboBonus = state.combo >= 2 ? state.gear.comboKnockback : 1;
+  return frenzy * state.levelKnockback * state.gear.knockback * comboBonus;
 }
 
 /**
@@ -301,17 +332,22 @@ function honeyFactor(state) {
  */
 function applyComboMilestone(state) {
   const c = BALANCE.combo;
-  if (state.combo === c.dashAt) {
+  /*
+   * 蜜糖節奏會把三個門檻整組換掉（5/10/15 → 4/8/12）。
+   * 沒戴就用 balance.js 的原值，所以沒有飾品時行為跟 C5 之前一模一樣。
+   */
+  const at = state.gear.comboAt || [c.dashAt, c.sweetTimeAt, c.frenzyAt];
+  if (state.combo === at[0]) {
     state.dashMs = c.dashMs;
     emit(state, EV.COMBO_BONUS, 1, state.combo);
     return;
   }
-  if (state.combo === c.sweetTimeAt) {
+  if (state.combo === at[1]) {
     state.sweetNext = true;
     emit(state, EV.COMBO_BONUS, 2, state.combo);
     return;
   }
-  if (state.combo >= c.frenzyAt && (state.combo - c.frenzyAt) % c.frenzyRepeatEvery === 0) {
+  if (state.combo >= at[2] && (state.combo - at[2]) % c.frenzyRepeatEvery === 0) {
     state.frenzyMs = c.frenzyMs;
     emit(state, EV.COMBO_BONUS, 3, state.combo);
   }
@@ -347,7 +383,10 @@ function killWord(state) {
   const len = state.target.length;
   const hf = honeyFactor(state);
   let gained = BALANCE.honey.perKill * hf;
-  if (len >= BALANCE.honey.longWordFrom) gained += BALANCE.honey.longWordBonus * hf;
+  if (len >= BALANCE.honey.longWordFrom) {
+    // 長字獵手：長字的蜂蜜加倍（經驗也加倍，見下面）
+    gained += BALANCE.honey.longWordBonus * hf * state.gear.longWordFactor;
+  }
   state.honey += gained;
   state.stats.wordsKilled += 1;
 
@@ -360,8 +399,11 @@ function killWord(state) {
    */
   let xpGained = XP.perKill;
   const isLong = len >= XP.longWordFrom;
-  if (isLong) xpGained += XP.longWordBonus;
-  if (isLong) state.stats.longKills += 1;
+  if (isLong) {
+    // 長字獵手同樣讓長字的經驗加倍
+    xpGained += XP.longWordBonus * state.gear.longWordFactor;
+    state.stats.longKills += 1;
+  }
 
   /*
    * ⭐ 以前錯過、這次打對。§6 的重點：普通的蟲 5 XP，這種 25 XP。
@@ -391,10 +433,20 @@ function killWord(state) {
 }
 
 function missWord(state) {
-  state.hp -= 1;
+  /*
+   * 二次機會：這一場第一次漏字不扣血。
+   *
+   * 字還是會排回隊伍尾端、連擊還是會斷、正確拼法還是會亮出來——
+   * 學習的部分一個都沒少（§1），少掉的只有那一顆血。
+   */
+  const forgiven = state.freeMissesLeft > 0;
+  if (forgiven) state.freeMissesLeft -= 1;
+  else state.hp -= 1;
+
   state.stats.wordsMissed += 1;
-  emit(state, EV.WORD_MISSED, state.wordIndex);
-  emit(state, EV.HP_LOST, state.hp);
+  emit(state, EV.WORD_MISSED, state.wordIndex, forgiven ? 1 : 0);
+  // 被赦免時不發 HP_LOST：血沒掉，畫面不該演成掉血
+  if (!forgiven) emit(state, EV.HP_LOST, state.hp);
 
   if (state.combo !== 0) {
     state.combo = 0;
@@ -500,7 +552,8 @@ export function applyAction(state, action) {
          */
         state.stats.wrongLetters += 1;
         state.cleanWord = false;
-        pushEnemy(state, BALANCE.wrongLetterPenaltyMs);
+        // 護甲降低打錯的代價（上限 −50%，在 equipment.js 夾住）
+        pushEnemy(state, BALANCE.wrongLetterPenaltyMs * state.gear.penalty);
         emit(state, EV.LETTER_BAD, ch.charCodeAt(0));
         if (state.combo !== 0) {
           state.combo = 0;
@@ -524,8 +577,10 @@ export function applyAction(state, action) {
     }
 
     case 'listen': {
-      const cost = BALANCE.listenCostMs[action.listen];
-      if (cost == null) return state;
+      const base = BALANCE.listenCostMs[action.listen];
+      if (base == null) return state;
+      // 回音水晶讓重聽便宜一半——目的是讓他敢多聽一次，而不是少打字母
+      const cost = base * state.gear.listen;
       state.stats.listens += 1;
       pushEnemy(state, cost);
       emit(state, EV.LISTEN, LISTEN_KIND[String(action.listen).toUpperCase()] || 0);
@@ -597,6 +652,8 @@ export function fingerprint(state) {
   mix(s.relearns);
   mix(state.xp);
   mix(state.level);
+  // 二次機會剩幾次會改變後面的結果，所以也要進指紋
+  mix(state.freeMissesLeft);
   return h >>> 0;
 }
 
@@ -616,6 +673,9 @@ export function snapshot(state) {
     xp: state.xp,
     totalXp: state.totalXp,
     levelKnockback: Number(state.levelKnockback.toFixed(3)),
+    // 裝備：給 HUD、除錯與測試看。gear 本身是純數字，不含裝備名稱
+    gear: { ...state.gear },
+    freeMissesLeft: state.freeMissesLeft,
     progress: Number(state.progress.toFixed(4)),
     crossMs: Math.round(state.crossMs),
     wordIndex: state.wordIndex,

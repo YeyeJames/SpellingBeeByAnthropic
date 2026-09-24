@@ -34,6 +34,32 @@ function levels() {
   return levelsPromise;
 }
 
+let equipmentPromise = null;
+function equipment() {
+  if (!equipmentPromise) equipmentPromise = import('../../public/js/shared/equipment.js');
+  return equipmentPromise;
+}
+
+/**
+ * 這個帳號現在裝了什麼，以及它換算出來的效果。
+ *
+ * 只回「他真的擁有」的裝備：資料庫裡如果留著一件已經不存在的 key
+ * （改過裝備表、或資料壞掉），就退回初始裝備，而不是讓戰鬥拿到 undefined。
+ */
+async function equippedFor(user) {
+  const { DEFAULT_EQUIPPED, SLOTS, gearByKey, effectsFor } = await equipment();
+  const owned = new Set(user.ownedGear || []);
+  const saved = user.equipped || {};
+  const out = { ...DEFAULT_EQUIPPED };
+  for (const slot of SLOTS) {
+    const g = gearByKey(saved[slot]);
+    if (!g || g.slot !== slot) continue;
+    if (g.tier !== 1 && !owned.has(g.key)) continue;
+    out[slot] = g.key;
+  }
+  return { equipped: out, effects: effectsFor(out) };
+}
+
 /**
  * 這個帳號在這一組裡「以前錯過」的字。
  *
@@ -83,7 +109,10 @@ router.get('/access', async (req, res, next) => {
       xpInto: lv.into,
       xpNeed: lv.need,
       rewards: levelRewards(lv.level),
-      relearnIds: relearn
+      relearnIds: relearn,
+      /* C5：開打前要知道裝了什麼——戰鬥的擊退、血量、打錯代價都看它 */
+      ...(await equippedFor(req.user)),
+      honey: req.user.honey || 0
     });
   } catch (err) {
     next(err);
@@ -193,12 +222,28 @@ router.post('/result', async (req, res, next) => {
         (Number(wrongLetters) || 0) === 0
     };
 
+    /*
+     * 長字獎勵的倍率由**伺服器自己查**他裝了什麼，不收前端送的。
+     * 收了的話，沒買長字獵手的人也能把經驗與蜂蜜灌成兩倍。
+     */
+    const { effects } = await equippedFor(req.user);
+    stats.longWordFactor = effects.longWordFactor;
+
     const { xpForBattle, levelFromXp, levelRewards } = await levels();
     const beforeXp = req.user.xp || 0;
     const beforeLevel = levelFromXp(beforeXp).level;
     const xpGained = xpForBattle(stats);
     const afterXp = await User.addXp(req.user._id, xpGained);
     const after = levelFromXp(afterXp);
+
+    /*
+     * 蜂蜜進帳戶（C5）。
+     *
+     * safeScore 已經夾過上限（groupSize × MAX_SCORE_PER_WORD），所以這裡
+     * 直接用它——遊戲裡看到的那個蜂蜜數字，就是存進帳戶的數字，
+     * 兩個不一樣的話他會問「為什麼打到 400 只拿到 300」。
+     */
+    const honeyAfter = await User.addHoney(req.user._id, safeScore);
 
     const progress = await GroupProgress.recordGameResult(req.user._id, groupId, {
       score: safeScore,
@@ -214,7 +259,10 @@ router.post('/result', async (req, res, next) => {
       xpNeed: after.need,
       leveledUp: after.level > beforeLevel,
       levelsGained: Math.max(0, after.level - beforeLevel),
-      rewards: levelRewards(after.level)
+      rewards: levelRewards(after.level),
+      /* 這一場賺到的蜂蜜，以及存款總額——結算畫面要兩個都講 */
+      honeyGained: safeScore,
+      honey: honeyAfter
     });
   } catch (err) {
     next(err);
