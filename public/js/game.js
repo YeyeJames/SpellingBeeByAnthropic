@@ -1114,8 +1114,17 @@ async function boot() {
      *
      * 網址的 ?n= 最優先（測試在用），其次是關卡自己的上限（混合關會把
      * 好幾組加起來，一場打不完），都沒有才用預設。
+     *
+     * ⚠️ 戰役關卡的「沒有上限」是 null，意思是**整組都要打**，
+     * 不是「用預設的 20」。掉進 20 的話：
+     *   - 地圖上寫「Week 1・40 字」，實際只打得到 20 個——畫面在說謊
+     *   - 第一章的工作是「把整本課本走過一遍」，而每一關都少一半，
+     *     等於有一半的字他在戰役裡永遠碰不到（campaign-test 第 2 節
+     *     那條「一組單字都不能漏」測的是關卡表，測不到這裡）
+     * 所以戰役關卡沒有上限時，上限就是這一關的全部字數。
      */
-    const limit = Number(params.get('n')) || ctx.levelLimit || 20;
+    const defaultLimit = ctx.campaignLevel ? words.length : 20;
+    const limit = Number(params.get('n')) || ctx.levelLimit || defaultLimit;
     ctx.words = words.slice(0, limit);
     if (ctx.words.length === 0) throw new Error('單字庫是空的');
 

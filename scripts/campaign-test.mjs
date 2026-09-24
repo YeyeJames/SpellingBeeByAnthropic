@@ -284,5 +284,145 @@ console.log('6) 地圖頁');
   await browser.close();
 }
 
+/* ── 7. ⭐ 關卡真的打得開 ────────────────────────────────────
+ *
+ * 這一段是補上那個讓戰役整個不能玩、卻一路測試全綠的漏洞。
+ *
+ * 他按下第 1 關（地圖上明明寫著「Week 1・40 字」），畫面回
+ * 「無法開始遊戲：這一關沒有可以打的字」。
+ *
+ * 原因：遊戲頁拿到關卡的 wordIds 之後，會去 /api/wordbank?part=all
+ * 把單字內容撈回來配對——而伺服器那邊 part=all 走進 wordsByPart('all')，
+ * 也就是 w.part === Number('all') → NaN，跟任何東西比都是 false，
+ * 於是安靜地回**空陣列**。沒有 500、沒有錯誤，只是 0 筆。
+ *
+ * 前面 1～6 節全部都是綠的，因為它們各自測「關卡表算得對」與
+ * 「地圖頁畫得出來」，**沒有一節真的把一關打開**。兩邊各自正確，
+ * 接起來是斷的——所以這一節測的是那個接縫：
+ * 真的開一關，用真的 /api/wordbank，看遊戲有沒有真的開始。
+ */
+console.log('7) ⭐ 關卡真的打得開（用真的 /api/wordbank）');
+{
+  const browser = await chromium.launch({ executablePath: CHROME });
+  const ctx3 = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const page = await ctx3.newPage();
+  const errs = [];
+  page.on('pageerror', (e) => errs.push(e.message));
+
+  const FAKE_USER = {
+    _id: 'u-play', nickname: '測試', coins: 0, xp: 0, activeTheme: 'sports',
+    ownedItemKeys: [], avatar: { baseCharacter: 'rookie', accessories: [] }
+  };
+  await ctx3.route('**/api/auth/me*', (r) =>
+    r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: FAKE_USER }) }));
+
+  /*
+   * 只假造需要登入的那一支（/api/campaign/level/1），內容照伺服器真正會回的
+   * 形狀組出來——單字 id 是從真的單字庫拿的。
+   * /api/wordbank 故意**不假造**：壞掉的就是它，假造了這一節就白測了。
+   */
+  const lvl1 = campaign[0];
+  const lvl1Words = lvl1.groupIds.flatMap((g) => wordBank.wordsByGroup(g));
+  await ctx3.route('**/api/campaign/level/1', (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        level: lvl1,
+        wordBankId: 'g3a',
+        wordIds: lvl1Words.map((w) => w.id),
+        limit: lvl1.wordLimit,
+        order: lvl1.order
+      })
+    }));
+  await ctx3.addInitScript((u) => {
+    try {
+      localStorage.setItem('sb:v2:shared:currentUser', JSON.stringify(u));
+      /*
+       * 難度先存好，跳過開場的手速校準。
+       *
+       * 全新的瀏覽器沒有這個值，遊戲會先要他打 CAT / DOG / SUN 三個字量手速，
+       * 這時候 __spellbee.ready 還是 false。不設的話這一節會卡在校準畫面逾時，
+       * 看起來像關卡打不開——那是測試自己的問題，不是產品的。
+       */
+      localStorage.setItem('sb:v2:shared:gameDifficulty', JSON.stringify('normal'));
+    } catch (e) { /* 無痕 */ }
+  }, FAKE_USER);
+
+  // difficulty 走網址（優先序最高），比塞 localStorage 可靠
+  await page.goto(`${BASE}/game?level=1&difficulty=normal`, { waitUntil: 'domcontentloaded' });
+
+  /*
+   * 開場有一張「照順序 / 打亂」的設定畫面，要先按過去戰鬥才會開始
+   * （__spellbee.ready 在那之前是 false）。
+   */
+  await page.waitForSelector('.btn-order', { timeout: 20000 }).catch(() => {});
+  const preGameText = await page.evaluate(() => document.body.innerText);
+  await page.evaluate(() => {
+    const b = [...document.querySelectorAll('.btn-order')].find((e) => e.textContent.includes('照順序'));
+    if (b) b.click();
+  });
+
+  const started = await page
+    .waitForFunction(() => window.__spellbee && window.__spellbee.ready, null, { timeout: 20000 })
+    .then(() => true)
+    .catch(() => false);
+
+  /*
+   * 錯誤訊息直接抓出來當佐證——紅掉的時候要一眼看出是哪一種失敗，
+   * 而不是只有「逾時」。
+   */
+  const shown = await page.evaluate(() =>
+    [...document.querySelectorAll('body *')]
+      .map((e) => (e.children.length === 0 ? e.textContent.trim() : ''))
+      .find((t) => t && t.includes('無法開始遊戲')) || '');
+
+  check('第 1 關開得起來', started, shown || (started ? '' : '逾時'));
+  check('沒有「無法開始遊戲」', shown === '', shown);
+
+  /*
+   * ⭐ 地圖上寫幾個字，就要真的打幾個字。
+   *
+   * 修好 part=all 之後關卡開得起來了，但開場畫面寫的是「總共 20 個字」——
+   * 地圖明明寫 Week 1 是 40 字。原因是關卡的 wordLimit 是 null（單組不設上限），
+   * 而遊戲頁 `ctx.levelLimit || 20` 把 null 當成「用預設 20」。
+   *
+   * 這比「打不開」更難發現：遊戲照樣開得起來、照樣打得完，只是**每一關都少一半**。
+   * 第一章的工作是「把整本課本走過一遍」，少一半就等於這件事沒做到。
+   */
+  check('開場寫的字數跟地圖一樣',
+    preGameText.includes(`總共 ${lvl1.wordCount} 個字`),
+    (preGameText.match(/總共 \d+ 個字/) || ['（找不到）'])[0] + ` / 地圖寫 ${lvl1.wordCount}`);
+
+  if (started) {
+    const st = await page.evaluate(() => window.__spellbee.state());
+    check('真的載到字了', !!st && !!st.target, st ? `第一個字：${st.target}` : '沒有狀態');
+  }
+
+  check('沒有 JS 例外', errs.length === 0, errs.join(' | '));
+  await browser.close();
+}
+
+/* ── 8. part=all 的約定 ────────────────────────────────────
+ * 上面那個 bug 的根：同一個字串在兩個呼叫端代表同一件事，
+ * 但只有其中一種寫法是通的。這裡把約定本身釘住。
+ */
+console.log('8) /api/wordbank 的 part=all 要給整本');
+{
+  const all = await fetch(`${BASE}/api/wordbank?part=all&bank=g3a`).then((r) => r.json());
+  check('part=all 回整本，不是 0 筆', all.words.length === 749, `${all.words.length} 筆`);
+
+  const none = await fetch(`${BASE}/api/wordbank?bank=g3a`).then((r) => r.json());
+  check('不帶 part 也是整本（兩種寫法要一致）',
+    none.words.length === all.words.length, `${none.words.length} vs ${all.words.length}`);
+
+  const p1 = await fetch(`${BASE}/api/wordbank?part=1&bank=g3a`).then((r) => r.json());
+  check('指定 part 還是只給那一個 part', p1.words.length === 25, `${p1.words.length} 筆`);
+
+  // 亂傳要明講，不可以安靜地回 0 筆——那正是這次沒被發現的原因
+  const bad = await fetch(`${BASE}/api/wordbank?part=foo&bank=g3a`);
+  check('part 亂傳會回 400 而不是空陣列', bad.status === 400, `HTTP ${bad.status}`);
+}
+
 console.log(failures === 0 ? '\n全部通過' : `\n${failures} 項失敗`);
 process.exit(failures === 0 ? 0 : 1);

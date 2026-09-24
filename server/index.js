@@ -134,7 +134,26 @@ function main() {
     let words;
     const bank = req.query.bank;
     if (group) words = wordBank.wordsByGroup(group);
-    else if (part) words = wordBank.wordsByPart(part, bank);
+    /*
+     * part=all 是「整本都給我」，不是某一個 part。
+     *
+     * 沒有這一行的話會走到 wordsByPart('all')，而那裡是 w.part === Number('all')
+     * ——Number('all') 是 NaN，跟任何東西比都是 false，所以**回傳空陣列**。
+     * 戰役就是這樣壞掉的：地圖上寫著「Week 1・40 字」，按下去卻說
+     * 「這一關沒有可以打的字」。沒有任何錯誤、沒有 500，只是安靜地回 0 筆。
+     *
+     * 遊戲頁有兩個地方會問「整本」，而它們本來用不一樣的寫法（一個送
+     * part=all、一個乾脆不送 part），所以只有其中一個是通的。
+     * 現在兩種寫法都對。
+     */
+    else if (part === 'all') words = wordBank.getBank(bank).words;
+    else if (part) {
+      // 不是數字就明講。放行的話會走進 wordsByPart 的 NaN 陷阱，變成安靜的 0 筆
+      if (!Number.isFinite(Number(part))) {
+        return res.status(400).json({ error: `part 要是數字或 all，收到「${part}」` });
+      }
+      words = wordBank.wordsByPart(part, bank);
+    }
     /*
      * 不指定就給**那一本**的全部，而不是所有課本的全部。
      * 給全部的話，Allen 的遊戲頁會把 Pierce 的字也載進來——

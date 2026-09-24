@@ -83,8 +83,19 @@ function allWords() {
   return WORDS;
 }
 
+/*
+ * ⚠️ part 一定要是數字。'all' 這種字串在這裡是 Number('all') → NaN，
+ * 而 NaN 跟任何東西比都是 false，所以會安靜地回**空陣列**——
+ * 呼叫端拿到 0 筆，看起來像「這一組真的沒有字」。
+ * 戰役第 1 關就是這樣壞掉的（見 index.js 的 part=all 那一段）。
+ * 所以這裡寧可丟出來，也不要假裝查到了一個空的 part。
+ */
 function wordsByPart(part, bankId) {
-  return getBank(bankId).words.filter((w) => w.part === Number(part));
+  const n = Number(part);
+  if (!Number.isFinite(n)) {
+    throw new Error(`wordsByPart 只收數字的 part，收到 ${JSON.stringify(part)}`);
+  }
+  return getBank(bankId).words.filter((w) => w.part === n);
 }
 
 function wordsByGroup(groupId) {
