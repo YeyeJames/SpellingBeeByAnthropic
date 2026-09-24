@@ -45,6 +45,12 @@ export function createRecorder(setup) {
        * 舊錄影檔沒有這個欄位，replayLog 會退回全裸，也就是 C5 之前的行為。
        */
       equipped: setup.equipped ? { ...setup.equipped } : null,
+      /*
+       * 這一關的特殊敵人（C6）。跟等級與裝備一樣會改變結果，
+       * 不存的話同一份錄影在別的關卡重播就會配到不一樣的敵人。
+       * 舊錄影檔沒有這個欄位 → 空陣列 → 全部是普通敵人，也就是 C6 之前的行為。
+       */
+      enemyTraits: setup.enemyTraits ? [...setup.enemyTraits] : [],
       wordIds: setup.wordIds.slice()
     },
     // 每筆 [tick, kind, payload]，用陣列而不是物件，錄影檔才不會大得誇張
@@ -93,7 +99,8 @@ export function replayLog(log, words, { maxTicks = 60 * 120 * 30 } = {}) {
     level: log.setup.level || 1,
     xp: log.setup.xp || 0,
     relearnIds: log.setup.relearnIds || null,
-    equipped: log.setup.equipped || null
+    equipped: log.setup.equipped || null,
+    enemyTraits: log.setup.enemyTraits || null
   });
 
   const entries = log.entries;

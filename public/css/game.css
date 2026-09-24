@@ -743,3 +743,15 @@ body.is-touch #listen-buttons {
   border-color: #f5b301;
   color: #ffd166;
 }
+
+/*
+ * 靜音蟲在場時，重聽鍵變灰（C6 / §5）。
+ *
+ * 不藏起來：藏起來畫面會跳，而且他會以為功能壞了。
+ * 變灰 + title 說明，他按下去之前就知道為什麼。
+ */
+.listen-btn.is-disabled,
+.chrome-btn.is-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

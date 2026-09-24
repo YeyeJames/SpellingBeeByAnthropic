@@ -16,6 +16,7 @@
 
 import { BALANCE, knockbackMsFor } from './core/balance.js';
 import { XP, levelRewards } from '../shared/levels.js';
+import { TRAIT_INFO, TRAITS } from './core/enemy-trait.js';
 
 /**
  * 毫秒寫成小孩看得懂的秒數：1500 →「1.5 秒」、620 →「0.62 秒」。
@@ -102,6 +103,21 @@ export function buildRules(difficulty = BALANCE.defaultDifficulty) {
         `打完整組再加「字數 ×${XP.perWordOnClear}」；完全沒失誤的話整場經驗 ×${XP.perfectFactor}。`,
         `每升一級，打對字母把蟲推回去的距離 +${Math.round(levelRewards(2).knockbackFactor * 100 - 100)}%；練到 ${levelRewards(1).nextHpAt} 級多一顆血。`,
         '等級只會讓同樣的字更好打，不會讓你少打字母。'
+      ]
+    },
+    {
+      icon: '🐛',
+      title: '特殊的蟲（第二章之後會出現）',
+      lines: [
+        '第一次遇到的時候遊戲會停一下、把牠放大、告訴你牠的規則，不用先背。',
+        `${TRAIT_INFO[TRAITS.ARMORED].icon} ${TRAIT_INFO[TRAITS.ARMORED].label}　${TRAIT_INFO[TRAITS.ARMORED].rule}`,
+        `${TRAIT_INFO[TRAITS.DASHER].icon} ${TRAIT_INFO[TRAITS.DASHER].label}　${TRAIT_INFO[TRAITS.DASHER].rule}`,
+        `${TRAIT_INFO[TRAITS.SILENT].icon} ${TRAIT_INFO[TRAITS.SILENT].label}　${TRAIT_INFO[TRAITS.SILENT].rule}`,
+        /*
+         * 跟裝備那一節一樣，這一行是 §1 的鐵律，說明裡一定要寫出來——
+         * 難度也不可以靠「多打幾個字母」做出來。
+         */
+        '⚠️ 這些蟲都不會讓你多打字母——牠們的血量還是那個字有幾個字母。'
       ]
     },
     {

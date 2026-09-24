@@ -110,6 +110,9 @@ const ctx = {
   campaignLevel: Number(params.get('level')) || null,
   campaignInfo: null,
   levelLimit: null,
+  /* 這一關的特殊敵人（C6）。不是戰役關卡就是 null = 全部普通敵人 */
+  enemyTraits: null,
+  lastSilent: null,
   levelLocked: false,
   paused: false,
   scene: null,
@@ -154,6 +157,22 @@ const ctx = {
 
   /** 每一格由畫面端呼叫，把進度寫回上方那一條。 */
   syncHud: (state) => syncHud(state),
+
+  /*
+   * 靜音蟲：重聽鍵對牠沒有用，所以要看得出來（C6 / §5）。
+   *
+   * 不把按鈕藏起來——藏起來的話畫面會跳動，而且他會以為功能壞了。
+   * 變灰 + 加一句說明，他按下去之前就知道為什麼。
+   */
+  syncListenButtons(state) {
+    const silent = state?.trait === 'silent';
+    if (silent === ctx.lastSilent) return;
+    ctx.lastSilent = silent;
+    document.querySelectorAll('[data-listen]').forEach((btn) => {
+      btn.classList.toggle('is-disabled', silent);
+      btn.title = silent ? '這隻是靜音蟲，只唸一次，重聽沒有用' : '';
+    });
+  },
 
   /**
    * 要不要把單字顯示在畫面上。
@@ -352,7 +371,8 @@ function startBattle() {
     level: ctx.level,
     xp: ctx.xp,
     relearnIds: ctx.relearnIds,
-    equipped: ctx.equipped
+    equipped: ctx.equipped,
+    enemyTraits: ctx.enemyTraits
   });
   /*
    * 換一場之前先把上一場收進這次開機的檔案櫃。
@@ -376,6 +396,7 @@ function startBattle() {
     xp: ctx.xp,
     relearnIds: ctx.relearnIds,
     equipped: ctx.equipped,
+    enemyTraits: ctx.enemyTraits,
     wordIds: ctx.words.map((w) => w.id)
   });
   ctx.paused = false;
@@ -577,6 +598,8 @@ async function fetchLevelWordIds(level) {
     // 關卡指定的出題順序蓋過記住的偏好——第 2 章的重點就是「這次是亂的」
     if (data.order) ctx.order = data.order;
     ctx.levelLimit = data.limit || null;
+    // 這一關會出現哪些特殊敵人（C6）
+    ctx.enemyTraits = data.level?.enemyTraits || null;
     return data.wordIds || null;
   } catch (err) {
     return null;

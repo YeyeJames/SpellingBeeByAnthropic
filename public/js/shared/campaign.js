@@ -41,6 +41,8 @@
  * C9 會帶著裝備與等級重跑平衡。
  */
 
+import { traitPoolForChapter } from '../game/core/enemy-trait.js';
+
 /* 章節設定。每一章 24 關，後面接一關中王。 */
 export const CHAPTERS = [
   {
@@ -142,7 +144,13 @@ export function buildCampaign(groups = []) {
          * 上限抓 30：跟單一組的規模相當，一場大約五到十分鐘。
          */
         wordLimit: groupIds.length > 1 ? 30 : null,
-        wordCount: groupIds.length > 1 ? Math.min(30, countOf(groupIds)) : countOf(groupIds)
+        wordCount: groupIds.length > 1 ? Math.min(30, countOf(groupIds)) : countOf(groupIds),
+        /*
+         * 這一關會出現哪些特殊敵人（C6）。
+         * 第 1 章完全不加——那一章的工作是把整本課本走一遍，
+         * 這時候加規則只會讓他分心。
+         */
+        enemyTraits: traitPoolForChapter(chapter.n)
       });
     }
 
@@ -166,7 +174,9 @@ export function buildCampaign(groups = []) {
         order: 'random',
         weakness: false,
         wordLimit: 20,
-        wordCount: Math.min(20, countOf(bossGroups))
+        wordCount: Math.min(20, countOf(bossGroups)),
+        // 中王用該章的特性池——王關不該比它守的那一章簡單
+        enemyTraits: traitPoolForChapter(chapter.n)
       });
     }
   }
@@ -182,7 +192,9 @@ export function buildCampaign(groups = []) {
     order: 'random',
     weakness: false,
     wordLimit: null,
-    wordCount: countOf(contestGroups.map((g) => g.id))
+    wordCount: countOf(contestGroups.map((g) => g.id)),
+    // 大魔王：三種特殊敵人全上
+    enemyTraits: traitPoolForChapter(4)
   });
 
   return levels;
@@ -208,12 +220,18 @@ export function isUnlocked(level, highestCleared) {
 
 /** 進度摘要，給地圖頁的頂端用。 */
 export function campaignSummary(campaign, highestCleared = 0) {
-  const cleared = Math.min(Number(highestCleared) || 0, campaign.length);
+  const total = campaign.length;
+  const cleared = Math.min(Number(highestCleared) || 0, total);
   const next = campaign.find((l) => l.level === cleared + 1) || null;
   return {
     cleared,
-    total: campaign.length,
-    percent: Math.round((cleared / campaign.length) * 100),
+    total,
+    /*
+     * 關卡表是空的時候（課本還沒有每週單字）要回 0，不是 NaN。
+     * 0/0 算出來是 NaN，接到畫面上就變成 width: NaN%——進度條會壞掉，
+     * 而且完全看不出為什麼。
+     */
+    percent: total > 0 ? Math.round((cleared / total) * 100) : 0,
     next
   };
 }

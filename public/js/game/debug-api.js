@@ -227,6 +227,32 @@ export function installDebugApi(ctx) {
       };
     },
 
+    /**
+     * 特殊敵人（C6）：當前這一隻的特性、護甲還剩幾層、這一場介紹過哪幾種。
+     * 測試靠它驗「特性真的生效」與「§1：字母數一個都沒少」。
+     */
+    traitState() {
+      const s = ctx.getState();
+      if (!s) return null;
+      return {
+        trait: s.trait,
+        armorLeft: s.armorLeft,
+        pool: s.traitPool.slice(),
+        seen: s.traitsSeen.slice()
+      };
+    },
+
+    /** 特殊敵人的教學停格現在寫著什麼（沒在顯示時 visible 是 false）。 */
+    traitIntro() {
+      const s = ctx.scene;
+      if (!s || !s.traitTitle) return { visible: false, title: '', rule: '' };
+      return {
+        visible: (s.traitIntroMs || 0) > 0,
+        title: s.traitTitle.text || '',
+        rule: s.traitRule?.text || ''
+      };
+    },
+
     /** 升級橫幅現在寫著什麼（沒在顯示時是空字串）。 */
     levelUpBanner() {
       const s = ctx.scene;

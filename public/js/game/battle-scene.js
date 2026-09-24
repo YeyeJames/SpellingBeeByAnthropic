@@ -14,12 +14,13 @@
 
 import { BALANCE } from './core/balance.js';
 import { createClock, advanceClock } from './core/clock.js';
-import { stepBattle, clearEvents, EV, EV_NAME, LISTEN_KIND } from './core/battle.js';
+import { stepBattle, clearEvents, EV, EV_NAME, LISTEN_KIND, TRAIT_BY_CODE } from './core/battle.js';
 import { samplePerf } from './perf.js';
 import { createEffects } from './effects.js';
 import { ENEMY_KINDS, enemyKindFor } from './core/enemy-kind.js';
 import { createRng } from './core/rng.js';
 import { levelFromXp, levelRewards } from '../shared/levels.js';
+import { TRAITS, TRAIT_INFO } from './core/enemy-trait.js';
 
 const SCAFFOLD_NOTE = '（靜音或裝置沒有語音時才顯示）';
 
@@ -141,6 +142,18 @@ const LEVEL_UP_MS = 2000;
 const LEVEL_UP_FADE_MS = 500;
 /* 重學回來的字：飄一行特別的字，讓他發現「這種字特別賺」 */
 const RELEARN_COLOR = '#a78bfa';
+
+/*
+ * 特殊敵人第一次出現時的教學停格（C6 / §5）。
+ *
+ * 「停半秒、放大牠、標出名字與一句話規則」——成本很低，效果很大：
+ * 他不需要讀說明書就會知道這隻不一樣。FPS 與 Roguelike 的標準做法。
+ */
+const TRAIT_INTRO_MS = 2200;
+const TRAIT_INTRO_FREEZE_MS = 500;
+const TRAIT_INTRO_FADE_MS = 400;
+/* 護甲的外殼：打前兩下裂開、第三下碎掉 */
+const ARMOR_COLOR = 0x94a3b8;
 
 /* 事件帶的是代號，代價表的鍵是字串，這張表把兩者對起來 */
 const LISTEN_COST_KEY = {
@@ -474,6 +487,16 @@ export function createBattleScene(ctx) {
       this.slowAura = this.add.circle(0, 0, 52, SLOW_AURA_COLOR, 0);
       this.enemy.add(this.slowAura);
       this.lastSlowed = false;
+
+      /*
+       * 護甲的外殼。畫在本體外面一圈，打掉一層就淡一階、碎掉就消失——
+       * 「打前兩下外殼裂開、第三下碎掉」是 §5 指定的教學方式：
+       * 他不用看說明，打兩下就懂了。
+       */
+      this.armorRing = this.add.circle(0, 0, 60, 0x000000, 0);
+      this.armorRing.setStrokeStyle(5, ARMOR_COLOR, 0);
+      this.enemy.add(this.armorRing);
+      this.lastArmorLeft = -1;
       this.enemyBody = this.makeEnemyBody(ENEMY_KINDS[0].key);
       this.enemyKind = '';
       this.enemy.add(this.enemyBody);
@@ -531,6 +554,17 @@ export function createBattleScene(ctx) {
         .setOrigin(0.5)
         .setAlpha(0);
       this.levelUpRemainMs = 0;
+
+      /* 特殊敵人的教學停格：名字一行、規則一行 */
+      this.traitTitle = this.add
+        .text(0, 0, '', { fontFamily: 'system-ui, sans-serif', fontSize: '40px', color: '#f8fafc' })
+        .setOrigin(0.5)
+        .setAlpha(0);
+      this.traitRule = this.add
+        .text(0, 0, '', { fontFamily: 'system-ui, sans-serif', fontSize: '22px', color: '#cbd5e1' })
+        .setOrigin(0.5)
+        .setAlpha(0);
+      this.traitIntroMs = 0;
 
       this.energyBg = this.add.rectangle(0, 0, 10, 14, 0x000000, 0.35).setOrigin(0, 0.5);
       this.energyFill = this.add.rectangle(0, 0, 10, 14, 0x6ee7b7).setOrigin(0, 0.5);
@@ -687,6 +721,8 @@ export function createBattleScene(ctx) {
       this.xpBarFill.setPosition(xpBarLeft, hudY + 66).setSize(1, 8);
       this.xpBarWidth = xpBarW;
       this.levelUpText.setPosition(width * 0.5, height * 0.26);
+      this.traitTitle.setPosition(width * 0.5, height * 0.34);
+      this.traitRule.setPosition(width * 0.5, height * 0.34 + 44);
 
       const barW = Math.min(520, width * 0.4);
       this.energyBg.setPosition(width * 0.5 - barW / 2, hudY).setSize(barW, 16);
@@ -720,6 +756,8 @@ export function createBattleScene(ctx) {
       this.trailText.setFontSize(Math.round(24 * ui));
       this.levelText.setFontSize(Math.round(18 * ui));
       this.levelUpText.setFontSize(Math.round(34 * ui));
+      this.traitTitle.setFontSize(Math.round(40 * ui));
+      this.traitRule.setFontSize(Math.round(22 * ui));
       this.wordText.setPosition(width * 0.5, height * 0.3);
       this.scaffoldNote.setPosition(width * 0.5, height * 0.3 + 40 * ui);
       // 貼在題目上方：看得到，又不跟下面那疊提示文字搶位置
@@ -788,12 +826,15 @@ export function createBattleScene(ctx) {
         this.updateListenBanner(delta);
         this.updateTrailFlash(delta);
         this.updateLevelUpBanner(delta);
+        this.updateTraitIntro(delta);
         this.updateWaitingLine(state, delta);
         this.updateBonusBanner(state, delta);
         this.updateParallax(delta);
       }
       this.render(state);
       ctx.syncHud(state);
+      // 靜音蟲時把重聽鍵變灰（C6）
+      ctx.syncListenButtons?.(state);
       /*
        * 把戰況餵給音樂。每格呼叫，但值沒變就不做事——
        * 音樂要「直接反映戰況」，所以連擊與血量一變就要跟著走。
@@ -985,6 +1026,47 @@ export function createBattleScene(ctx) {
            * 結束訊息），不需要在這裡另外演出；登記一筆是因為對帳表只認事件，
            * 不登記會被誤判成「只有聲音沒有畫面」。
            */
+          case EV.TRAIT_INTRO: {
+            /*
+             * 第一次遇到這一種特殊敵人：停半秒、放大牠、寫出名字與規則（§5）。
+             *
+             * 停格用的是既有的 hitStop 機制（連同輸入一起凍結），
+             * 這樣他按的鍵不會打在看不見的畫面上，而是排隊等解凍。
+             */
+            const info = TRAIT_INFO[TRAIT_BY_CODE[ev.a]];
+            if (info) {
+              this.traitTitle.setText(`${info.icon} ${info.label}`).setColor(info.color);
+              this.traitRule.setText(info.rule);
+              this.traitIntroMs = TRAIT_INTRO_MS;
+              this.hitStopUntil = performance.now() + TRAIT_INTRO_FREEZE_MS;
+              ctx.blockInput(TRAIT_INTRO_FREEZE_MS);
+              this.cameras.main.flash(160, 200, 200, 255, false);
+              vfx(ev);
+            }
+            break;
+          }
+          case EV.ARMOR_BROKE:
+            /* 外殼碎掉：碎片噴出來，一眼看得出「現在打得動了」 */
+            this.effects.burst(this.enemy.x, this.enemy.y, 10);
+            this.cameras.main.shake(90, 0.005);
+            this.effects.floatText('外殼碎了！', this.enemy.x, this.enemy.y - 76, {
+              color: '#cbd5e1',
+              scale: 1.2,
+              fan: false
+            });
+            vfx(ev);
+            break;
+          case EV.ENEMY_DASH:
+            /*
+             * 衝刺蟲往前衝。
+             *
+             * 用跟懲罰一樣的滑行動畫——看得到的移動才連得起因果。
+             * 重聽那次已經學過這一課：瞬移只會讓他覺得「遊戲怪怪的」。
+             */
+            this.startPenaltyDash(state, ev.a);
+            this.cameras.main.shake(70, 0.004);
+            vfx(ev);
+            break;
           case EV.RELEARNED: {
             /*
              * 以前錯過、這次打對。
@@ -1118,6 +1200,21 @@ export function createBattleScene(ctx) {
       this.penaltyLag = this.penaltyLagFrom * (1 - eased);
     }
 
+    /** 特殊敵人的教學停格：亮一下就淡掉。比升級再久一點，因為要讀一句話。 */
+    updateTraitIntro(delta) {
+      if (this.traitIntroMs <= 0) return;
+      this.traitIntroMs -= delta;
+      if (this.traitIntroMs <= 0) {
+        this.traitIntroMs = 0;
+        this.traitTitle.setAlpha(0);
+        this.traitRule.setAlpha(0);
+        return;
+      }
+      const a = Math.min(1, this.traitIntroMs / TRAIT_INTRO_FADE_MS);
+      this.traitTitle.setAlpha(a);
+      this.traitRule.setAlpha(a);
+    }
+
     /** 升級橫幅：亮一下就淡掉。比 Combo 久一點——升級比較少發生。 */
     updateLevelUpBanner(delta) {
       if (this.levelUpRemainMs <= 0) return;
@@ -1219,6 +1316,15 @@ export function createBattleScene(ctx) {
        * 減速中：敵人身上罩一層冰藍光環，還會呼吸。
        * 用遊戲時間當相位，暫停時會跟著停（跟危險線同一個做法）。
        */
+      /*
+       * 護甲外殼：還剩幾層就畫多亮。
+       * 只在數字變了才動，跟其他顯示一樣——每影格 setStrokeStyle 也是配置。
+       */
+      if (state.armorLeft !== this.lastArmorLeft) {
+        this.lastArmorLeft = state.armorLeft;
+        this.armorRing.setStrokeStyle(5, ARMOR_COLOR, state.armorLeft > 0 ? 0.35 + 0.25 * state.armorLeft : 0);
+      }
+
       const slowed = state.dashMs > 0;
       if (slowed) {
         this.slowAura.setFillStyle(SLOW_AURA_COLOR, 0.22 + 0.16 * Math.sin(state.timeMs * 0.013));
@@ -1258,6 +1364,12 @@ export function createBattleScene(ctx) {
       // 升級橫幅同理，上一場的不可以留下來
       this.levelUpRemainMs = 0;
       this.levelUpText.setAlpha(0);
+      // 特殊敵人的教學停格與護甲外殼也一樣
+      this.traitIntroMs = 0;
+      this.traitTitle.setAlpha(0);
+      this.traitRule.setAlpha(0);
+      this.lastArmorLeft = -1;
+      this.armorRing.setStrokeStyle(5, ARMOR_COLOR, 0);
       // 拼字那一排也要歸零，否則新的一場開場會掛著上一場最後那幾個字母
       this.trailBadMs = 0;
       this.lastTrailTyped = -1;

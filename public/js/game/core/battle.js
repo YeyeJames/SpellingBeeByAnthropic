@@ -15,6 +15,7 @@ import { createRng, shuffleInPlace } from './rng.js';
 import { isTypeableChar, isSeparator } from './charset.js';
 import { XP, levelFromXp, levelRewards } from '../../shared/levels.js';
 import { effectsFor } from '../../shared/equipment.js';
+import { TRAITS, traitFor, ARMOR_LETTERS, DASH_EVERY_MS, DASH_PUSH_MS } from './enemy-trait.js';
 
 /* 事件類型。用數字而不是字串，是為了讓事件緩衝區可以完全不配置記憶體。 */
 export const EV = {
@@ -45,13 +46,31 @@ export const EV = {
    * 這是 §6 的重點：一隻普通的蟲 5 XP，一個重學回來的字 25 XP。
    * 事件獨立一個型別，畫面才演得出「這一隻特別值錢」。
    */
-  RELEARNED: 14
+  RELEARNED: 14,
+  /*
+   * 特殊敵人第一次出現（C6）。a = 特性代號（見 enemy-trait.js）。
+   * 畫面收到就停半秒、放大牠、標出名字與一句話規則——§5 特別要求的，
+   * 成本很低效果很大：他不用讀說明書就知道這隻不一樣。
+   */
+  TRAIT_INTRO: 15,
+  /** 護甲碎了。a = wordIndex */
+  ARMOR_BROKE: 16,
+  /** 衝刺蟲往前衝了一段。a = 前進了幾毫秒的距離 */
+  ENEMY_DASH: 17
 };
 
 export const EV_NAME = Object.fromEntries(Object.entries(EV).map(([k, v]) => [v, k]));
 
 /* 聽力動作代號，給 LISTEN 事件的參數用 */
 export const LISTEN_KIND = { REPLAY: 1, SLOW: 2, SENTENCE: 3 };
+
+/* 事件只能帶數字，所以特性也要有代號 */
+export const TRAIT_CODE = {
+  [TRAITS.ARMORED]: 1,
+  [TRAITS.DASHER]: 2,
+  [TRAITS.SILENT]: 3
+};
+export const TRAIT_BY_CODE = { 1: TRAITS.ARMORED, 2: TRAITS.DASHER, 3: TRAITS.SILENT };
 
 /*
  * 事件緩衝區大小。
@@ -126,7 +145,12 @@ export function createBattle({
    * 不給就是全裸（初始木蜂針＋薄蠟衣），效果全部是 1 倍，
    * 也就是 C5 之前的行為——舊錄影檔的指紋因此不會變。
    */
-  equipped = null
+  equipped = null,
+  /*
+   * 這一關會出現哪些特殊敵人（C6）。空陣列 = 全部都是普通的，
+   * 也就是 C6 之前的行為，所以舊錄影檔重播出來的指紋不會變。
+   */
+  enemyTraits = null
 } = {}) {
   if (!Array.isArray(words) || words.length === 0) {
     throw new Error('createBattle 需要至少一個單字');
@@ -184,6 +208,13 @@ export function createBattle({
     gear,
     /* 二次機會：這一場還剩幾次「漏字不扣血」 */
     freeMissesLeft: gear.freeMisses,
+    /* 特殊敵人（C6）：這一關的特性池、當前這一隻的特性、以及它的狀態 */
+    traitPool: Array.isArray(enemyTraits) ? enemyTraits.slice() : [],
+    trait: TRAITS.NONE,
+    armorLeft: 0,
+    dashTimerMs: 0,
+    /* 哪幾種已經介紹過了——同一場只停一次，不然每隻都停會很煩 */
+    traitsSeen: [],
     relearnSet,
 
     // 亂數狀態：一起算進指紋，才能證明兩次跑法完全一致
@@ -274,7 +305,28 @@ function startNextWord(state) {
     state.crossMs *= BALANCE.combo.sweetTimeFactor;
     state.sweetNext = false;
   }
+
+  /*
+   * 這一隻是什麼特性（C6）。
+   *
+   * 用「這是這一場的第幾隻」算出來，不抽亂數也不看時間——同一場重播
+   * 必然配到同一批敵人，否則「剛剛怪怪的」那顆按鈕就沒有意義了。
+   * queueHead 已經加過 1，所以減回去才是這一隻的序號。
+   */
+  state.trait = traitFor(state.traitPool, state.queueHead - 1, state.seed);
+  state.armorLeft = state.trait === TRAITS.ARMORED ? ARMOR_LETTERS : 0;
+  state.dashTimerMs = state.trait === TRAITS.DASHER ? DASH_EVERY_MS : 0;
+
   emit(state, EV.WORD_START, wi);
+
+  /*
+   * 第一次遇到某一種特殊敵人，停下來介紹一次（§5）。
+   * 同一場只介紹一次——每隻都停會很煩，而他看過一次就記得了。
+   */
+  if (state.trait !== TRAITS.NONE && !state.traitsSeen.includes(state.trait)) {
+    state.traitsSeen.push(state.trait);
+    emit(state, EV.TRAIT_INTRO, TRAIT_CODE[state.trait] || 0, wi);
+  }
 }
 
 /**
@@ -485,6 +537,22 @@ export function stepBattle(state) {
   const speed = state.dashMs > 0 ? BALANCE.combo.dashSpeedFactor : 1;
   state.progress += (BALANCE.logicStepMs * speed) / state.crossMs;
 
+  /*
+   * 衝刺蟲：每兩秒自己往前衝一小段（§5）。
+   *
+   * 它照樣吃蜂群衝刺的減速——那是玩家用連擊換來的，不該對某一種敵人失效。
+   * 衝的那一下要發事件，畫面才震得起來；看不見的前進只會讓他覺得
+   * 「遊戲怪怪的」（重聽那次已經學過這一課了）。
+   */
+  if (state.trait === TRAITS.DASHER && state.status === 'running') {
+    state.dashTimerMs -= BALANCE.logicStepMs * speed;
+    if (state.dashTimerMs <= 0) {
+      state.dashTimerMs += DASH_EVERY_MS;
+      pushEnemy(state, DASH_PUSH_MS);
+      emit(state, EV.ENEMY_DASH, DASH_PUSH_MS);
+    }
+  }
+
   if (state.progress >= 1) {
     state.progress = 1;
     missWord(state);
@@ -537,9 +605,25 @@ export function applyAction(state, action) {
         state.honey += letterHoney;
         // 經驗不吃狂蜂倍率（理由見 killWord）
         addXp(state, XP.perCorrectLetter);
-        // 擊退：往回推，但不會推到畫面外。狂蜂狀態期間三倍
-        state.progress -= (knockbackMsFor(state.difficulty) * knockbackFactor(state)) / state.crossMs;
-        if (state.progress < 0) state.progress = 0;
+
+        /*
+         * 護甲蟲：前兩個字母打不動牠（§5）。
+         *
+         * 注意**字母照樣算對、照樣往前推進**——打掉的只有擊退，不是進度。
+         * 這是 §1 的鐵律：特殊敵人不可以改變要打的字母數，只能改變
+         * 「打對之後有多少好處」。外殼碎掉之後就跟一般敵人一樣了。
+         */
+        if (state.armorLeft > 0) {
+          state.armorLeft -= consumed;
+          if (state.armorLeft <= 0) {
+            state.armorLeft = 0;
+            emit(state, EV.ARMOR_BROKE, state.wordIndex);
+          }
+        } else {
+          // 擊退：往回推，但不會推到畫面外。狂蜂狀態期間三倍
+          state.progress -= (knockbackMsFor(state.difficulty) * knockbackFactor(state)) / state.crossMs;
+          if (state.progress < 0) state.progress = 0;
+        }
         emit(state, EV.LETTER_OK, state.typed, state.target.length, letterHoney);
 
         if (state.typed >= state.target.length) killWord(state);
@@ -579,6 +663,14 @@ export function applyAction(state, action) {
     case 'listen': {
       const base = BALANCE.listenCostMs[action.listen];
       if (base == null) return state;
+      /*
+       * 靜音蟲：這個字只唸一次，重聽鍵對牠沒有用（§5）。
+       *
+       * 直接不理會，而且**不收代價**——收了代價卻沒唸，那是懲罰他按按鈕，
+       * 他會學到「不要亂按」而不是「這隻不能重聽」。
+       * 畫面會把重聽鍵變灰並說明原因（見 battle-scene.js）。
+       */
+      if (state.trait === TRAITS.SILENT) return state;
       // 回音水晶讓重聽便宜一半——目的是讓他敢多聽一次，而不是少打字母
       const cost = base * state.gear.listen;
       state.stats.listens += 1;
@@ -654,6 +746,13 @@ export function fingerprint(state) {
   mix(state.level);
   // 二次機會剩幾次會改變後面的結果，所以也要進指紋
   mix(state.freeMissesLeft);
+  /*
+   * 特殊敵人的狀態也會改變結果（護甲還剩幾層、衝刺還有多久），
+   * 不進指紋的話「重播出來一樣」就不再代表「這一場真的一模一樣」。
+   */
+  mix(TRAIT_CODE[state.trait] || 0);
+  mix(state.armorLeft);
+  mixFloat(state.dashTimerMs);
   return h >>> 0;
 }
 
@@ -676,6 +775,11 @@ export function snapshot(state) {
     // 裝備：給 HUD、除錯與測試看。gear 本身是純數字，不含裝備名稱
     gear: { ...state.gear },
     freeMissesLeft: state.freeMissesLeft,
+    /* 特殊敵人：給 HUD、除錯與測試看 */
+    trait: state.trait,
+    armorLeft: state.armorLeft,
+    traitPool: state.traitPool.slice(),
+    traitsSeen: state.traitsSeen.slice(),
     progress: Number(state.progress.toFixed(4)),
     crossMs: Math.round(state.crossMs),
     wordIndex: state.wordIndex,
