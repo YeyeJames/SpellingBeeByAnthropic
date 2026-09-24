@@ -302,7 +302,8 @@ input[type='password']:focus {
     height: 28px;
     font-size: 0.85rem;
   }
-  .coin-badge {
+  .coin-badge,
+  .level-badge {
     padding: 0.2rem 0.45rem;
     font-size: 0.78rem;
   }

@@ -15,6 +15,21 @@
  * 以 key 為準 upsert：改價格、改說明、加新品項，重新部署就生效。
  * 要下架就把 active 改成 false（不要直接刪掉——已經買過的人
  * ownedItemKeys 裡還留著那個 key，刪掉會讓它變成孤兒）。
+ *
+ * ── 價格為什麼是這個量級（2026-09 調整） ──────────────────
+ * 他自己講的：「商店東西可以調高單價，賺錢太快了」。
+ *
+ * 舊價格是 60～150，而練習一輪（30 字全對）就有 900 金幣——第一輪還沒
+ * 練完，整間店 660 塊全部買得起。買東西沒有取捨，也就沒有期待。
+ *
+ * 現在整間店 8,200，大約九輪練習。最便宜的 600 刻意壓在「一輪就買得到」，
+ * 這樣他手上已經存的錢不會突然變成廢紙，而且第一次逛就有東西可以拿；
+ * 之後才是要存的。
+ *
+ * 單價只是其中一半——另一半是 utils/coins.js 的連勝加成封頂，
+ * 那個沒修的話金幣是指數成長的，單價調幾次都會被追上。
+ *
+ * ⚠️ 已經買過的東西不會因為漲價被收回（看的是 ownedItemKeys）。
  */
 
 const SHOP_ITEMS = [
@@ -23,7 +38,7 @@ const SHOP_ITEMS = [
     type: 'theme',
     name: '太空主題',
     description: '把介面換成閃亮的星空太空風！',
-    cost: 150,
+    cost: 2000,
     iconAsset: '/assets/icons/star.svg',
     active: true
   },
@@ -32,7 +47,7 @@ const SHOP_ITEMS = [
     type: 'theme',
     name: '恐龍主題',
     description: '穿越回侏儸紀，來場恐龍大冒險！',
-    cost: 150,
+    cost: 2000,
     iconAsset: '/assets/icons/star.svg',
     active: true
   },
@@ -41,7 +56,7 @@ const SHOP_ITEMS = [
     type: 'avatarAccessory',
     name: '酷炫墨鏡',
     description: '幫拼字蜂戴上帥氣墨鏡！',
-    cost: 60,
+    cost: 600,
     iconAsset: '/assets/sprites/accessory-sunglasses.svg',
     active: true
   },
@@ -50,7 +65,7 @@ const SHOP_ITEMS = [
     type: 'avatarAccessory',
     name: '超級披風',
     description: '拼字蜂變身拼字超人！',
-    cost: 80,
+    cost: 900,
     iconAsset: '/assets/sprites/accessory-cape.svg',
     active: true
   },
@@ -59,7 +74,7 @@ const SHOP_ITEMS = [
     type: 'avatarAccessory',
     name: '金牌獎章',
     description: '掛上閃亮亮的第一名獎牌！',
-    cost: 100,
+    cost: 1200,
     iconAsset: '/assets/sprites/accessory-medal.svg',
     active: true
   },
@@ -68,7 +83,7 @@ const SHOP_ITEMS = [
     type: 'minigame',
     name: '接金幣小遊戲',
     description: '解鎖後可以在商店裡玩「接金幣」小遊戲放鬆一下！',
-    cost: 120,
+    cost: 1500,
     iconAsset: '/assets/icons/coin.svg',
     active: true
   }

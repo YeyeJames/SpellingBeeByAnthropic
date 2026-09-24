@@ -98,20 +98,7 @@
   white-space: nowrap;
 }
 
-/*
- * 等級章。跟蜂蜜擺在一起但顏色不同——鎖住裝備的是等級不是錢，
- * 兩個長一樣的話他會繼續以為問題出在蜂蜜不夠。
- */
-.level-badge {
-  background: #2a1f42;
-  color: #c4b5fd;
-  border: 1px solid #5b4a8a;
-  border-radius: 999px;
-  padding: 0.3rem 0.9rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
+/* 等級章 .level-badge 定義在 theme.css——導覽列每一頁都有它，不只商店 */
 
 .shop-sub {
   margin: 0.2rem 0 1rem;

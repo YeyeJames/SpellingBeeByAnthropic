@@ -166,3 +166,28 @@ h1, h2, h3, .display-font {
   border-radius: 999px;
   box-shadow: 0 3px 0 #c99f1e;
 }
+
+/*
+ * 等級章。導覽列與商店裝備區共用。
+ *
+ * 顏色刻意跟金幣／蜂蜜分開（紫 vs 金）：鎖住裝備的是等級不是錢，
+ * 兩個長一樣的話他會一直以為問題出在錢不夠。
+ */
+.level-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: #4c3a7a;
+  color: #e9d5ff;
+  font-family: var(--font-display);
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  box-shadow: 0 3px 0 #332654;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* hidden 屬性要贏過 display:inline-flex，不然「還沒打過遊戲就不顯示」會失效 */
+.level-badge[hidden] {
+  display: none;
+}

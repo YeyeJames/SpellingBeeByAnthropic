@@ -3,8 +3,10 @@ import { onSyncState } from './outbox.js';
 import { readShared, writeShared } from './local-store.js';
 import { updateCachedUser } from './auth.js';
 import * as sound from './sound-manager.js';
+import { levelFromXp } from './shared/levels.js';
 
 let coinsEl = null;
+let levelEl = null;
 let currentCoins = 0;
 
 // 導覽列樣板存進本地：切換分頁時可以立刻畫出來，完全不必等網路。
@@ -16,7 +18,8 @@ let currentCoins = 0;
  * 舊 HTML 裡沒有的元素——按鈕直接變成死的，要重新整理一次才會好。
  * 那種問題在自己的機器上永遠看不到（快取是空的），只有使用者會遇到。
  */
-const NAV_CACHE_KEY = 'navHtml3';
+// navHtml4：加了 [data-nav-level] 等級章
+const NAV_CACHE_KEY = 'navHtml4';
 
 function fetchNavHtml() {
   return fetch('/partials/nav.html')
@@ -41,9 +44,11 @@ export async function mountNav(user, activePage) {
 
   coinsEl = mountPoint.querySelector('[data-nav-coins]');
   currentCoins = user.coins;
+  levelEl = mountPoint.querySelector('[data-nav-level]');
   const nicknameEl = mountPoint.querySelector('[data-nav-nickname]');
   if (coinsEl) coinsEl.textContent = `🪙 ${currentCoins}`;
   if (nicknameEl) nicknameEl.textContent = user.nickname;
+  setNavLevelFromXp(user.xp);
 
   const activeLink = mountPoint.querySelector(`[data-nav="${activePage}"]`);
   if (activeLink) activeLink.classList.add('active');
@@ -69,6 +74,8 @@ export async function mountNav(user, activePage) {
     const fresh = e.detail;
     if (!fresh || typeof fresh.coins !== 'number') return;
     if (fresh.coins > currentCoins) setNavCoins(fresh.coins);
+    // 等級只會往上，所以直接跟著伺服器走，不需要金幣那套防倒退的判斷
+    setNavLevelFromXp(fresh.xp);
     const nameEl = mountPoint.querySelector('[data-nav-nickname]');
     if (nameEl && fresh.nickname) nameEl.textContent = fresh.nickname;
   });
@@ -215,4 +222,32 @@ export function setNavCoins(amount) {
   currentCoins = amount;
   if (coinsEl) coinsEl.textContent = `🪙 ${currentCoins}`;
   updateCachedUser({ coins: amount });
+}
+
+/**
+ * 導覽列的等級章。
+ *
+ * ── 為什麼要有 ──────────────────────────────────────────
+ * 他自己問的：「怎麼沒看到等級？不是說幾級才能解鎖？」
+ * 在此之前 levelFromXp() 只有戰鬥畫面的 HUD 在用，遊戲外面一個地方都沒有。
+ * 商店寫著「10 級解鎖」，他卻沒辦法知道自己離那裡多遠。
+ *
+ * ── 為什麼從 xp 現算，不另外存一個 level ──────────────────
+ * 跟伺服器同一份 shared/levels.js。存兩份遲早對不起來，而那種不一致
+ * 最難查：商店說他 9 級不能買，導覽列寫 10 級。
+ *
+ * ── 還沒打過遊戲的人不顯示 ────────────────────────────────
+ * xp 是 0（或還沒有這個欄位）就整個藏起來。只練習過的人看到一個永遠
+ * 不動的「Lv 1」只會多一個看不懂的東西；等他第一次打完遊戲，
+ * 這個章才會出現——那時候它才有意義。
+ */
+export function setNavLevelFromXp(xp) {
+  if (!levelEl) return;
+  const n = Number(xp) || 0;
+  if (n <= 0) {
+    levelEl.hidden = true;
+    return;
+  }
+  levelEl.hidden = false;
+  levelEl.textContent = `Lv ${levelFromXp(n).level}`;
 }
