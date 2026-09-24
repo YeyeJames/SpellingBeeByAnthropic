@@ -256,7 +256,15 @@ console.log('\n6) 不存在的組要擋下來');
 {
   const before = store.practiceSessions.length;
   const r = await startSession({ group: 'w99' });
-  check('回 400 而不是開一場空的', r.status === 400, `${r.status} ${r.body.error || ''}`);
+  /*
+   * 重點是「擋下來、不要開一場空的」，狀態碼本身是次要的。
+   *
+   * 原本這裡是 400（查不到字才擋）。兩本課本之後，組別會先對「這個帳號
+   * 那一本」守門，不在裡面就 404——跟 /api/game/access、/api/words
+   * 同一個情況同一個答案。前端只顯示錯誤訊息，不看狀態碼。
+   */
+  check('擋下來而不是開一場空的（404：不在你的單字庫裡）', r.status === 404,
+    `${r.status} ${r.body.error || ''}`);
   check('沒有留下紀錄', store.practiceSessions.length === before);
 
   const noArg = await startSession({});
