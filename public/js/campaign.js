@@ -125,7 +125,9 @@ function render(data) {
       cell.innerHTML =
         `<span class="level-no">${KIND_ICON[l.kind] || ''}${l.level}</span>` +
         `<span class="level-sub">${escapeHtml(l.subtitle)}</span>` +
-        `<span class="level-meta">${l.weakness ? '你的弱點字' : `${l.wordCount} 字`}</span>` +
+        `<span class="level-meta">${l.weakness ? '你的弱點字' : `${l.wordCount} 字`}` +
+        // 速度（C9）：越後面越快，地圖上就看得到——那是他要練的東西
+        `${l.speed && l.speed !== 1 ? `・⚡×${l.speed}` : ''}</span>` +
         (l.cleared ? `<span class="level-stars">${'★'.repeat(l.stars)}${'☆'.repeat(3 - l.stars)}</span>` : '');
       /*
        * 鎖著的格子要說得出「為什麼」。

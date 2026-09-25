@@ -173,13 +173,26 @@ const HP_MAX_BONUS = 2;
    打字的次數一個都沒少，只是每一下把蟲推得遠一點。 */
 const KNOCKBACK_PER_LEVEL = 0.02;
 
+/*
+ * 擊退加成到 30 級就停（C9）。
+ *
+ * 原本沒有上限：模擬一趟完整的戰役，孩子第 1 章打完就 27 級、全部打完 56 級，
+ * 擊退 ×2.1，再疊上裝備——第 2 章以後第一次就輸的比例是 0%，
+ * 不管後面的關卡調多快都會被追上。
+ *
+ * 30 級是最後一階裝備解鎖的等級，也是第二點血的等級：到這裡「變強」這條線
+ * 已經給完了。之後等級照樣升、經驗條照樣跑，只是不再加擊退——
+ * 後面的挑戰交給關卡速度（shared/campaign.js 的 SPEED），也就是英打本身。
+ */
+export const KNOCKBACK_CAP_LEVEL = 30;
+
 export function levelRewards(level) {
   const l = Math.max(1, Math.floor(level) || 1);
   const hpSteps = l < HP_FIRST_AT ? 0 : 1 + Math.floor((l - HP_FIRST_AT) / HP_EVERY);
   return {
     bonusHp: Math.min(HP_MAX_BONUS, hpSteps),
     // 1 級是 1.0（完全等於 C2 之前的平衡），之後每級 +2%
-    knockbackFactor: 1 + KNOCKBACK_PER_LEVEL * (l - 1),
+    knockbackFactor: 1 + KNOCKBACK_PER_LEVEL * (Math.min(l, KNOCKBACK_CAP_LEVEL) - 1),
     // 下一點血在幾級——HUD 與結算要講得出「再練到幾級會多一條命」
     nextHpAt: hpSteps >= HP_MAX_BONUS ? null : l < HP_FIRST_AT ? HP_FIRST_AT : HP_FIRST_AT + hpSteps * HP_EVERY
   };

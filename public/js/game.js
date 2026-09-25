@@ -399,7 +399,12 @@ function startBattle() {
      * 三選一（C8）只在戰役關卡開。練習完那組的遊戲維持原樣——
      * 他已經熟悉那個流程，而且那是「考試」，不需要變化。
      */
-    perks: !!ctx.campaignLevel
+    perks: !!ctx.campaignLevel,
+    /*
+     * 這一關的速度（C9）。關卡表給的，伺服器那邊用的是同一個數字。
+     * 不是戰役（組別遊戲、複習關）一律 1：複習關是卡關的出口，不該再加速。
+     */
+    speed: ctx.campaignLevel && !ctx.review ? Number(ctx.campaignInfo?.speed) || 1 : 1
   });
   ctx.shownWordIdx = new Set();
   hidePerkPanel();
@@ -428,6 +433,7 @@ function startBattle() {
     enemyTraits: ctx.enemyTraits,
     xpFactor: ctx.xpFactor,
     perks: !!ctx.campaignLevel,
+    speed: ctx.campaignLevel && !ctx.review ? Number(ctx.campaignInfo?.speed) || 1 : 1,
     wordIds: ctx.words.map((w) => w.id)
   });
   ctx.paused = false;
@@ -1486,10 +1492,18 @@ async function boot() {
       }
       document.getElementById('pregame-group').textContent = ctx.groupLabel || '練習';
       // 自己錄的音要看得到，不然他不會知道遊戲裡到底有沒有用上
+      /*
+       * 戰役的速度要寫出來（C9）。後面的關卡蟲會越來越快——看不到這個數字的話，
+       * 他只會覺得「怎麼突然變難了」，而不是「這一關比較快，我要打快一點」。
+       */
+      const spd = Number(ctx.campaignInfo?.speed) || 1;
+      const speedNote = ctx.campaignLevel && spd !== 1
+        ? `・蟲的速度 ×${spd.toFixed(2).replace(/0$/, '')}`
+        : '';
       document.getElementById('pregame-count').textContent =
-        ctx.recordedCount > 0
+        (ctx.recordedCount > 0
           ? `總共 ${ctx.words.length} 個字（其中 ${ctx.recordedCount} 個唸的是你自己錄的聲音）`
-          : `總共 ${ctx.words.length} 個字`;
+          : `總共 ${ctx.words.length} 個字`) + speedNote;
       /*
        * 最容易誤會的三件事，每一場都放一次。
        * 難度可能在校準之後才決定，所以這裡才生成，不是載入時。

@@ -78,6 +78,40 @@ export const CHAPTERS = [
 ];
 
 export const LEVELS_PER_CHAPTER = 24;
+
+/*
+ * 每一關的速度（C9）。1 = 基本速度；1.2 = 蟲走完全程的時間少 20%，
+ * 等於「他要打快 20%」。速度放大的是整個敵人那一邊（逼近、擊退、打錯的代價
+ * 一起），所以它就是一個乾淨的「英打要多快」旋鈕。
+ *
+ * ── 為什麼難度要從速度來 ───────────────────────────────────
+ * 家長實際觀察（2026-09）：兩兄弟「不會拼」的比例非常小，第一次看到時可能錯，
+ * 第二、三次就完全記住了。所以後面章節的挑戰不能靠「考他不會的字」，
+ * 要靠「來不及」——順便練英打，這也是家長要的方向。
+ *
+ * ── 為什麼每一章裡面也要慢慢加 ─────────────────────────────
+ * 模擬器量到原本的曲線是**反的**：第 1 關（Lv1、Week 1 四十個字）
+ * 輸的機率接近一半，是整個遊戲最難的一關；之後等級一路往上，第 2 章以後
+ * 第一次就輸的比例是 0%。所以第 1 章從比基本慢一點開始（第一次玩戰役的孩子
+ * 不該在第一關就擲銅板），每一章裡面再一關一關往上加，章與章之間接得起來。
+ *
+ * 數字是用 scripts/balance-campaign.mjs 調出來的，目標區間寫在
+ * docs/campaign-design.md 附錄 G。調這裡之前先跑那一支。
+ */
+export const SPEED = {
+  // 第 n 章：[第一關, 最後一關]，中間線性
+  chapters: { 1: [0.85, 1.3], 2: [1.28, 1.42], 3: [1.34, 1.48], 4: [1.35, 1.5] },
+  // 中王只有 20 個字，要比它守的那一章快才有「王」的感覺
+  midboss: { 1: 1.38, 2: 1.52, 3: 1.62 },
+  // 大魔王是 100 個字、3 條命：長度本身就是難度，速度反而要放一點
+  finalboss: 1.15
+};
+
+export function speedFor(chapterN, indexInChapter) {
+  const [from, to] = SPEED.chapters[chapterN] || [1, 1];
+  const t = LEVELS_PER_CHAPTER > 1 ? indexInChapter / (LEVELS_PER_CHAPTER - 1) : 0;
+  return Math.round((from + (to - from) * t) * 100) / 100;
+}
 export const TOTAL_LEVELS = 100;
 
 /* 中王與大魔王的關號。C7 才會給它們真正的特殊規則，C3 先讓它們是「混合關」。 */
@@ -150,7 +184,8 @@ export function buildCampaign(groups = []) {
          * 第 1 章完全不加——那一章的工作是把整本課本走一遍，
          * 這時候加規則只會讓他分心。
          */
-        enemyTraits: traitPoolForChapter(chapter.n)
+        enemyTraits: traitPoolForChapter(chapter.n),
+        speed: speedFor(chapter.n, i)
       });
     }
 
@@ -176,7 +211,8 @@ export function buildCampaign(groups = []) {
         wordLimit: 20,
         wordCount: Math.min(20, countOf(bossGroups)),
         // 中王用該章的特性池——王關不該比它守的那一章簡單
-        enemyTraits: traitPoolForChapter(chapter.n)
+        enemyTraits: traitPoolForChapter(chapter.n),
+        speed: SPEED.midboss[chapter.n] || 1
       });
     }
   }
@@ -194,7 +230,8 @@ export function buildCampaign(groups = []) {
     wordLimit: null,
     wordCount: countOf(contestGroups.map((g) => g.id)),
     // 大魔王：三種特殊敵人全上
-    enemyTraits: traitPoolForChapter(4)
+    enemyTraits: traitPoolForChapter(4),
+    speed: SPEED.finalboss
   });
 
   return levels;

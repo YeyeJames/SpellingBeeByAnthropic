@@ -173,7 +173,16 @@ export function createBattle({
    * 開不開三選一（C8）。只有戰役關卡開。
    * 不給就是關的，跟 C8 之前完全一樣——舊錄影檔、既有測試的指紋都不會變。
    */
-  perks = false
+  perks = false,
+  /*
+   * 這一關的速度（C9）。1 = 基本速度；1.2 = 蟲走完全程的時間少 20%。
+   *
+   * 家長實際觀察：兩兄弟「不會拼」的比例非常小，第二、三次就記住了。
+   * 所以後面章節的挑戰來自速度，順便練英打。速度寫在關卡表裡
+   * （shared/campaign.js），伺服器、遊戲頁、錄影檔用的是同一個數字。
+   * 不給就是 1，舊錄影檔的指紋不會變。
+   */
+  speed = 1
 } = {}) {
   if (!Array.isArray(words) || words.length === 0) {
     throw new Error('createBattle 需要至少一個單字');
@@ -277,6 +286,7 @@ export function createBattle({
      * perkOffer 不是 null 的時候整場停住，等他選。
      */
     perksOn: !!perks,
+    speed: Number(speed) > 0 ? Number(speed) : 1,
     perkRng: createRng((seed ^ 0x9e3779b9) >>> 0),
     perks: [],
     perkOffer: null,
@@ -342,7 +352,7 @@ function startNextWord(state) {
   state.typed = 0;
   state.cleanWord = true;
   state.progress = 0;
-  state.crossMs = crossMsFor(state.target.length, state.difficulty);
+  state.crossMs = crossMsFor(state.target.length, state.difficulty) / state.speed;
   /*
    * 蜜糖時間：下一個單字的時間加倍。
    * 在這裡套用而不是在觸發當下，是因為觸發時當前那個字已經在跑了——

@@ -15,7 +15,7 @@
  */
 
 import { BALANCE, knockbackMsFor } from './core/balance.js';
-import { XP, levelRewards } from '../shared/levels.js';
+import { XP, levelRewards, KNOCKBACK_CAP_LEVEL } from '../shared/levels.js';
 import { TRAIT_INFO, TRAITS } from './core/enemy-trait.js';
 
 /**
@@ -105,6 +105,8 @@ export function buildRules(difficulty = BALANCE.defaultDifficulty) {
          * C4 的核心，說明裡要寫出來：卡關的時候有一條路，而且是最快的那條。
          */
         `📖 複習關（戰役地圖最上面）：題目是你打錯過的字，整場經驗 ×${XP.reviewFactor}，輸了也算。卡關的時候去那裡變強最快。`,
+        `⚡ 戰役越後面，蟲走得越快（地圖上寫著 ×1.3 這種數字）——後面的關卡考的是英打速度。`,
+        `練到 ${KNOCKBACK_CAP_LEVEL} 級之後擊退就不再增加，再往上靠的是你自己打字的速度。`,
         `每升一級，打對字母把蟲推回去的距離 +${Math.round(levelRewards(2).knockbackFactor * 100 - 100)}%；練到 ${levelRewards(1).nextHpAt} 級多一顆血。`,
         '等級只會讓同樣的字更好打，不會讓你少打字母。'
       ]

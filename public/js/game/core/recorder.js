@@ -54,6 +54,8 @@ export function createRecorder(setup) {
       xpFactor: Number(setup.xpFactor) > 0 ? Number(setup.xpFactor) : 1,
       // 三選一（C8）。舊錄影檔沒有 → 關的，也就是 C8 之前的行為
       perks: !!setup.perks,
+      // 這一關的速度（C9）。舊錄影檔沒有 → 1
+      speed: Number(setup.speed) > 0 ? Number(setup.speed) : 1,
       wordIds: setup.wordIds.slice()
     },
     // 每筆 [tick, kind, payload]，用陣列而不是物件，錄影檔才不會大得誇張
@@ -109,7 +111,8 @@ export function replayLog(log, words, { maxTicks = 60 * 120 * 30 } = {}) {
     enemyTraits: log.setup.enemyTraits || null,
     // 舊錄影檔沒有這個欄位 → 1 倍，也就是 C4 之前的行為
     xpFactor: log.setup.xpFactor || 1,
-    perks: !!log.setup.perks
+    perks: !!log.setup.perks,
+    speed: log.setup.speed || 1
   });
 
   const entries = log.entries;
