@@ -32,7 +32,8 @@ import {
   warmUpSpeech
 } from './audio-player.js';
 import { buildRules, buildQuickRules } from './game/rules.js';
-import { readShared, writeShared, newId } from './local-store.js';
+import { newId } from './local-store.js';
+import { readPref, writePref } from './prefs.js';
 import { getCachedUser } from './auth.js';
 
 const params = new URLSearchParams(location.search);
@@ -44,6 +45,10 @@ function initialSeed() {
   return (Date.now() ^ (Math.random() * 0xffffffff)) >>> 0;
 }
 
+/*
+ * 這三個是「這個孩子的」設定，存在帳號名下（見 prefs.js）。
+ * 本來存在共用的那一份，Allen 一進遊戲就沿用 Pierce 的難度、連校準都跳過。
+ */
 const DIFFICULTY_KEY = 'gameDifficulty';
 const ORDER_KEY = 'gameOrder';
 const SHOW_WORD_KEY = 'gameShowWord';
@@ -57,7 +62,7 @@ const SHOW_WORD_KEY = 'gameShowWord';
 function storedOrder() {
   const fromUrl = params.get('order');
   if (fromUrl === 'random' || fromUrl === 'sequential') return fromUrl;
-  const saved = readShared(ORDER_KEY);
+  const saved = readPref(ORDER_KEY);
   return saved === 'random' || saved === 'sequential' ? saved : null;
 }
 
@@ -71,7 +76,7 @@ function storedOrder() {
 function storedDifficulty() {
   const fromUrl = params.get('difficulty');
   if (fromUrl) return fromUrl;
-  const saved = readShared(DIFFICULTY_KEY);
+  const saved = readPref(DIFFICULTY_KEY);
   return saved || null;
 }
 
@@ -133,7 +138,7 @@ const ctx = {
    * 要不要把單字寫在畫面上。
    * null = 照自動規則（靜音或沒語音就顯示）；true/false = 他自己按過按鈕。
    */
-  showWord: readShared(SHOW_WORD_KEY) === null ? null : readShared(SHOW_WORD_KEY) === '1',
+  showWord: readPref(SHOW_WORD_KEY) === null ? null : readPref(SHOW_WORD_KEY) === '1',
 
   /** 一場結束。畫面端在 BATTLE_END 時呼叫。 */
   onBattleEnd(state, won) {
@@ -216,8 +221,8 @@ const ctx = {
    */
   setShowWord(v) {
     ctx.showWord = v === null ? null : !!v;
-    if (v === null) writeShared(SHOW_WORD_KEY, null);
-    else writeShared(SHOW_WORD_KEY, ctx.showWord ? '1' : '0');
+    if (v === null) writePref(SHOW_WORD_KEY, null);
+    else writePref(SHOW_WORD_KEY, ctx.showWord ? '1' : '0');
     ctx.refreshAudioButtons?.();
     return ctx.showWord;
   },
@@ -1321,7 +1326,7 @@ async function boot() {
         btn.classList.toggle('is-last', btn.dataset.order === storedOrder());
         btn.onclick = () => {
           ctx.order = btn.dataset.order;
-          writeShared(ORDER_KEY, ctx.order);
+          writePref(ORDER_KEY, ctx.order);
           pregameEl.hidden = true;
           ctx.sfx.unlock(); // 這一下點擊就是瀏覽器要的使用者手勢
           onChosen();
@@ -1359,7 +1364,7 @@ async function boot() {
         onDone: (result) => {
           if (result?.difficulty) {
             ctx.difficulty = result.difficulty;
-            writeShared(DIFFICULTY_KEY, result.difficulty);
+            writePref(DIFFICULTY_KEY, result.difficulty);
             ctx.calibration = result;
           }
           // 校準時他已經按過鍵了，音訊可以解鎖

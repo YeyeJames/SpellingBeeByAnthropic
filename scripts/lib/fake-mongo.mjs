@@ -105,10 +105,39 @@ export function createFakeDb(store, { uniqueIndexes = {} } = {}) {
     }
 
     return {
-      find: (query = {}) => ({
-        sort: () => ({ toArray: async () => rows.filter((d) => matches(d, query)) }),
-        toArray: async () => rows.filter((d) => matches(d, query))
-      }),
+      /*
+       * 可以串的游標：find().sort().limit().toArray()。
+       *
+       * 原本 sort() 什麼都沒做、也沒有 limit()，而 WordProgress.getReviewQueue
+       * 正是 .sort().limit() ——那支一被呼叫就 TypeError。之前沒被發現，是因為
+       * 沒有測試真的從頁面走到它；第一支用真的伺服器走完整頁面的測試就撞上了。
+       * sort 照規格真的排（複習佇列的順序是有意義的），不是假裝有排。
+       */
+      find: (query = {}) => {
+        let sortSpec = null;
+        let max = Infinity;
+        const cursor = {
+          sort: (spec) => { sortSpec = spec; return cursor; },
+          limit: (n) => { max = n > 0 ? n : Infinity; return cursor; },
+          toArray: async () => {
+            let out = rows.filter((d) => matches(d, query));
+            if (sortSpec) {
+              const keys = Object.entries(sortSpec);
+              out = [...out].sort((a, b) => {
+                for (const [k, dir] of keys) {
+                  const av = a[k] instanceof Date ? a[k].getTime() : a[k];
+                  const bv = b[k] instanceof Date ? b[k].getTime() : b[k];
+                  if (av < bv) return -dir;
+                  if (av > bv) return dir;
+                }
+                return 0;
+              });
+            }
+            return out.slice(0, max);
+          }
+        };
+        return cursor;
+      },
       findOne: async (query = {}) => rows.find((d) => matches(d, query)) || null,
       countDocuments: async (query = {}) => rows.filter((d) => matches(d, query)).length,
       insertOne: async (doc) => {

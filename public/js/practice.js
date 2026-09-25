@@ -12,7 +12,8 @@ import * as sound from './sound-manager.js';
 import { loadPhaser } from './game/load-phaser.js';
 import { runPageInit } from './ui-status.js';
 import { initOutbox, enqueue, onApplied } from './outbox.js';
-import { readShared, writeShared, readUser, writeUser, newId } from './local-store.js';
+import { readUser, writeUser, newId } from './local-store.js';
+import { readPref, writePref } from './prefs.js';
 import { isAnswerCorrect } from './shared/answer-match.js';
 
 const setupPanel = document.getElementById('setup-panel');
@@ -132,7 +133,7 @@ function renderPartPicker() {
       `<span class="part-sub">${groupSubLabel(group)}</span>`;
     btn.addEventListener('click', () => {
       selectedGroup = group.id;
-      writeShared('lastGroup', group.id);
+      writePref('lastGroup', group.id);
       renderPartPicker();
       updateGameButton();
     });
@@ -248,8 +249,8 @@ function selectedReadMode() {
 
 /** 還原上次的出題順序與朗讀方式 */
 function restoreSetupPrefs() {
-  const savedOrder = readShared('lastOrder');
-  const savedReadMode = readShared('lastReadMode');
+  const savedOrder = readPref('lastOrder');
+  const savedReadMode = readPref('lastReadMode');
   const orderInput = savedOrder && document.querySelector(`input[name="order"][value="${savedOrder}"]`);
   if (orderInput) orderInput.checked = true;
   const readInput = savedReadMode && document.querySelector(`input[name="readMode"][value="${savedReadMode}"]`);
@@ -270,8 +271,8 @@ async function startPractice({ reviewOnly = false } = {}) {
   }
 
   sound.startBgm();
-  writeShared('lastOrder', selectedOrder());
-  writeShared('lastReadMode', selectedReadMode());
+  writePref('lastOrder', selectedOrder());
+  writePref('lastReadMode', selectedReadMode());
   readMode = selectedReadMode();
 
   let data;
@@ -311,7 +312,7 @@ function renderReviewButton(count) {
 
 /** 同樣先用上次的數字顯示，實際數量在背景更新 */
 async function refreshReviewButton({ background = false } = {}) {
-  const cached = readShared('reviewCount');
+  const cached = readPref('reviewCount');
   if (background && cached !== null) {
     renderReviewButton(cached);
     fetchReviewCount().catch(() => {});
@@ -322,7 +323,7 @@ async function refreshReviewButton({ background = false } = {}) {
 
 async function fetchReviewCount() {
   const { words } = await api.get('/practice/review-queue');
-  writeShared('reviewCount', words.length);
+  writePref('reviewCount', words.length);
   renderReviewButton(words.length);
 }
 
@@ -599,7 +600,7 @@ runPageInit(async () => {
   currentUser = user;
   initOutbox(user._id);
   // 幾件事互不相依，平行處理，避免畫面元素一個接一個冒出來
-  selectedGroup = readShared('lastGroup') || null;
+  selectedGroup = readPref('lastGroup') || null;
   restoreSetupPrefs();
   await Promise.all([
     loadGroups(),

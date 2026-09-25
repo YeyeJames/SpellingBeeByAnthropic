@@ -179,7 +179,11 @@ console.log('\n6) 練習頁 → 遊戲');
 {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   await context.addInitScript(() => {
-    localStorage.setItem('sb:v2:shared:gameDifficulty', JSON.stringify('normal'));
+    /*
+     * 難度存在帳號名下（prefs.js）：這一段有登入帳號，共用那份遊戲不會讀。
+     * 放在共用那份的話，遊戲頁會以為這個孩子還沒量過手速，先跳校準畫面。
+     */
+    localStorage.setItem('sb:v2:u:test-user:gameDifficulty', JSON.stringify('normal'));
     localStorage.setItem(
       'sb:v2:shared:currentUser',
       JSON.stringify({ _id: 'test-user', username: '測試', coins: 0, activeTheme: null, stats: { currentStreak: 0 } })

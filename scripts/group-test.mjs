@@ -211,8 +211,17 @@ console.log('\n4) 練習頁選組');
 
   // 選了要記得，下次進來才不用再選一次
   await page.click('#part-picker .part-btn:has(.part-title:text-is("Week 6②"))');
-  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('sb:v2:shared:lastGroup')));
-  check('選過的組會記住', saved === 'w06b', String(saved));
+  /*
+   * 記在**這個帳號**名下，不是共用那份。
+   * 共用的話，Pierce 最後選 Week 6②，Allen 一打開練習頁就預選一個
+   * 他課本裡不存在的組（見 prefs.js）。
+   */
+  const saved = await page.evaluate(() => ({
+    mine: JSON.parse(localStorage.getItem('sb:v2:u:test-user:lastGroup')),
+    shared: JSON.parse(localStorage.getItem('sb:v2:shared:lastGroup'))
+  }));
+  check('選過的組會記住', saved.mine === 'w06b', String(saved.mine));
+  check('而且記在自己名下，不是共用那份', saved.shared === null, String(saved.shared));
   const selected = await page.evaluate(
     () => document.querySelector('#part-picker .part-btn.selected .part-title')?.textContent
   );
