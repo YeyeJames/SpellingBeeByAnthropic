@@ -16,6 +16,9 @@ import { isTypeableChar, isSeparator } from './charset.js';
 import { XP, levelFromXp, levelRewards } from '../../shared/levels.js';
 import { effectsFor } from '../../shared/equipment.js';
 import { TRAITS, traitFor, ARMOR_LETTERS, DASH_EVERY_MS, DASH_PUSH_MS } from './enemy-trait.js';
+import {
+  PERK_CODE, PERK_OFFER_AT, LIGHTNING, RUSH, FIRST_STRIKE_KEEP, REWIND, FREEZE_MS, drawOffer
+} from './perks.js';
 
 /* 事件類型。用數字而不是字串，是為了讓事件緩衝區可以完全不配置記憶體。 */
 export const EV = {
@@ -62,7 +65,11 @@ export const EV = {
    * 戰鬥中照 1 倍即時算、最後才乘——跟伺服器 xpForBattle() 同一個順序，
    * 兩邊才會一分不差。
    */
-  XP_BONUS: 18
+  XP_BONUS: 18,
+  /* 三選一（C8）。OFFER：a = 張數；TAKEN：a = 能力代號；FIRED：a = 代號，b = 數值 */
+  PERK_OFFER: 19,
+  PERK_TAKEN: 20,
+  PERK_FIRED: 21
 };
 
 export const EV_NAME = Object.fromEntries(Object.entries(EV).map(([k, v]) => [v, k]));
@@ -161,7 +168,12 @@ export function createBattle({
    * 這一場的經驗倍率（C4）。複習關 ×3，其他都是 1。
    * 跟裝備一樣是開場設定、要進錄影檔；不給就是 1，舊錄影檔的指紋不會變。
    */
-  xpFactor = 1
+  xpFactor = 1,
+  /*
+   * 開不開三選一（C8）。只有戰役關卡開。
+   * 不給就是關的，跟 C8 之前完全一樣——舊錄影檔、既有測試的指紋都不會變。
+   */
+  perks = false
 } = {}) {
   if (!Array.isArray(words) || words.length === 0) {
     throw new Error('createBattle 需要至少一個單字');
@@ -260,6 +272,21 @@ export function createBattle({
      */
     wordOutcome: words.map(() => 0),
 
+    /*
+     * 三選一（C8）。perkRng 是專用的亂數（理由見 perks.js 的 drawOffer）；
+     * perkOffer 不是 null 的時候整場停住，等他選。
+     */
+    perksOn: !!perks,
+    perkRng: createRng((seed ^ 0x9e3779b9) >>> 0),
+    perks: [],
+    perkOffer: null,
+    perkOffersMade: 0,
+    perkSpeed: 1,
+    rewindUsed: false,
+    freezeMs: 0,
+    freezeNext: false,
+    wordStartMs: 0,
+
     // 目前這個字
     wordIndex: -1,
     target: '', // 小寫化的答案
@@ -335,6 +362,15 @@ function startNextWord(state) {
    * queueHead 已經加過 1，所以減回去才是這一隻的序號。
    */
   state.trait = traitFor(state.traitPool, state.queueHead - 1, state.seed);
+
+  // 閃電手要知道這個字是什麼時候出來的；冰凍針凍住的是「下一隻」
+  state.wordStartMs = state.timeMs;
+  if (state.freezeNext) {
+    state.freezeMs = FREEZE_MS;
+    state.freezeNext = false;
+    // 凍住要看得到：不然他只會覺得「這隻怎麼不動」
+    emit(state, EV.PERK_FIRED, PERK_CODE.freeze, FREEZE_MS);
+  }
   state.armorLeft = state.trait === TRAITS.ARMORED ? ARMOR_LETTERS : 0;
   state.dashTimerMs = state.trait === TRAITS.DASHER ? DASH_EVERY_MS : 0;
 
@@ -394,7 +430,28 @@ function addXp(state, amount) {
 
 /** 狂蜂狀態期間蜂蜜兩倍。 */
 function honeyFactor(state) {
-  return state.frenzyMs > 0 ? BALANCE.combo.frenzyHoneyFactor : 1;
+  const frenzy = state.frenzyMs > 0 ? BALANCE.combo.frenzyHoneyFactor : 1;
+  // 加速挑戰：蟲變快，蜂蜜 ×2（只動蜂蜜，不動經驗——見 perks.js 的鐵律）
+  const rush = state.perkSpeed !== 1 ? RUSH.honeyFactor : 1;
+  return frenzy * rush;
+}
+
+function hasPerk(state, id) {
+  return state.perksOn && state.perks.includes(id);
+}
+
+/**
+ * 該給三選一了嗎（C8）。在打掉一隻蟲、下一隻已經出來之後判斷——
+ * 他選的時候看得到下一隻蟲在哪裡，但牠是停住的。
+ */
+function maybeOfferPerks(state) {
+  if (!state.perksOn || state.status !== 'running' || state.perkOffer) return;
+  if (!PERK_OFFER_AT.includes(state.stats.wordsKilled)) return;
+  const offer = drawOffer(state.perkRng, state.perks);
+  if (!offer.length) return;
+  state.perkOffer = offer;
+  state.perkOffersMade += 1;
+  emit(state, EV.PERK_OFFER, offer.length);
 }
 
 /**
@@ -448,6 +505,24 @@ function awardClearXp(state) {
 }
 
 /**
+ * 連擊中斷。🍀 幸運草（C8）：只掉一半、不歸零。
+ *
+ * 只動連擊。cleanWord 照樣是 false——「這個字打錯過」是學習紀錄
+ * （結算時寫進精熟度），不是遊戲數值，能力不可以碰它。
+ */
+function breakCombo(state) {
+  if (state.combo === 0) return;
+  if (hasPerk(state, 'clover')) {
+    state.combo = Math.floor(state.combo / 2);
+    emit(state, EV.PERK_FIRED, PERK_CODE.clover, state.combo);
+    if (state.combo === 0) emit(state, EV.COMBO_RESET);
+    return;
+  }
+  state.combo = 0;
+  emit(state, EV.COMBO_RESET);
+}
+
+/**
  * 經驗倍率（C4 複習關 ×3），輸贏都算。
  *
  * 跟完美倍率同一個做法：算出乘完的總額、把差額補進去，用 Math.round，
@@ -477,6 +552,20 @@ function killWord(state) {
   }
   state.honey += gained;
   state.stats.wordsKilled += 1;
+
+  /*
+   * ⚡ 閃電手：打得夠快，這個字的蜂蜜 ×3（C8）。
+   * 「夠快」從這個字出來的那一刻算，含聽的時間——見 perks.js 的 LIGHTNING。
+   */
+  if (hasPerk(state, 'lightning')
+    && state.timeMs - state.wordStartMs <= LIGHTNING.baseMs + LIGHTNING.perLetterMs * len) {
+    const extra = gained * (LIGHTNING.honeyFactor - 1);
+    state.honey += extra;
+    gained += extra;
+    emit(state, EV.PERK_FIRED, PERK_CODE.lightning, extra);
+  }
+  // ❄️ 冰凍針：這個字沒打錯就打完，下一隻蟲凍住
+  if (hasPerk(state, 'freeze') && state.cleanWord) state.freezeNext = true;
 
   /*
    * 經驗值：擊殺 + 長字，兩者都不吃狂蜂倍率。
@@ -522,6 +611,7 @@ function killWord(state) {
   );
   emit(state, EV.WORD_KILLED, state.wordIndex, len, gained);
   startNextWord(state);
+  maybeOfferPerks(state);
 }
 
 function missWord(state) {
@@ -541,10 +631,7 @@ function missWord(state) {
   // 被赦免時不發 HP_LOST：血沒掉，畫面不該演成掉血
   if (!forgiven) emit(state, EV.HP_LOST, state.hp);
 
-  if (state.combo !== 0) {
-    state.combo = 0;
-    emit(state, EV.COMBO_RESET);
-  }
+  breakCombo(state);
 
   // 漏掉的字排回隊伍尾端——本場之內立刻再遇到一次，這是學習底線的一部分
   state.queue.push(state.wordIndex);
@@ -567,6 +654,8 @@ function missWord(state) {
  */
 export function stepBattle(state) {
   if (state.status !== 'running') return state;
+  // 三選一的畫面開著：整場停住，時間也不走（C8）
+  if (state.perkOffer) return state;
 
   state.tick += 1;
   state.timeMs += BALANCE.logicStepMs;
@@ -575,9 +664,24 @@ export function stepBattle(state) {
   if (state.dashMs > 0) state.dashMs = Math.max(0, state.dashMs - BALANCE.logicStepMs);
   if (state.frenzyMs > 0) state.frenzyMs = Math.max(0, state.frenzyMs - BALANCE.logicStepMs);
 
-  // 蜂群衝刺期間敵人走得慢一半
-  const speed = state.dashMs > 0 ? BALANCE.combo.dashSpeedFactor : 1;
+  // 蜂群衝刺期間敵人走得慢一半；加速挑戰（C8）快 25%
+  const speed = (state.dashMs > 0 ? BALANCE.combo.dashSpeedFactor : 1) * state.perkSpeed;
+  /*
+   * ❄️ 冰凍針（C8）：凍住的時候蟲不動，衝刺蟲也不衝。
+   * 只停這一隻蟲，連擊效果的倒數照走——凍住的是蟲，不是時間。
+   */
+  if (state.freezeMs > 0) {
+    state.freezeMs = Math.max(0, state.freezeMs - BALANCE.logicStepMs);
+    return state;
+  }
   state.progress += (BALANCE.logicStepMs * speed) / state.crossMs;
+
+  // ⏪ 倒帶（C8）：第一次快到蜂巢時彈回去，一場一次
+  if (hasPerk(state, 'rewind') && !state.rewindUsed && state.progress >= REWIND.triggerAt) {
+    state.progress = REWIND.backTo;
+    state.rewindUsed = true;
+    emit(state, EV.PERK_FIRED, PERK_CODE.rewind, 0);
+  }
 
   /*
    * 衝刺蟲：每兩秒自己往前衝一小段（§5）。
@@ -612,6 +716,21 @@ export function stepBattle(state) {
  */
 export function applyAction(state, action) {
   if (state.status !== 'running' || !action) return state;
+
+  /*
+   * 三選一的畫面開著：只收「選哪一張」，其他一律不收（C8）。
+   * 他選卡的時候手可能還在打字——那些字母不能被算成打錯。
+   */
+  if (state.perkOffer) {
+    if (action.kind !== 'perk') return state;
+    const id = state.perkOffer[Number(action.pick)];
+    if (!id) return state;
+    state.perks.push(id);
+    state.perkOffer = null;
+    if (id === 'rush') state.perkSpeed = RUSH.speedFactor;
+    emit(state, EV.PERK_TAKEN, PERK_CODE[id]);
+    return state;
+  }
 
   switch (action.kind) {
     case 'letter': {
@@ -665,6 +784,14 @@ export function applyAction(state, action) {
           // 擊退：往回推，但不會推到畫面外。狂蜂狀態期間三倍
           state.progress -= (knockbackMsFor(state.difficulty) * knockbackFactor(state)) / state.crossMs;
           if (state.progress < 0) state.progress = 0;
+          /*
+           * 🎯 首字重擊（C8）：第一下就打對，蟲的進度只剩一半。
+           * 放在這個分支裡是刻意的：護甲蟲的外殼擋的就是擊退，它也一起被擋。
+           */
+          if (hasPerk(state, 'firstStrike') && state.typed === consumed && state.cleanWord) {
+            state.progress *= FIRST_STRIKE_KEEP;
+            emit(state, EV.PERK_FIRED, PERK_CODE.firstStrike, 0);
+          }
         }
         emit(state, EV.LETTER_OK, state.typed, state.target.length, letterHoney);
 
@@ -681,10 +808,7 @@ export function applyAction(state, action) {
         // 護甲降低打錯的代價（上限 −50%，在 equipment.js 夾住）
         pushEnemy(state, BALANCE.wrongLetterPenaltyMs * state.gear.penalty);
         emit(state, EV.LETTER_BAD, ch.charCodeAt(0));
-        if (state.combo !== 0) {
-          state.combo = 0;
-          emit(state, EV.COMBO_RESET);
-        }
+        breakCombo(state);
         if (state.progress >= 1) {
           state.progress = 1;
           missWord(state);
@@ -763,6 +887,14 @@ export function fingerprint(state) {
   // Combo 效果會改變結果，所以也要進指紋，否則重播比對會放過它們
   mixFloat(state.dashMs);
   mixFloat(state.frenzyMs);
+  // 三選一（C8）只在開著的時候混進指紋：沒開的一場指紋跟 C8 之前完全一樣
+  if (state.perksOn) {
+    mix(state.perks.length);
+    for (const id of state.perks) mix(PERK_CODE[id] || 0);
+    mix(state.perkOffer ? state.perkOffer.length : 0);
+    mix(state.rewindUsed ? 1 : 0);
+    mixFloat(state.freezeMs);
+  }
   mix(state.sweetNext ? 1 : 0);
   mixFloat(state.progress);
   mixFloat(state.timeMs);
@@ -833,6 +965,12 @@ export function snapshot(state) {
     frenzyMs: Math.round(state.frenzyMs),
     sweetNext: state.sweetNext,
     sweetActive: state.sweetActive,
+    /* 三選一（C8）：給畫面、除錯與測試看 */
+    perksOn: state.perksOn,
+    perks: state.perks.slice(),
+    perkOffer: state.perkOffer ? state.perkOffer.slice() : null,
+    perkSpeed: state.perkSpeed,
+    freezeMs: Math.round(state.freezeMs),
     stats: { ...state.stats },
     fingerprint: fingerprint(state)
   };

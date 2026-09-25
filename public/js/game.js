@@ -217,6 +217,14 @@ const ctx = {
     return !ctx.voicesAvailable;
   },
 
+  /** 三選一（C8）：畫面端收到 PERK_OFFER／PERK_TAKEN 時呼叫 */
+  showPerkOffer(ids) {
+    showPerkPanel(ids);
+  },
+  hidePerkOffer() {
+    hidePerkPanel();
+  },
+
   /** 自動規則現在會給什麼答案（按鈕的預設值從這裡來）。 */
   autoShowWord() {
     if (ctx.sfx?.isMuted()) return true;
@@ -386,9 +394,15 @@ function startBattle() {
     relearnIds: ctx.relearnIds,
     equipped: ctx.equipped,
     enemyTraits: ctx.enemyTraits,
-    xpFactor: ctx.xpFactor
+    xpFactor: ctx.xpFactor,
+    /*
+     * 三選一（C8）只在戰役關卡開。練習完那組的遊戲維持原樣——
+     * 他已經熟悉那個流程，而且那是「考試」，不需要變化。
+     */
+    perks: !!ctx.campaignLevel
   });
   ctx.shownWordIdx = new Set();
+  hidePerkPanel();
   /*
    * 換一場之前先把上一場收進這次開機的檔案櫃。
    *
@@ -413,6 +427,7 @@ function startBattle() {
     equipped: ctx.equipped,
     enemyTraits: ctx.enemyTraits,
     xpFactor: ctx.xpFactor,
+    perks: !!ctx.campaignLevel,
     wordIds: ctx.words.map((w) => w.id)
   });
   ctx.paused = false;
@@ -667,6 +682,75 @@ function showReviewEmpty(msg) {
   }
   el.hidden = false;
 }
+
+/* ── 三選一（C8） ─────────────────────────────────────────── */
+
+let perkSelected = 0;
+let perkShowing = false;
+
+/** 畫面端在 PERK_OFFER 時呼叫：畫出三張卡。 */
+async function showPerkPanel(ids) {
+  const { PERKS } = await import('./game/core/perks.js');
+  const panel = document.getElementById('perk-panel');
+  const cards = document.getElementById('perk-cards');
+  if (!panel || !cards) return;
+  cards.innerHTML = '';
+  ids.forEach((id, i) => {
+    const p = PERKS[id];
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `perk-card${p.risk ? ' is-risk' : ''}`;
+    btn.dataset.perkPick = String(i);
+    btn.innerHTML =
+      `<span class="perk-icon">${p.icon}</span>` +
+      `<span><span class="perk-name">${escapeHtml(p.name)}</span><br />` +
+      `<span class="perk-rule">${escapeHtml(p.rule)}</span></span>` +
+      `<span class="perk-key">按 ${i + 1}</span>`;
+    btn.addEventListener('click', () => pickPerk(i));
+    cards.appendChild(btn);
+  });
+  perkSelected = 0;
+  highlightPerk();
+  perkShowing = true;
+  panel.hidden = false;
+}
+
+function hidePerkPanel() {
+  perkShowing = false;
+  const panel = document.getElementById('perk-panel');
+  if (panel) panel.hidden = true;
+}
+
+function highlightPerk() {
+  document.querySelectorAll('#perk-cards .perk-card').forEach((el, i) => {
+    el.classList.toggle('is-selected', i === perkSelected);
+  });
+}
+
+function pickPerk(i) {
+  if (!perkShowing || !ctx.state?.perkOffer) return;
+  if (i < 0 || i >= ctx.state.perkOffer.length) return;
+  hidePerkPanel();
+  ctx.sendAction({ kind: 'perk', pick: i });
+}
+
+/*
+ * 選卡的按鍵要搶在遊戲的鍵盤處理之前（捕獲階段）。
+ *
+ * ← → 在戰鬥中是「重聽」「唸例句」——選卡時按方向鍵，如果讓它漏下去，
+ * 就會一邊選卡一邊唸句子。字母鍵也吃掉：核心在選卡時本來就不收字母，
+ * 但吃在這裡，連打字的聲音都不會出來。
+ */
+window.addEventListener('keydown', (e) => {
+  if (!perkShowing) return;
+  const n = ctx.state?.perkOffer?.length || 0;
+  if (['1', '2', '3'].includes(e.key)) pickPerk(Number(e.key) - 1);
+  else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { perkSelected = (perkSelected + n - 1) % n; highlightPerk(); }
+  else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { perkSelected = (perkSelected + 1) % n; highlightPerk(); }
+  else if (e.key === 'Enter' || e.key === ' ') pickPerk(perkSelected);
+  e.preventDefault();
+  e.stopImmediatePropagation();
+}, true);
 
 /** 從單字庫撈出指定的那些 id，順序照伺服器給的。 */
 async function wordsFromIds(ids) {

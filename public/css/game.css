@@ -755,3 +755,116 @@ body.is-touch #listen-buttons {
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/* ── 三選一（C8） ─────────────────────────────────────────── */
+#perk-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 26;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  text-align: center;
+  /* 半透明：看得到後面停住的那隻蟲 */
+  background: rgba(8, 10, 18, 0.72);
+}
+
+#perk-panel[hidden] {
+  display: none;
+}
+
+#perk-panel > strong {
+  font-size: 1.8rem;
+  color: #ffd166;
+}
+
+#perk-cards {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.perk-card {
+  width: 200px;
+  min-height: 190px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem 0.9rem;
+  border-radius: 16px;
+  border: 3px solid #3b4260;
+  background: #1c2136;
+  color: #e5e7eb;
+  cursor: pointer;
+  font: inherit;
+  transition: transform 0.08s, border-color 0.08s;
+}
+
+.perk-card:hover,
+.perk-card.is-selected {
+  border-color: #ffd166;
+  transform: translateY(-4px);
+}
+
+.perk-card.is-risk {
+  background: #2d1a1a;
+}
+
+.perk-icon {
+  font-size: 2.6rem;
+  line-height: 1;
+}
+
+.perk-name {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.perk-rule {
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: #cbd5e1;
+}
+
+.perk-key {
+  margin-top: auto;
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.perk-keys {
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
+/* 手機寬度：三張排成一直排，卡片變寬變矮 */
+@media (max-width: 680px) {
+  .perk-card {
+    width: 100%;
+    max-width: 340px;
+    min-height: 0;
+    flex-direction: row;
+    text-align: left;
+  }
+  .perk-key {
+    margin-top: 0;
+  }
+  /* 手機上後面的 HUD 字會透過來跟標題疊在一起，背景要更實一點 */
+  #perk-panel {
+    background: rgba(8, 10, 18, 0.9);
+  }
+  #perk-panel > strong {
+    font-size: 1.35rem;
+  }
+}
+
+/* 「按 1」不可以斷成兩行 */
+.perk-key {
+  white-space: nowrap;
+}

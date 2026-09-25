@@ -52,6 +52,8 @@ export function createRecorder(setup) {
        */
       enemyTraits: setup.enemyTraits ? [...setup.enemyTraits] : [],
       xpFactor: Number(setup.xpFactor) > 0 ? Number(setup.xpFactor) : 1,
+      // 三選一（C8）。舊錄影檔沒有 → 關的，也就是 C8 之前的行為
+      perks: !!setup.perks,
       wordIds: setup.wordIds.slice()
     },
     // 每筆 [tick, kind, payload]，用陣列而不是物件，錄影檔才不會大得誇張
@@ -59,8 +61,9 @@ export function createRecorder(setup) {
   };
 }
 
-const KIND = { letter: 1, backspace: 2, listen: 3 };
-const KIND_BACK = { 1: 'letter', 2: 'backspace', 3: 'listen' };
+/* 只能往後加：舊錄影檔的 1～3 不能改意思。4 = 三選一選了第幾張（C8） */
+const KIND = { letter: 1, backspace: 2, listen: 3, perk: 4 };
+const KIND_BACK = { 1: 'letter', 2: 'backspace', 3: 'listen', 4: 'perk' };
 const LISTEN_CODE = { replay: 1, slow: 2, sentence: 3 };
 const LISTEN_BACK = { 1: 'replay', 2: 'slow', 3: 'sentence' };
 
@@ -70,6 +73,7 @@ export function recordAction(log, tick, action) {
   let payload = 0;
   if (action.kind === 'letter') payload = String(action.ch).toLowerCase().charCodeAt(0);
   else if (action.kind === 'listen') payload = LISTEN_CODE[action.listen] || 0;
+  else if (action.kind === 'perk') payload = Number(action.pick) || 0;
   log.entries.push([tick, kind, payload]);
 }
 
@@ -78,6 +82,7 @@ function entryToAction(entry) {
   if (kind === 'letter') return { kind: 'letter', ch: String.fromCharCode(entry[2]) };
   if (kind === 'backspace') return { kind: 'backspace' };
   if (kind === 'listen') return { kind: 'listen', listen: LISTEN_BACK[entry[2]] };
+  if (kind === 'perk') return { kind: 'perk', pick: entry[2] };
   return null;
 }
 
@@ -103,7 +108,8 @@ export function replayLog(log, words, { maxTicks = 60 * 120 * 30 } = {}) {
     equipped: log.setup.equipped || null,
     enemyTraits: log.setup.enemyTraits || null,
     // 舊錄影檔沒有這個欄位 → 1 倍，也就是 C4 之前的行為
-    xpFactor: log.setup.xpFactor || 1
+    xpFactor: log.setup.xpFactor || 1,
+    perks: !!log.setup.perks
   });
 
   const entries = log.entries;
@@ -118,6 +124,11 @@ export function replayLog(log, words, { maxTicks = 60 * 120 * 30 } = {}) {
     }
     clearEvents(state);
     if (state.status !== 'running') break;
+    /*
+     * 三選一停在那裡、這一步又沒有「選了哪一張」的紀錄（錄影檔被截斷）：
+     * 停下來。不然 stepBattle 在選卡時不會前進，這個迴圈會永遠轉下去。
+     */
+    if (state.perkOffer && !(ei < entries.length && entries[ei][0] === state.tick)) break;
     // 輸入放完之後就沒事可做了，再跑下去只是等敵人撞進來；讓它跑完收尾
     if (ei >= entries.length && state.tick > lastTick + 120 * 60) break;
     stepBattle(state);

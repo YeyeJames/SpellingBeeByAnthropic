@@ -94,6 +94,18 @@
     兩顆按鈕本身就是「開始」——多一個確認鍵對小孩只是多一次點擊。
     網址帶 order= 時整個跳過（自動化測試靠這個，跟難度的規則一樣）。
   -->
+  <!--
+    三選一（C8）。打掉第 5、12、19、26 隻蟲之後出現，整場停住等他選。
+    背景是半透明的：他看得到後面那隻停住的蟲，知道自己為什麼停下來。
+    每張卡一個圖示、一個名字、一行規則——小四生要一眼看得懂（設計文件 §10 的風險）。
+    鍵盤 1／2／3 直接選，或 ← → 移動、Enter 確定；也可以直接點。
+  -->
+  <div id="perk-panel" hidden>
+    <strong>選一個能力（這一場有效）</strong>
+    <div id="perk-cards"></div>
+    <p class="perk-keys">按 1／2／3，或 ← → 選、Enter 確定</p>
+  </div>
+
   <div id="pregame" hidden>
     <strong id="pregame-group"></strong>
     <p id="pregame-count"></p>

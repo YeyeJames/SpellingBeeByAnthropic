@@ -20,6 +20,7 @@ import { createEffects } from './effects.js';
 import { ENEMY_KINDS, enemyKindFor } from './core/enemy-kind.js';
 import { createRng } from './core/rng.js';
 import { levelFromXp, levelRewards } from '../shared/levels.js';
+import { PERKS, PERK_BY_CODE } from './core/perks.js';
 import { TRAITS, TRAIT_INFO } from './core/enemy-trait.js';
 
 const SCAFFOLD_NOTE = '（靜音或裝置沒有語音時才顯示）';
@@ -543,6 +544,13 @@ export function createBattleScene(ctx) {
           color: '#c4b5fd'
         })
         .setOrigin(0, 0.5);
+      /*
+       * 這一場拿到的能力（C8），排在等級那一排下面。
+       * 他要記得自己選了什麼，才會把「剛剛那一下」跟「我選的那張卡」連起來。
+       */
+      this.perksText = this.add
+        .text(0, 0, '', { fontFamily: 'system-ui, sans-serif', fontSize: '16px', color: '#fde68a' })
+        .setOrigin(0, 0.5);
       this.xpBarBg = this.add.rectangle(0, 0, 10, 8, XP_BAR_BG).setOrigin(0, 0.5);
       this.xpBarFill = this.add.rectangle(0, 0, 10, 8, XP_BAR_COLOR).setOrigin(0, 0.5);
       this.lastLevelShown = -1;
@@ -715,6 +723,7 @@ export function createBattleScene(ctx) {
        */
       const xpLeft = width * 0.06 - 11;
       this.levelText.setPosition(xpLeft, hudY + 66);
+      this.perksText.setPosition(xpLeft, hudY + 94);
       const xpBarLeft = xpLeft + 58;
       const xpBarW = Math.min(180, Math.max(90, width * 0.12));
       this.xpBarBg.setPosition(xpBarLeft, hudY + 66).setSize(xpBarW, 8);
@@ -1084,13 +1093,57 @@ export function createBattleScene(ctx) {
             vfx(ev);
             break;
           }
+          /* ── 三選一（C8） ── */
+          case EV.PERK_OFFER:
+            ctx.showPerkOffer?.(state.perkOffer || []);
+            vfx(ev);
+            break;
+          case EV.PERK_TAKEN: {
+            ctx.hidePerkOffer?.();
+            const p = PERKS[PERK_BY_CODE[ev.a]];
+            if (p) {
+              this.effects.floatText(`${p.icon} ${p.name}！`, this.scale.width / 2, this.scale.height * 0.5, {
+                color: '#fde68a',
+                scale: 1.4,
+                fan: false
+              });
+            }
+            this.perksText.setText(
+              state.perks.map((id) => `${PERKS[id].icon} ${PERKS[id].name}`).join('　')
+            );
+            vfx(ev);
+            break;
+          }
+          case EV.PERK_FIRED: {
+            /*
+             * 每一張卡發動的那一下都要看得到。看不到的能力等於不存在——
+             * 他也就不會知道下一次三選一該選哪一張。
+             */
+            const id = PERK_BY_CODE[ev.a];
+            const text = {
+              lightning: `⚡ 閃電手！+${ev.b}`,
+              firstStrike: '🎯 重擊！',
+              rewind: '⏪ 倒帶！',
+              freeze: '❄️ 凍住了！',
+              clover: `🍀 連擊保住 ${ev.b}`
+            }[id];
+            if (text) {
+              this.effects.floatText(text, this.enemy.x, this.enemy.y - 100, {
+                color: '#fde68a',
+                scale: 1.25,
+                fan: false
+              });
+            }
+            vfx(ev);
+            break;
+          }
           case EV.XP_BONUS:
             /*
              * 📖 複習關的 ×3 在結算時一次補進來（C4）。
              * 要飄得出來、而且講出是因為「複習」——他要把「去複習」跟
              * 「變強最快」連在一起，只看到經驗條突然跳一截是連不起來的。
              */
-            this.effects.floatText(`📖 複習加倍！+${ev.a} XP`, this.scale.width / 2, this.scale.height * 0.4, {
+            this.effects.floatText(`📖 複習加倍！+${ev.a} XP`, this.scale.width / 2, this.scale.height * 0.5, {
               color: RELEARN_COLOR,
               scale: 1.5,
               fan: false
@@ -1524,6 +1577,16 @@ export function createBattleScene(ctx) {
       if (state.honey !== this.lastHoney) {
         this.lastHoney = state.honey;
         this.honeyText.setText(`🍯 ${state.honey}`);
+      }
+
+      /*
+       * 能力那一排跟著這一場的狀態走（C8）。重開一場時畫面物件是沿用的，
+       * 只靠事件更新的話，新的一場開頭還會掛著上一場的卡。
+       */
+      const perkCount = state.perks ? state.perks.length : 0;
+      if (perkCount !== this.lastPerkCount) {
+        this.lastPerkCount = perkCount;
+        this.perksText.setText((state.perks || []).map((id) => `${PERKS[id].icon} ${PERKS[id].name}`).join('　'));
       }
 
       if (state.status === 'running') {
