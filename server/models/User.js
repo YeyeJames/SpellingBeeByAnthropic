@@ -230,11 +230,20 @@ async function applyAttemptResult(id, correct) {
   return { user: updatedUser, coinsAwarded, newStreak };
 }
 
+/**
+ * 買一件造型：扣金幣、記進擁有清單。
+ *
+ * 跟 buyGear 一樣，「錢夠」與「還沒買過」寫在查詢條件裡，由資料庫一次檢查。
+ * 本來是無條件扣款：兩件東西幾乎同時買（兩個分頁、或同一個帳號在兩台裝置上），
+ * 兩個請求都通過路由裡「錢夠嗎」的檢查，金幣就被扣成負的。
+ * 回傳 null 代表條件不成立，什麼都沒動。
+ */
 async function addOwnedItem(id, itemKey, cost) {
-  await collection().updateOne(
-    { _id: new ObjectId(id) },
+  const r = await collection().updateOne(
+    { _id: new ObjectId(id), coins: { $gte: cost }, ownedItemKeys: { $ne: itemKey } },
     { $addToSet: { ownedItemKeys: itemKey }, $inc: { coins: -cost } }
   );
+  if (!r.matchedCount) return null;
   return findById(id);
 }
 

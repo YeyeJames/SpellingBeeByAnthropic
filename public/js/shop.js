@@ -161,7 +161,8 @@ function purchaseItem(item) {
   enqueue({
     kind: 'purchase',
     path: '/shop/purchase',
-    body: { itemKey: item.key, cost: item.cost }
+    // name 只給失敗訊息用（伺服器不看），不然畫面上會寫「accessory_cape 購買失敗」
+    body: { itemKey: item.key, cost: item.cost, name: item.name }
   });
 }
 
@@ -327,7 +328,7 @@ onApplied('purchase', (result, op, err) => {
     currentUser.coins += op.body.cost;
     currentUser.ownedItemKeys = (currentUser.ownedItemKeys || []).filter((k) => k !== op.body.itemKey);
     setNavCoins(currentUser.coins);
-    shopError.textContent = `「${op.body.itemKey}」購買失敗：${err.message}`;
+    shopError.textContent = `「${op.body.name || op.body.itemKey}」購買失敗：${err.message}`;
     renderFromCache();
     return;
   }

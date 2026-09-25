@@ -35,9 +35,18 @@ async function recordResult(userId, wordId, correct) {
   );
 }
 
-async function getReviewQueue(userId, limit = 50) {
+/**
+ * 到期要複習的字。
+ *
+ * allowedIds 是他自己那一本的字。一定要在查詢裡就限定，不能撈出來再濾：
+ * Allen 的帳號在「選了自己的課本、畫面卻還是 Pierce 的」那段時間練過
+ * Pierce 的字，那些紀錄還在。不限定的話，練習頁的「複習 N 個」會把它們
+ * 算進去，按下去卻說「沒有需要複習的單字」；而且別本的字排在前面時，
+ * 會把他自己真正到期的字擠出這 50 個之外。
+ */
+async function getReviewQueue(userId, allowedIds, limit = 50) {
   return collection()
-    .find({ userId: new ObjectId(userId), nextReviewAt: { $lte: new Date() } })
+    .find({ userId: new ObjectId(userId), wordId: { $in: allowedIds }, nextReviewAt: { $lte: new Date() } })
     .sort({ nextReviewAt: 1 })
     .limit(limit)
     .toArray();

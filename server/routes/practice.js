@@ -62,7 +62,7 @@ router.post('/session', async (req, res, next) => {
     let label;
     if (reviewOnly) {
       // 複習模式跨組，把所有到期的單字都撈進來
-      const dueProgress = await WordProgress.getReviewQueue(req.user._id);
+      const dueProgress = await WordProgress.getReviewQueue(req.user._id, bank.words.map((w) => w.id));
       const dueIds = new Set(dueProgress.map((p) => p.wordId));
       candidates = (await Word.listWords(bankId)).filter((w) => dueIds.has(w._id));
       if (!candidates.length) {
@@ -201,6 +201,10 @@ router.post('/group-complete', async (req, res, next) => {
 
     const groupWords = wordBank.wordsByGroup(groupId);
     if (!groupWords.length) return res.status(400).json({ error: '找不到這一組單字' });
+    // 跟開練習、開遊戲同一道門：別本課本的組不算在他頭上
+    if (!wordBank.listGroups(req.user.wordBankId).some((g) => g.id === String(groupId))) {
+      return res.status(404).json({ error: '這一組不在你的單字庫裡' });
+    }
 
     /*
      * 真的做完整組才算。
@@ -246,7 +250,8 @@ router.post('/group-complete', async (req, res, next) => {
 
 router.get('/review-queue', async (req, res, next) => {
   try {
-    const dueProgress = await WordProgress.getReviewQueue(req.user._id);
+    const bankIds = wordBank.getBank(wordBank.resolveBankId(req.user.wordBankId)).words.map((w) => w.id);
+    const dueProgress = await WordProgress.getReviewQueue(req.user._id, bankIds);
     const words = await Promise.all(dueProgress.map((p) => Word.getWordById(p.wordId)));
     res.json({ words: words.filter(Boolean) });
   } catch (err) {

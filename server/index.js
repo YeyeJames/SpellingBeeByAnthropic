@@ -57,7 +57,11 @@ process.on('uncaughtException', (err) => {
 function main() {
   const app = express();
   app.set('trust proxy', 1);
-  app.use(express.json());
+  /*
+   * 預設上限是 100KB，而一場的錄影檔（/api/telemetry/battle-log）最多允許 400KB。
+   * 整本課本打一場、按鍵多的時候會超過 100KB，被這裡擋成錯誤，錄影檔就上不去。
+   */
+  app.use(express.json({ limit: '512kb' }));
 
   const sessionMiddleware = session({
     name: 'connect.sid',
@@ -244,6 +248,15 @@ function main() {
 
   // eslint-disable-next-line no-unused-vars
   app.use((err, req, res, next) => {
+    /*
+     * 帶著狀態碼的錯誤照它的狀態碼回（例如 JSON 格式壞掉是 400、太大是 413）。
+     * 一律回 500 的話，背景佇列會以為是伺服器暫時出問題而一直重送，
+     * 一筆壞掉的資料就永遠卡在佇列最前面，後面的作答全部送不出去。
+     */
+    const status = Number(err.status || err.statusCode);
+    if (status >= 400 && status < 500) {
+      return res.status(status).json({ error: `請求有問題：${err.message}` });
+    }
     console.error(err);
     res.status(500).json({ error: `伺服器發生錯誤：${err.message}` });
   });

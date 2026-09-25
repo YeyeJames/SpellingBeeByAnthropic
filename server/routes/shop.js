@@ -274,6 +274,11 @@ router.post('/purchase', async (req, res, next) => {
     }
 
     const updatedUser = await User.addOwnedItem(req.user._id, itemKey, item.cost);
+    if (!updatedUser) {
+      // 條件在這中間變了（同時買了別的把錢花掉）：把購買紀錄撤掉，不然之後用同一個 opId 也買不了
+      await getDB().collection('purchases').deleteOne({ userId: req.user._id, opId: opId || null, itemKey });
+      return res.status(400).json({ error: '金幣不夠喔，再多練習賺一點吧！' });
+    }
     res.json({ user: User.sanitizeUser(updatedUser) });
   } catch (err) {
     next(err);

@@ -36,6 +36,7 @@ import { newId } from './local-store.js';
 import { readPref, writePref } from './prefs.js';
 import { startTelemetry, track, uploadBattleLog } from './telemetry.js';
 import { getCachedUser } from './auth.js';
+import { initOutbox, enqueue } from './outbox.js';
 
 const params = new URLSearchParams(location.search);
 
@@ -899,9 +900,18 @@ async function fetchGroupAccess(group) {
   if (!group && !playerOnly) return { unlocked: true, reason: 'no-group' };
   try {
     const url = group ? `/api/game/access?group=${encodeURIComponent(group)}` : '/api/game/access';
-    const res = await fetch(url, {
-      credentials: 'same-origin'
-    });
+    /*
+     * 伺服器剛醒來（Render 免費方案休眠後）的前幾秒，資料庫還沒連上，會回 503。
+     * 這時候直接放行的話，他這一場是 1 級、沒有裝備在打——存錢買的東西
+     * 悄悄不算數，而他看不出為什麼今天特別難。多等幾秒問清楚再開打。
+     */
+    let res = null;
+    for (let i = 0; i < 4; i += 1) {
+      // 連不上（離線）就直接放行，不用等——那不是「還沒醒」
+      res = await fetch(url, { credentials: 'same-origin' });
+      if (![502, 503, 504].includes(res.status)) break;
+      if (i < 3) await new Promise((r) => setTimeout(r, 2000));
+    }
     if (!res.ok) return { unlocked: true, reason: `status-${res.status}` };
     const data = await res.json();
     return { ...data, reason: 'checked' };
@@ -1098,25 +1108,54 @@ function showPostgame(state, won) {
 async function reportLevelClear(state, won) {
   const s = state.stats;
   const letters = s.correctLetters + s.wrongLetters;
-  try {
-    const res = await fetch('/api/campaign/clear', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
-      body: JSON.stringify({
-        opId: `${ctx.seed}:${ctx.battleId}`,
-        level: ctx.campaignLevel,
-        won,
-        score: state.honey,
-        accuracy: letters > 0 ? s.correctLetters / letters : 0
-      })
-    });
-    if (!res.ok) return;
-    const data = await res.json();
-    updatePostgameLevel(data, won);
-  } catch (err) {
-    /* 記不到就算了，不要擋住結算畫面 */
+  const data = await postBattleReport('/campaign/clear', {
+    opId: `${ctx.seed}:${ctx.battleId}`,
+    level: ctx.campaignLevel,
+    won,
+    score: state.honey,
+    accuracy: letters > 0 ? s.correctLetters / letters : 0
+  });
+  if (data) updatePostgameLevel(data, won);
+}
+
+/**
+ * 送出一場的結果；網路一時不通就重試，還是不通就排進背景佇列。
+ *
+ * 本來是送一次、失敗就算了——打贏一關剛好碰上網路閃一下（或伺服器正在
+ * 重新部署），那一關的過關、經驗、蜂蜜就全部不見，而他完全不會知道，
+ * 只會發現「我明明過了，地圖上還是鎖著」。
+ *
+ * 伺服器兩支都認得重送：/game/result 用 opId 去重，/campaign/clear 本身
+ * 就是「取較高的那一關」，送兩次結果一樣。所以重送是安全的。
+ * 4xx 是資料本身有問題，重送也不會好，不排。
+ */
+async function postBattleReport(path, body) {
+  for (let i = 0; i < 3; i += 1) {
+    try {
+      const res = await fetch(`/api${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(body)
+      });
+      if (res.ok) return await res.json();
+      if (res.status < 500) return null;
+    } catch (err) {
+      /* 網路不通：等一下再試 */
+    }
+    await new Promise((r) => setTimeout(r, 1500 * (i + 1)));
   }
+  /*
+   * 排進背景佇列：下次打開練習、商店、單字庫（或下一場打完）時會自動補送。
+   * opId 一定要跟著帶過去——佇列自己會發一個新的，那樣伺服器就認不出
+   * 「剛剛其實已經收到了、只是回應沒傳回來」的那一場，會加兩次。
+   */
+  const user = getCachedUser();
+  if (user && user._id) {
+    initOutbox(user._id);
+    enqueue({ kind: 'battle-report', path, body, opId: body.opId });
+  }
+  return null;
 }
 
 /**
@@ -1178,32 +1217,26 @@ async function reportResult(state, won) {
     words.push({ id: state.words[i].id, outcome, shown: ctx.shownWordIdx.has(i) });
   });
   try {
-    const res = await fetch('/api/game/result', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
-      body: JSON.stringify({
-        opId: `${ctx.seed}:${ctx.battleId}`,
-        ...where,
-        words,
-        score: state.honey,
-        accuracy: letters > 0 ? s.correctLetters / letters : 0,
-        won,
-        wordsKilled: s.wordsKilled,
-        wordsMissed: s.wordsMissed,
-        /*
-         * 經驗值的算式材料。刻意不送前端算好的總分——
-         * 送了等於讓瀏覽器自己決定要升幾級。伺服器用同一個
-         * shared/levels.js 重算，而且每一項都夾在這一組的上限之內。
-         */
-        correctLetters: s.correctLetters,
-        wrongLetters: s.wrongLetters,
-        longKills: s.longKills,
-        relearns: s.relearns
-      })
+    const data = await postBattleReport('/game/result', {
+      opId: `${ctx.seed}:${ctx.battleId}`,
+      ...where,
+      words,
+      score: state.honey,
+      accuracy: letters > 0 ? s.correctLetters / letters : 0,
+      won,
+      wordsKilled: s.wordsKilled,
+      wordsMissed: s.wordsMissed,
+      /*
+       * 經驗值的算式材料。刻意不送前端算好的總分——
+       * 送了等於讓瀏覽器自己決定要升幾級。伺服器用同一個
+       * shared/levels.js 重算，而且每一項都夾在這一組的上限之內。
+       */
+      correctLetters: s.correctLetters,
+      wrongLetters: s.wrongLetters,
+      longKills: s.longKills,
+      relearns: s.relearns
     });
-    if (res.ok) {
-      const data = await res.json();
+    if (data) {
       /*
        * 以伺服器為準。
        *
