@@ -14,6 +14,7 @@ const express = require('express');
 const { getDB } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const wordBank = require('../data/word-bank');
+const WordProgress = require('../models/WordProgress');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -22,6 +23,13 @@ let campaignPromise = null;
 function campaignRules() {
   if (!campaignPromise) campaignPromise = import('../../public/js/shared/campaign.js');
   return campaignPromise;
+}
+
+/* 經驗倍率跟前端同一份（shared/levels.js），ES module 只能動態載入 */
+let levelsPromise = null;
+async function reviewFactor() {
+  if (!levelsPromise) levelsPromise = import('../../public/js/shared/levels.js');
+  return (await levelsPromise).XP.reviewFactor;
 }
 
 /** 這個帳號的戰役進度。沒有紀錄就是還沒開始（第 1 關解開著）。 */
@@ -40,9 +48,12 @@ router.get('/', async (req, res, next) => {
     const { buildCampaign, isUnlocked, campaignSummary, CHAPTERS } = await campaignRules();
     const campaign = buildCampaign(wordBank.listGroups(req.user.wordBankId));
     const progress = await progressFor(req.user._id);
+    const review = await reviewSummary(req.user);
 
     res.json({
       chapters: CHAPTERS.map((c) => ({ n: c.n, title: c.title, blurb: c.blurb })),
+      /* 📖 複習關的入口（C4）：有幾個字等著複習。0 就是「沒有要複習的字」 */
+      review,
       summary: campaignSummary(campaign, progress.highestCleared),
       highestCleared: progress.highestCleared,
       levels: campaign.map((l) => ({
@@ -51,6 +62,48 @@ router.get('/', async (req, res, next) => {
         cleared: l.level <= progress.highestCleared,
         stars: progress.stars[String(l.level)] || 0
       }))
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** 這個帳號那一本課本的全部單字 id。弱點只能從自己那一本裡挑。 */
+function bankWordIds(user) {
+  return wordBank.getBank(wordBank.resolveBankId(user.wordBankId)).words.map((w) => w.id);
+}
+
+/* 複習關一場最多幾個字：大約跟一組一樣，五分鐘左右打得完 */
+const REVIEW_SIZE = 20;
+
+async function reviewSummary(user) {
+  const due = await WordProgress.weakWords(user._id, bankWordIds(user), { dueOnly: true, limit: 999 });
+  return { count: due.length, size: Math.min(due.length, REVIEW_SIZE), xpFactor: await reviewFactor() };
+}
+
+/**
+ * 📖 複習關（C4）：題目是他答錯過、還沒學會、而且到了該複習時間的字。
+ *
+ * 這是 §0 的核心——卡關的出口是複習關，不是重打舊關。
+ *   - 不佔關號、不用解鎖、隨時可以打，打幾次都可以：卡關的時候隨時有路走
+ *   - 經驗 ×3，輸贏都算：去複習是變強最快的方法
+ *   - 沒有到期的弱點字就沒有複習關——「沒有要複習的字」本身就是一個好消息
+ */
+router.get('/review', async (req, res, next) => {
+  try {
+    const wordIds = await WordProgress.weakWords(req.user._id, bankWordIds(req.user), {
+      dueOnly: true,
+      limit: REVIEW_SIZE
+    });
+    if (!wordIds.length) {
+      return res.status(404).json({ error: '目前沒有要複習的字，太棒了！', empty: true });
+    }
+    res.json({
+      review: true,
+      wordIds,
+      wordBankId: wordBank.resolveBankId(req.user.wordBankId),
+      order: 'random',
+      xpFactor: await reviewFactor()
     });
   } catch (err) {
     next(err);
@@ -79,27 +132,44 @@ router.get('/level/:level', async (req, res, next) => {
       });
     }
 
-    /*
-     * 第 4 章是「個人弱點章」。
-     *
-     * 真正接上 WordProgress 是 C4 的事；在那之前退回該關對應的組別，
-     * 這樣整條路仍然走得通（而不是走到第 76 關發現是死路）。
-     * 退回時明白標出來，地圖頁會寫「C4 之後才會變成你的弱點單字」。
-     */
-    const usingFallback = !!level.weakness;
-
-    const words = [];
+    const fallback = [];
     for (const gid of level.groupIds) {
-      for (const w of wordBank.wordsByGroup(gid)) words.push(w);
+      for (const w of wordBank.wordsByGroup(gid)) fallback.push(w.id);
+    }
+
+    /*
+     * 第 4 章是「個人弱點章」（C4）：題目是**他自己**最弱的字。
+     *
+     * 先放他最弱的字，不夠的用這一關原本對應的組別補滿——一關的大小跟
+     * 其他關一樣，也永遠不會是空的（他還沒錯過幾個字的時候也打得了）。
+     *
+     * 弱點字不管到期沒有都拿（跟複習關不同）：這一章是進度，每一關都要有東西。
+     * 他在這一關把字打對了，那些字的格子會往上升（結算時寫進 wordProgress），
+     * 下一關就輪到下一批最弱的——「24 關把弱點掃過一遍」就是這樣發生的，
+     * 不需要事先把 24 關的題目分好。
+     */
+    let wordIds = fallback;
+    let weakCount = 0;
+    if (level.weakness) {
+      const size = level.wordLimit || fallback.length;
+      const weak = await WordProgress.weakWords(req.user._id, bankWordIds(req.user), { limit: size });
+      const weakSet = new Set(weak);
+      wordIds = [...weak, ...fallback.filter((id) => !weakSet.has(id))].slice(0, size);
+      weakCount = weak.length;
     }
 
     res.json({
-      level: { ...level, weaknessPending: usingFallback },
+      level: {
+        ...level,
+        weakCount,
+        // 弱點章但他還沒有任何弱點字：整關都是補上去的字，畫面要講清楚
+        weaknessPending: !!level.weakness && weakCount === 0
+      },
       // 遊戲頁要用它去 /api/wordbank 拿對的那一本（那支不需要登入，看不到 req.user）
       wordBankId: wordBank.resolveBankId(req.user.wordBankId),
       // 只送 id 與組別，單字內容遊戲頁本來就會自己去 /api/wordbank 拿
-      wordIds: words.map((w) => w.id),
-      limit: level.wordLimit,
+      wordIds,
+      limit: level.weakness ? null : level.wordLimit,
       order: level.order
     });
   } catch (err) {

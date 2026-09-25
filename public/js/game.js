@@ -113,6 +113,14 @@ const ctx = {
    */
   wordBankId: getCachedUser()?.wordBankId || null,
   campaignLevel: Number(params.get('level')) || null,
+  /* 📖 複習關（C4）：?review=1。題目是他自己的弱點字，經驗 ×3 */
+  review: params.get('review') === '1',
+  xpFactor: 1,
+  /*
+   * 這一場哪些字**有顯示在畫面上**（wordIndex 的集合）。
+   * 顯示著打對是抄，不代表會拼；結算時這些字不寫進精熟度（見 reportResult）。
+   */
+  shownWordIdx: new Set(),
   campaignInfo: null,
   levelLimit: null,
   /* 這一關的特殊敵人（C6）。不是戰役關卡就是 null = 全部普通敵人 */
@@ -377,8 +385,10 @@ function startBattle() {
     xp: ctx.xp,
     relearnIds: ctx.relearnIds,
     equipped: ctx.equipped,
-    enemyTraits: ctx.enemyTraits
+    enemyTraits: ctx.enemyTraits,
+    xpFactor: ctx.xpFactor
   });
+  ctx.shownWordIdx = new Set();
   /*
    * 換一場之前先把上一場收進這次開機的檔案櫃。
    *
@@ -402,6 +412,7 @@ function startBattle() {
     relearnIds: ctx.relearnIds,
     equipped: ctx.equipped,
     enemyTraits: ctx.enemyTraits,
+    xpFactor: ctx.xpFactor,
     wordIds: ctx.words.map((w) => w.id)
   });
   ctx.paused = false;
@@ -611,6 +622,52 @@ async function fetchLevelWordIds(level) {
   }
 }
 
+/**
+ * 📖 複習關的題目（C4）。回 null 代表沒有要複習的字（或拿不到）。
+ * 沒有要複習的字是好消息，畫面要講出來，不是開一場空的戰鬥。
+ */
+async function fetchReviewWordIds() {
+  try {
+    const res = await fetch('/api/campaign/review', { credentials: 'same-origin' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      showReviewEmpty(data.error || '目前沒有要複習的字');
+      return null;
+    }
+    if (data.wordBankId) ctx.wordBankId = data.wordBankId;
+    ctx.order = data.order || 'random';
+    ctx.xpFactor = Number(data.xpFactor) || 1;
+    ctx.campaignInfo = { review: true, subtitle: '📖 複習關' };
+    return data.wordIds || null;
+  } catch (err) {
+    showReviewEmpty('拿不到複習的題目，請檢查網路後再試一次');
+    return null;
+  }
+}
+
+/*
+ * 沒有要複習的字。借用「沒解鎖」那一塊畫面，但**整句換掉**——
+ * 那一塊的標題固定是「🔒 ……還沒解鎖」，套在這裡會變成懲罰的口氣，
+ * 而這其實是好消息（設計文件 §4：沒有要複習的字，本身就是正向訊號）。
+ */
+function showReviewEmpty(msg) {
+  ctx.levelLocked = true;
+  const el = document.getElementById('locked-panel');
+  document.body.classList.remove('page-loading');
+  if (!el) return;
+  const title = el.querySelector('strong');
+  if (title) title.textContent = '✨ 目前沒有要複習的字';
+  document.getElementById('locked-detail').textContent = msg;
+  const hint = el.querySelector('.pregame-hint');
+  if (hint) hint.textContent = '打錯過的字會在該複習的時候回到這裡。';
+  const back = el.querySelector('.btn-locked-back');
+  if (back) {
+    back.textContent = '看戰役地圖';
+    back.setAttribute('href', '/campaign.html');
+  }
+  el.hidden = false;
+}
+
 /** 從單字庫撈出指定的那些 id，順序照伺服器給的。 */
 async function wordsFromIds(ids) {
   // 只拿自己那一本課本的字（bankQuery 見下面）
@@ -620,9 +677,11 @@ async function wordsFromIds(ids) {
   const byId = new Map(data.words.map((w) => [w.id, w]));
   const picked = ids.map((id) => byId.get(id)).filter((w) => w && w.typeable !== false);
   if (!picked.length) throw new Error('這一關沒有可以打的字');
-  ctx.groupLabel = ctx.campaignInfo
-    ? `第 ${ctx.campaignInfo.level} 關・${ctx.campaignInfo.subtitle}`
-    : '戰役';
+  ctx.groupLabel = ctx.campaignInfo?.review
+    ? `📖 複習關・經驗 ×${ctx.xpFactor}`
+    : ctx.campaignInfo
+      ? `第 ${ctx.campaignInfo.level} 關・${ctx.campaignInfo.subtitle}`
+      : '戰役';
   return picked;
 }
 
@@ -643,6 +702,11 @@ async function fetchWords() {
    * 拿不到（離線、資料庫在睡）就退回原本的 group/part 那條路，
    * 遊戲本來就設計成資料庫掛掉也打得開。
    */
+  if (ctx.review) {
+    const ids = await fetchReviewWordIds();
+    if (ids) return wordsFromIds(ids);
+    return [];
+  }
   if (ctx.campaignLevel) {
     const ids = await fetchLevelWordIds(ctx.campaignLevel);
     if (ids) return wordsFromIds(ids);
@@ -713,9 +777,16 @@ async function fetchWords() {
  * 而那個代價遠大於「偶爾跳過順序玩一場」。
  */
 async function fetchGroupAccess(group) {
-  if (!group) return { unlocked: true, reason: 'no-group' };
+  /*
+   * 戰役關卡與複習關沒有組別，但一樣要問：等級、經驗、裝備都從這裡來。
+   * 本來沒有組別就直接放行、什麼都不問——戰役裡他一律是 1 級、全裸，
+   * 存錢買的裝備在戰役裡完全沒有作用。
+   */
+  const playerOnly = !group && (ctx.campaignLevel || ctx.review);
+  if (!group && !playerOnly) return { unlocked: true, reason: 'no-group' };
   try {
-    const res = await fetch(`/api/game/access?group=${encodeURIComponent(group)}`, {
+    const url = group ? `/api/game/access?group=${encodeURIComponent(group)}` : '/api/game/access';
+    const res = await fetch(url, {
       credentials: 'same-origin'
     });
     if (!res.ok) return { unlocked: true, reason: `status-${res.status}` };
@@ -967,9 +1038,32 @@ function updatePostgameLevel(data, won) {
  */
 async function reportResult(state, won) {
   const group = params.get('group');
-  if (!group || !state) return;
+  /*
+   * 三種都要回報：組別、戰役關卡、複習關。
+   *
+   * 本來這裡是 `if (!group) return`——而戰役關卡的網址是 ?level=N，
+   * 沒有 group。所以**戰役打完什麼都沒記**：戰鬥中經驗條照樣在漲
+   * （那是這一頁自己算的），伺服器卻從來沒收到，重新整理就不見了。
+   */
+  const where = ctx.review
+    ? { review: true }
+    : ctx.campaignLevel
+      ? { level: ctx.campaignLevel }
+      : group ? { groupId: group } : null;
+  if (!where || !state) return;
   const s = state.stats;
   const letters = s.correctLetters + s.wrongLetters;
+  /*
+   * 每個字這一場打得怎樣（C4）。伺服器拿它：
+   *   1. 夾經驗與分數的上限（只算這一場真的出現的字）
+   *   2. 寫進精熟度——第 4 章與複習關的題目從那裡來
+   * 沒遇到的字（輸掉時還排在後面的）不送，那些字這一場沒有任何資訊。
+   */
+  const words = [];
+  state.wordOutcome.forEach((outcome, i) => {
+    if (!outcome) return;
+    words.push({ id: state.words[i].id, outcome, shown: ctx.shownWordIdx.has(i) });
+  });
   try {
     const res = await fetch('/api/game/result', {
       method: 'POST',
@@ -977,7 +1071,8 @@ async function reportResult(state, won) {
       credentials: 'same-origin',
       body: JSON.stringify({
         opId: `${ctx.seed}:${ctx.battleId}`,
-        groupId: group,
+        ...where,
+        words,
         score: state.honey,
         accuracy: letters > 0 ? s.correctLetters / letters : 0,
         won,
@@ -1128,7 +1223,7 @@ async function boot() {
      *     那條「一組單字都不能漏」測的是關卡表，測不到這裡）
      * 所以戰役關卡沒有上限時，上限就是這一關的全部字數。
      */
-    const defaultLimit = ctx.campaignLevel ? words.length : 20;
+    const defaultLimit = ctx.campaignLevel || ctx.review ? words.length : 20;
     const limit = Number(params.get('n')) || ctx.levelLimit || defaultLimit;
     ctx.words = words.slice(0, limit);
     if (ctx.words.length === 0) throw new Error('單字庫是空的');

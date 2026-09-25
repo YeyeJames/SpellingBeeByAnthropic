@@ -1084,6 +1084,19 @@ export function createBattleScene(ctx) {
             vfx(ev);
             break;
           }
+          case EV.XP_BONUS:
+            /*
+             * 📖 複習關的 ×3 在結算時一次補進來（C4）。
+             * 要飄得出來、而且講出是因為「複習」——他要把「去複習」跟
+             * 「變強最快」連在一起，只看到經驗條突然跳一截是連不起來的。
+             */
+            this.effects.floatText(`📖 複習加倍！+${ev.a} XP`, this.scale.width / 2, this.scale.height * 0.4, {
+              color: RELEARN_COLOR,
+              scale: 1.5,
+              fan: false
+            });
+            vfx(ev);
+            break;
           case EV.LEVEL_UP:
             this.levelUpText.setText(`⬆️ 升到 ${ev.a} 級！`);
             this.levelUpRemainMs = LEVEL_UP_MS;
@@ -1515,6 +1528,12 @@ export function createBattleScene(ctx) {
 
       if (state.status === 'running') {
         const show = ctx.shouldShowWord();
+        /*
+         * 記下這個字有被顯示過（C4）。顯示著打對是抄，不代表會拼——
+         * 結算時這些字不寫進精熟度。只要顯示過一格就算，
+         * 中途才打開「顯示單字」也一樣：他看到了。
+         */
+        if (show && state.wordIndex >= 0 && ctx.shownWordIdx) ctx.shownWordIdx.add(state.wordIndex);
         if (show !== this.lastShowWord) {
           this.lastShowWord = show;
           this.wordText.setAlpha(show ? 1 : 0);

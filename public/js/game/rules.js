@@ -101,6 +101,10 @@ export function buildRules(difficulty = BALANCE.defaultDifficulty) {
          */
         `⭐ 以前打錯過的字，這次打對 +${XP.relearnBonus}　——一隻普通的蟲 ${XP.perKill} 分，這種 ${XP.perKill + XP.relearnBonus} 分，差五倍。`,
         `打完整組再加「字數 ×${XP.perWordOnClear}」；完全沒失誤的話整場經驗 ×${XP.perfectFactor}。`,
+        /*
+         * C4 的核心，說明裡要寫出來：卡關的時候有一條路，而且是最快的那條。
+         */
+        `📖 複習關（戰役地圖最上面）：題目是你打錯過的字，整場經驗 ×${XP.reviewFactor}，輸了也算。卡關的時候去那裡變強最快。`,
         `每升一級，打對字母把蟲推回去的距離 +${Math.round(levelRewards(2).knockbackFactor * 100 - 100)}%；練到 ${levelRewards(1).nextHpAt} 級多一顆血。`,
         '等級只會讓同樣的字更好打，不會讓你少打字母。'
       ]

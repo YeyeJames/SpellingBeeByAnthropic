@@ -37,7 +37,18 @@ export const XP = {
   perWordOnClear: 2,
 
   // 完美通關（一個字都沒漏、一個字母都沒打錯）
-  perfectFactor: 1.5
+  perfectFactor: 1.5,
+
+  /*
+   * 📖 複習關（C4）整場經驗 ×3，輸贏都算。
+   *
+   * §0 的核心：卡關的出口是複習關，不是重打舊關。重打舊關刷的是他已經會的字；
+   * 複習關刷的是**他自己答錯過的字**。×3 讓「去複習」成為變強最快的方法，
+   * 獎勵的方向跟學習的方向就是同一個。
+   *
+   * 輸了也給：卡關的孩子去複習，打輸了還拿不到東西，那個出口就不存在了。
+   */
+  reviewFactor: 3
 };
 
 /* ── 等級曲線 ───────────────────────────────────────────── */
@@ -217,6 +228,13 @@ export function xpForBattle(s = {}) {
 
   // 完美通關的倍率套在全部經驗上，而且只有真的打完才算
   if (s.won && s.perfect) xp = Math.round(xp * XP.perfectFactor);
+
+  /*
+   * 這一場的經驗倍率（複習關 ×3）。順序是「先完美、再倍率」，
+   * 跟戰鬥核心 applyXpFactor() 一樣——兩邊一分都不能差。
+   */
+  const factor = Number(s.xpFactor) > 0 ? Number(s.xpFactor) : 1;
+  if (factor !== 1) xp = Math.round(xp * factor);
 
   return Math.max(0, Math.round(xp));
 }

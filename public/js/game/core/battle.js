@@ -56,7 +56,13 @@ export const EV = {
   /** 護甲碎了。a = wordIndex */
   ARMOR_BROKE: 16,
   /** 衝刺蟲往前衝了一段。a = 前進了幾毫秒的距離 */
-  ENEMY_DASH: 17
+  ENEMY_DASH: 17,
+  /*
+   * 經驗倍率（C4 複習關 ×3）在結算時一次補進去。a = 補了多少。
+   * 戰鬥中照 1 倍即時算、最後才乘——跟伺服器 xpForBattle() 同一個順序，
+   * 兩邊才會一分不差。
+   */
+  XP_BONUS: 18
 };
 
 export const EV_NAME = Object.fromEntries(Object.entries(EV).map(([k, v]) => [v, k]));
@@ -150,7 +156,12 @@ export function createBattle({
    * 這一關會出現哪些特殊敵人（C6）。空陣列 = 全部都是普通的，
    * 也就是 C6 之前的行為，所以舊錄影檔重播出來的指紋不會變。
    */
-  enemyTraits = null
+  enemyTraits = null,
+  /*
+   * 這一場的經驗倍率（C4）。複習關 ×3，其他都是 1。
+   * 跟裝備一樣是開場設定、要進錄影檔；不給就是 1，舊錄影檔的指紋不會變。
+   */
+  xpFactor = 1
 } = {}) {
   if (!Array.isArray(words) || words.length === 0) {
     throw new Error('createBattle 需要至少一個單字');
@@ -238,7 +249,16 @@ export function createBattle({
     xp: 0,
     totalXp: xp,
     level,
+    xpFactor: Number(xpFactor) > 0 ? Number(xpFactor) : 1,
     status: 'running', // running | won | lost
+    /*
+     * 每個字這一場打得怎樣（C4）：0 沒遇到、1 乾淨打完、2 打完但有打錯、3 漏掉。
+     *
+     * 同一個字可能遇到兩次（漏掉的字會排回隊伍尾端），取**最差**的那一次：
+     * 漏掉之後再補打對，這一場還是算「不會」——補打的時候正確拼法剛剛才亮過。
+     * 結算時送給伺服器寫進 wordProgress，第 4 章與複習關的題目就是從那裡來的。
+     */
+    wordOutcome: words.map(() => 0),
 
     // 目前這個字
     wordIndex: -1,
@@ -284,6 +304,7 @@ function startNextWord(state) {
     state.status = 'won';
     state.wordIndex = -1;
     awardClearXp(state);
+    applyXpFactor(state);
     emit(state, EV.BATTLE_END, 1);
     return;
   }
@@ -426,6 +447,21 @@ function awardClearXp(state) {
   addXp(state, Math.round(state.xp * XP.perfectFactor) - state.xp);
 }
 
+/**
+ * 經驗倍率（C4 複習關 ×3），輸贏都算。
+ *
+ * 跟完美倍率同一個做法：算出乘完的總額、把差額補進去，用 Math.round，
+ * 與伺服器 xpForBattle() 的「先完美、再倍率」順序一樣——一分都不能差，
+ * 不然重新整理之後經驗條會跳。
+ */
+function applyXpFactor(state) {
+  if (state.xpFactor === 1) return;
+  const bonus = Math.round(state.xp * state.xpFactor) - state.xp;
+  if (bonus <= 0) return;
+  addXp(state, bonus);
+  emit(state, EV.XP_BONUS, bonus);
+}
+
 /** 把敵人往前推 ms 毫秒的距離（打錯、重聽的代價都走這裡）。 */
 function pushEnemy(state, ms) {
   state.progress += ms / state.crossMs;
@@ -480,6 +516,10 @@ function killWord(state) {
     applyComboMilestone(state);
   }
 
+  state.wordOutcome[state.wordIndex] = Math.max(
+    state.wordOutcome[state.wordIndex] || 0,
+    state.cleanWord ? 1 : 2
+  );
   emit(state, EV.WORD_KILLED, state.wordIndex, len, gained);
   startNextWord(state);
 }
@@ -496,6 +536,7 @@ function missWord(state) {
   else state.hp -= 1;
 
   state.stats.wordsMissed += 1;
+  state.wordOutcome[state.wordIndex] = 3;
   emit(state, EV.WORD_MISSED, state.wordIndex, forgiven ? 1 : 0);
   // 被赦免時不發 HP_LOST：血沒掉，畫面不該演成掉血
   if (!forgiven) emit(state, EV.HP_LOST, state.hp);
@@ -511,6 +552,7 @@ function missWord(state) {
   if (state.hp <= 0) {
     state.status = 'lost';
     state.wordIndex = -1;
+    applyXpFactor(state);
     emit(state, EV.BATTLE_END, 0);
     return;
   }

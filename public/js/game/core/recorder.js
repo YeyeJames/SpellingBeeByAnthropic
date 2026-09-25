@@ -51,6 +51,7 @@ export function createRecorder(setup) {
        * 舊錄影檔沒有這個欄位 → 空陣列 → 全部是普通敵人，也就是 C6 之前的行為。
        */
       enemyTraits: setup.enemyTraits ? [...setup.enemyTraits] : [],
+      xpFactor: Number(setup.xpFactor) > 0 ? Number(setup.xpFactor) : 1,
       wordIds: setup.wordIds.slice()
     },
     // 每筆 [tick, kind, payload]，用陣列而不是物件，錄影檔才不會大得誇張
@@ -100,7 +101,9 @@ export function replayLog(log, words, { maxTicks = 60 * 120 * 30 } = {}) {
     xp: log.setup.xp || 0,
     relearnIds: log.setup.relearnIds || null,
     equipped: log.setup.equipped || null,
-    enemyTraits: log.setup.enemyTraits || null
+    enemyTraits: log.setup.enemyTraits || null,
+    // 舊錄影檔沒有這個欄位 → 1 倍，也就是 C4 之前的行為
+    xpFactor: log.setup.xpFactor || 1
   });
 
   const entries = log.entries;

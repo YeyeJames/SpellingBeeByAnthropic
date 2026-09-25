@@ -160,3 +160,57 @@
     font-size: 0.72rem;
   }
 }
+
+/*
+ * 📖 複習關的入口（C4）。
+ *
+ * 放在最上面、而且要一眼看得出「這是一條路」：卡關的時候他第一個要看到的
+ * 就是它（設計文件 §0：卡關的出口是複習關）。顏色用重學的紫，
+ * 跟戰鬥中「學回來了！」同一個顏色——兩者說的是同一件事。
+ */
+.review-card {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin: 0.9rem 0 1.2rem;
+  padding: 0.85rem 1rem;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #3b2a6b, #5b3fa0);
+  color: #f3e8ff;
+  text-decoration: none;
+  box-shadow: 0 3px 0 #2a1d4d;
+}
+
+.review-card:hover {
+  filter: brightness(1.08);
+}
+
+.review-card.is-empty {
+  background: rgba(124, 92, 200, 0.15);
+  color: var(--color-text-muted);
+  box-shadow: none;
+}
+
+.review-icon {
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.review-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.review-text strong {
+  font-size: 1.05rem;
+}
+
+.review-go {
+  white-space: nowrap;
+  font-weight: 700;
+  color: #fde68a;
+}
