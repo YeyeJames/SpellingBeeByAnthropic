@@ -13,6 +13,8 @@ import { loadPhaser } from './game/load-phaser.js';
 import { runPageInit } from './ui-status.js';
 import { initOutbox, enqueue, onApplied } from './outbox.js';
 import { readUser, writeUser, newId } from './local-store.js';
+import { coinsForCorrectAnswer } from './shared/coins.js';
+import { track } from './telemetry.js';
 import { readPref, writePref } from './prefs.js';
 import { isAnswerCorrect } from './shared/answer-match.js';
 
@@ -337,6 +339,9 @@ async function showQuestion() {
   submitBtn.disabled = false;
   revealPanel.classList.add('hidden');
   answerInput.focus();
+  // 行為紀錄：這個字從出現到按下送出花了多久、重聽了幾次
+  session.shownAt = performance.now();
+  session.listens = 0;
 
   setToolsEnabled(true);
   gameScene.reactListening();
@@ -377,10 +382,20 @@ function submitAnswer() {
 
   // 判定規則只有一份（shared/answer-match.js），伺服器用的是同一個檔案
   const correct = isAnswerCorrect(userAnswer, word.english);
+  /*
+   * 行為紀錄：多久答、答對沒有、重聽幾次。不記他打了什麼——
+   * 打了什麼已經在作答紀錄（attempts）裡，這裡只補伺服器看不到的「花了多久」。
+   */
+  track('practice_answer', {
+    wordId: word._id,
+    correct,
+    ms: session.shownAt ? Math.round(performance.now() - session.shownAt) : null,
+    listens: session.listens || 0
+  });
 
-  // 用與伺服器相同的公式先算出金幣與連勝，讓畫面立刻有反應
+  // 用與伺服器相同的公式先算出金幣與連勝，讓畫面立刻有反應（公式只有一份：shared/coins.js）
   session.streak = correct ? session.streak + 1 : 0;
-  const coinsAwarded = correct ? 10 + Math.floor(session.streak / 5) * 5 : 0;
+  const coinsAwarded = correct ? coinsForCorrectAnswer(session.streak) : 0;
 
   session.sessionCoins += coinsAwarded;
   sessionCoinBadge.textContent = `本回 🪙 ${session.sessionCoins}`;
@@ -541,14 +556,17 @@ answerInput.addEventListener('keydown', (e) => {
 });
 replayBtn.addEventListener('click', () => {
   sound.playClick();
+  if (session) session.listens = (session.listens || 0) + 1;
   playWordAudio(session.words[session.index]);
 });
 slowBtn.addEventListener('click', () => {
   sound.playClick();
+  if (session) session.listens = (session.listens || 0) + 1;
   playWordAudio(session.words[session.index], { slow: true });
 });
 sentenceBtn.addEventListener('click', () => {
   sound.playClick();
+  if (session) session.listens = (session.listens || 0) + 1;
   const word = session.words[session.index];
   if (word.exampleSentence) speakSentence(word.exampleSentence);
 });

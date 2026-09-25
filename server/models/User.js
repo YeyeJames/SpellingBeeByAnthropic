@@ -165,7 +165,20 @@ const OWNED_COLLECTIONS = [
   'groupCompletions',
   'gameResults',
   // 戰役進度也是這個帳號自己的：哥哥打到第 30 關不代表弟弟也打到
-  'campaignProgress'
+  'campaignProgress',
+  /*
+   * 商店的購買紀錄與小遊戲的付費紀錄。本來漏在這份清單外面，
+   * 刪帳號之後會留下沒有主人的紀錄。
+   */
+  'purchases',
+  'minigamePlays',
+  /*
+   * 行為紀錄。刪掉一個孩子的帳號，他的行為資料一定要一起走——
+   * 這一條不能漏：那是最不該留下來的東西。
+   */
+  'events',
+  'eventBatches',
+  'battleLogs'
 ];
 
 async function deleteUser(id) {

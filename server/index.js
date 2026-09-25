@@ -12,6 +12,7 @@ const gameRoutes = require('./routes/game');
 const campaignRoutes = require('./routes/campaign');
 const shopRoutes = require('./routes/shop');
 const usersRoutes = require('./routes/users');
+const telemetryRoutes = require('./routes/telemetry');
 const wordBank = require('./data/word-bank');
 
 const PORT = process.env.PORT || 3000;
@@ -193,6 +194,7 @@ function main() {
   app.use('/api/campaign', campaignRoutes);
   app.use('/api/shop', shopRoutes);
   app.use('/api/user', usersRoutes);
+  app.use('/api/telemetry', telemetryRoutes);
 
   app.use('/api', (req, res) => res.status(404).json({ error: 'API 端點不存在' }));
 

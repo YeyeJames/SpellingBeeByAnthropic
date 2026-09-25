@@ -17,7 +17,8 @@ const PAGES = {
   'practice.html': '/js/practice.js',
   'wordbank.html': '/js/wordbank.js',
   'shop.html': '/js/shop.js',
-  'profile.html': '/js/profile.js'
+  'profile.html': '/js/profile.js',
+  'report.html': '/js/report.js'
 };
 
 // 用明確的標記包住整段，重複執行才不會愈跑愈亂

@@ -249,7 +249,9 @@ input[type='password']:focus {
   color: var(--color-text-muted);
 }
 
-.nav-user-menu button {
+/* 選單裡的連結（家長報告）跟按鈕長得一樣 */
+.nav-user-menu button,
+.nav-user-menu .nav-user-menu-link {
   display: block;
   width: 100%;
   text-align: left;
@@ -263,7 +265,13 @@ input[type='password']:focus {
   cursor: pointer;
 }
 
-.nav-user-menu button:hover {
+.nav-user-menu .nav-user-menu-link {
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+.nav-user-menu button:hover,
+.nav-user-menu .nav-user-menu-link:hover {
   background: var(--color-bg-raised);
 }
 

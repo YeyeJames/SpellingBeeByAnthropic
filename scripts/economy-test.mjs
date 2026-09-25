@@ -62,6 +62,21 @@ console.log('1) 連勝加成有天花板（原本沒有，這是「賺錢太快�
     `${calcCoinsForCorrectAnswer(1)} → ${calcCoinsForCorrectAnswer(20)}`);
 }
 
+/* ── 1.5 練習頁的公式要跟伺服器一模一樣 ─────────────────────
+ * 練習頁會先照公式把金幣加上去，伺服器回來再校正。兩邊差一點，
+ * 校正時金幣就倒退——伺服器加了上限、練習頁那份沒跟著改時就是這樣。
+ */
+console.log('1.5) 練習頁與伺服器的公式逐題一致');
+{
+  const { coinsForCorrectAnswer: client } = await import('../public/js/shared/coins.js');
+  const diff = [];
+  for (let s = 0; s <= 200; s += 1) if (client(s) !== calcCoinsForCorrectAnswer(s)) diff.push(s);
+  check('連勝 0～200 每一題都一樣', diff.length === 0, diff.length ? `連勝 ${diff.slice(0, 5).join(',')} 不一樣` : '');
+  const { readFileSync } = await import('node:fs');
+  const practiceJs = readFileSync(new URL('../public/js/practice.js', import.meta.url), 'utf8');
+  check('練習頁沒有自己再寫一份公式', !/10 \+ Math\.floor\(session\.streak/.test(practiceJs));
+}
+
 /* ── 2. 一輪一輪練下去，收入要持平，不是一路翻倍 ──────────── */
 console.log('2) 練越多輪，一輪的收入要持平');
 {

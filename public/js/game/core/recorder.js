@@ -79,7 +79,7 @@ export function recordAction(log, tick, action) {
   log.entries.push([tick, kind, payload]);
 }
 
-function entryToAction(entry) {
+export function entryToAction(entry) {
   const kind = KIND_BACK[entry[1]];
   if (kind === 'letter') return { kind: 'letter', ch: String.fromCharCode(entry[2]) };
   if (kind === 'backspace') return { kind: 'backspace' };
@@ -96,24 +96,36 @@ function entryToAction(entry) {
  *
  * @param {number} maxTicks 保險絲：錄影檔壞掉時不要無窮迴圈
  */
-export function replayLog(log, words, { maxTicks = 60 * 120 * 30 } = {}) {
-  const state = createBattle({
+/**
+ * 用錄影檔的設定重建一場戰鬥（還沒開始打）。
+ *
+ * 重播、分析工具、伺服器的分析全部走這一支。以前 analyze-log.mjs 自己組
+ * createBattle 的參數，而它漏帶了等級、裝備、特殊敵人、三選一、速度——
+ * 用它分析新的錄影檔，重播出來是**另一場**，每個字的結果都會算錯。
+ * 設定只在這裡組一次，就不會再有哪一份漏掉。
+ */
+export function battleFromSetup(setup, words) {
+  return createBattle({
     words,
-    seed: log.setup.seed,
-    difficulty: log.setup.difficulty,
-    order: log.setup.order,
-    maxHp: log.setup.maxHp,
+    seed: setup.seed,
+    difficulty: setup.difficulty,
+    order: setup.order,
+    maxHp: setup.maxHp,
     // 舊錄影檔沒有這幾個欄位，退回 C2 之前的行為（1 級、空名單）
-    level: log.setup.level || 1,
-    xp: log.setup.xp || 0,
-    relearnIds: log.setup.relearnIds || null,
-    equipped: log.setup.equipped || null,
-    enemyTraits: log.setup.enemyTraits || null,
+    level: setup.level || 1,
+    xp: setup.xp || 0,
+    relearnIds: setup.relearnIds || null,
+    equipped: setup.equipped || null,
+    enemyTraits: setup.enemyTraits || null,
     // 舊錄影檔沒有這個欄位 → 1 倍，也就是 C4 之前的行為
-    xpFactor: log.setup.xpFactor || 1,
-    perks: !!log.setup.perks,
-    speed: log.setup.speed || 1
+    xpFactor: setup.xpFactor || 1,
+    perks: !!setup.perks,
+    speed: setup.speed || 1
   });
+}
+
+export function replayLog(log, words, { maxTicks = 60 * 120 * 30 } = {}) {
+  const state = battleFromSetup(log.setup, words);
 
   const entries = log.entries;
   let ei = 0;

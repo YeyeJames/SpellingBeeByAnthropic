@@ -1,0 +1,91 @@
+/* 家長報告頁 */
+.report-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.report-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.report-note {
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.rkid {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 2px solid var(--color-border);
+}
+
+.rsec {
+  margin: 1rem 0 1.25rem;
+}
+
+.rsec h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+}
+
+.rsec p {
+  margin: 0.3rem 0;
+  line-height: 1.6;
+}
+
+/* 「怎麼算的」：小一點、淡一點，但一定要在——這些是推估，家長要能判斷該信幾分 */
+.rhow {
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+}
+
+.rbars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0.4rem 0;
+}
+
+.rbar {
+  display: grid;
+  grid-template-columns: 8.5em 1fr auto;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.9rem;
+}
+
+.rbar-track {
+  height: 12px;
+  border-radius: 6px;
+  background: var(--color-bg-raised, rgba(127, 127, 127, 0.15));
+  overflow: hidden;
+}
+
+.rbar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 6px;
+  background: var(--color-accent);
+}
+
+.rbar-value {
+  white-space: nowrap;
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 560px) {
+  .rbar {
+    grid-template-columns: 6em 1fr;
+  }
+  .rbar-value {
+    grid-column: 2;
+    font-size: 0.8rem;
+  }
+}

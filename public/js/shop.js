@@ -8,6 +8,7 @@ import { runPageInit } from './ui-status.js';
 import { initOutbox, enqueue, onApplied } from './outbox.js';
 import { readShared, writeShared, newId } from './local-store.js';
 import { readPref, writePref } from './prefs.js';
+import { track } from './telemetry.js';
 import { initGearShop } from './gear-shop.js';
 
 const shopGrid = document.getElementById('shop-grid');
@@ -199,6 +200,7 @@ const minigameHowTo = document.getElementById('minigame-howto');
 const minigameAgain = document.getElementById('minigame-again');
 const minigameNote = document.getElementById('minigame-note');
 let minigameItem = null;
+let minigameStartedAt = 0;
 
 /*
  * 測試用的把手（跟遊戲頁的 window.__spellbee 同一個做法）。
@@ -261,6 +263,7 @@ async function openMinigame(item) {
   minigameResult.textContent = '';
   testHandle.key = item.key;
   testHandle.scoreEvents = 0;
+  minigameStartedAt = performance.now();
   minigameInstance = mod.create('minigame-container', {
     onReady: () => { testHandle.ready = true; },
     onScore: () => {
@@ -279,6 +282,8 @@ async function openMinigame(item) {
  * 最高紀錄存在這個孩子自己名下（prefs），兩兄弟各比各的。
  */
 function onMinigameEnded(item, score) {
+  // 行為紀錄：他最常玩哪一個、玩多久——拿來跟練習次數比，看小遊戲有沒有取代練習
+  track('minigame', { key: item.key, score, ms: Math.round(performance.now() - minigameStartedAt) });
   const key = `minigameBest:${item.key}`;
   const best = Number(readPref(key)) || 0;
   const isRecord = score > best;

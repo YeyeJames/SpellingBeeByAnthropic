@@ -36,6 +36,13 @@ const wordBank = require('../server/data/word-bank.js');
 const { createBattle, applyAction, stepBattle, clearEvents, EV, EV_NAME, LISTEN_KIND } =
   await import('../public/js/game/core/battle.js');
 const { BALANCE } = await import('../public/js/game/core/balance.js');
+/*
+ * 重建戰鬥與解碼動作都用 recorder.js 的共用版本。
+ * 這裡原本自己組 createBattle 的參數，漏帶了等級、裝備、特殊敵人、三選一、速度——
+ * 分析新的錄影檔時重播出來是另一場；而且不認得「選卡」這個動作，
+ * 遇到有三選一的錄影檔會停在選卡畫面、迴圈永遠轉不出來。
+ */
+const { battleFromSetup, entryToAction: sharedEntryToAction } = await import('../public/js/game/core/recorder.js');
 
 /* 邏輯固定 120Hz，所以 tick 直接換算得到遊戲時間（暫停不會前進，正好是我們要的） */
 const MS_PER_TICK = BALANCE.logicStepMs;
@@ -63,16 +70,7 @@ function loadBundle(path) {
    recorder.js 的 replayLog 只回傳最終狀態，而我們要的是過程，
    所以這裡自己跑一次一樣的迴圈，差別只在讀完事件才清空。 */
 
-const KIND_BACK = { 1: 'letter', 2: 'backspace', 3: 'listen' };
-const LISTEN_BACK = { 1: 'replay', 2: 'slow', 3: 'sentence' };
-
-function entryToAction(entry) {
-  const kind = KIND_BACK[entry[1]];
-  if (kind === 'letter') return { kind: 'letter', ch: String.fromCharCode(entry[2]) };
-  if (kind === 'backspace') return { kind: 'backspace' };
-  if (kind === 'listen') return { kind: 'listen', listen: LISTEN_BACK[entry[2]] };
-  return null;
-}
+const entryToAction = sharedEntryToAction;
 
 function analyzeBattle(log) {
   const words = log.setup.wordIds.map((id) => {
@@ -80,13 +78,7 @@ function analyzeBattle(log) {
     return w || { id, english: id, chinese: '', exampleSentence: '' };
   });
 
-  const state = createBattle({
-    words,
-    seed: log.setup.seed,
-    difficulty: log.setup.difficulty,
-    order: log.setup.order,
-    maxHp: log.setup.maxHp
-  });
+  const state = battleFromSetup(log.setup, words);
 
   const entries = log.entries;
   const lastTick = entries.length ? entries[entries.length - 1][0] : 0;
@@ -193,6 +185,8 @@ function analyzeBattle(log) {
     }
 
     if (state.status !== 'running') break;
+    // 三選一停在那裡、又沒有選卡紀錄（錄影檔被截斷）：停下來，不然永遠轉不出去
+    if (state.perkOffer) break;
     if (ei >= entries.length && state.tick > lastTick + 120 * 60) break;
 
     stepBattle(state);

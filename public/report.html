@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>家長報告 - 拼字蜂</title>
+  <link rel="icon" href="/assets/icons/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/css/theme.css" />
+  <link rel="stylesheet" href="/css/base.css" />
+  <link rel="stylesheet" href="/css/components.css" />
+  <link rel="stylesheet" href="/css/report.css" />
+  <!-- modulepreload:start 由 npm run gen-preload 產生，請勿手動編輯 -->
+  <link rel="modulepreload" href="/js/report.js" />
+  <link rel="modulepreload" href="/js/api.js" />
+  <link rel="modulepreload" href="/js/ui-status.js" />
+  <link rel="modulepreload" href="/js/auth.js" />
+  <link rel="modulepreload" href="/js/theme.js" />
+  <link rel="modulepreload" href="/js/local-store.js" />
+  <link rel="modulepreload" href="/js/nav-partial.js" />
+  <link rel="modulepreload" href="/js/outbox.js" />
+  <link rel="modulepreload" href="/js/sound-manager.js" />
+  <link rel="modulepreload" href="/js/shared/levels.js" />
+  <link rel="modulepreload" href="/js/telemetry.js" />
+  <!-- modulepreload:end -->
+</head>
+<body data-theme="sports" class="page-loading">
+  <div data-nav-mount></div>
+
+  <div class="container">
+    <div class="panel container">
+      <div class="report-head">
+        <h1>📊 家長報告</h1>
+        <div class="report-controls">
+          <label>範圍
+            <select id="report-days">
+              <option value="7">最近 7 天</option>
+              <option value="30" selected>最近 30 天</option>
+              <option value="90">最近 90 天</option>
+            </select>
+          </label>
+          <!--
+            下載分析檔：原始資料，給家長自己決定要不要交給別人（例如 Claude）分析。
+            資料只在按下這個按鈕時才離開這個家的資料庫。
+          -->
+          <a class="btn secondary" id="report-export" href="/api/telemetry/export?days=30" download>⬇️ 下載分析檔</a>
+        </div>
+      </div>
+      <p class="report-note">
+        這些資料只存在你們自己的資料庫裡，90 天後自動刪除；刪掉帳號時會一起刪。
+        不記錄滑鼠軌跡，也不記錄輸入框裡打的內容。
+      </p>
+      <p class="error-text" id="report-error"></p>
+      <div id="report-kids"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/js/report.js"></script>
+  <script>
+    /* page-loading-failsafe */
+    setTimeout(function () { document.body.classList.remove("page-loading"); }, 30000);
+  </script>
+</body>
+</html>

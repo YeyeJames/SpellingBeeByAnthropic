@@ -34,6 +34,7 @@ import {
 import { buildRules, buildQuickRules } from './game/rules.js';
 import { newId } from './local-store.js';
 import { readPref, writePref } from './prefs.js';
+import { startTelemetry, track, uploadBattleLog } from './telemetry.js';
 import { getCachedUser } from './auth.js';
 
 const params = new URLSearchParams(location.search);
@@ -151,6 +152,11 @@ const ctx = {
   /** 一場結束。畫面端在 BATTLE_END 時呼叫。 */
   onBattleEnd(state, won) {
     reportResult(state, won);
+    /*
+     * 整場的按鍵錄影送去分析（跟成績同一個 opId，之後對得起來）。
+     * 伺服器收到當下就重播一次，算出每個漏掉的字是「來不及」「不會拼」還是「沒動作」。
+     */
+    uploadBattleLog(`${ctx.seed}:${ctx.battleId}`, ctx.log);
     // 戰役關卡另外記一筆：過了就解開下一關（C3）
     if (ctx.campaignLevel) reportLevelClear(state, won);
     showPostgame(state, won);
@@ -408,6 +414,14 @@ function startBattle() {
   });
   ctx.shownWordIdx = new Set();
   hidePerkPanel();
+  track('game_start', {
+    mode: ctx.review ? 'review' : ctx.campaignLevel ? 'level' : params.get('group') ? 'group' : 'other',
+    level: ctx.campaignLevel || null,
+    group: params.get('group') || null,
+    difficulty: ctx.difficulty,
+    words: ctx.words.length,
+    speed: ctx.state.speed
+  });
   /*
    * 換一場之前先把上一場收進這次開機的檔案櫃。
    *
@@ -693,6 +707,7 @@ function showReviewEmpty(msg) {
 
 let perkSelected = 0;
 let perkShowing = false;
+let perkShownAt = 0;
 
 /** 畫面端在 PERK_OFFER 時呼叫：畫出三張卡。 */
 async function showPerkPanel(ids) {
@@ -718,6 +733,7 @@ async function showPerkPanel(ids) {
   perkSelected = 0;
   highlightPerk();
   perkShowing = true;
+  perkShownAt = performance.now();
   panel.hidden = false;
 }
 
@@ -736,6 +752,13 @@ function highlightPerk() {
 function pickPerk(i) {
   if (!perkShowing || !ctx.state?.perkOffer) return;
   if (i < 0 || i >= ctx.state.perkOffer.length) return;
+  /*
+   * 行為紀錄：選了什麼、花多久。設計文件的風險是「小四生只會亂選」——
+   * 一秒內就選好，多半沒有看卡片上寫什麼。選卡時整場是停住的，
+   * 錄影檔的時間不會走，所以這個數字只能在這裡量。
+   */
+  const offer = ctx.state.perkOffer.slice();
+  track('perk_pick', { offer, picked: offer[i], pick: i, ms: Math.round(performance.now() - perkShownAt) });
   hidePerkPanel();
   ctx.sendAction({ kind: 'perk', pick: i });
 }
@@ -1276,6 +1299,15 @@ async function boot() {
      * 先問這一組開不開得起來，再去載 Phaser 與單字。
      * 鎖著的話載了也用不到，而且那是幾百 KB。
      */
+    /*
+     * 行為紀錄：遊戲頁沒有導覽列，所以自己記「進了遊戲頁」。
+     * 帳號從本地快取拿（遊戲頁刻意不強制登入；沒登入就不記）。
+     */
+    startTelemetry(getCachedUser(), 'game', {
+      level: ctx.campaignLevel || null,
+      group: params.get('group') || null,
+      review: ctx.review
+    });
     const access = await fetchGroupAccess(params.get('group'));
     if (!access.unlocked) {
       showLocked(access);

@@ -4,6 +4,7 @@ import { readShared, writeShared } from './local-store.js';
 import { updateCachedUser } from './auth.js';
 import * as sound from './sound-manager.js';
 import { levelFromXp } from './shared/levels.js';
+import { startTelemetry } from './telemetry.js';
 
 let coinsEl = null;
 let levelEl = null;
@@ -18,8 +19,8 @@ let currentCoins = 0;
  * 舊 HTML 裡沒有的元素——按鈕直接變成死的，要重新整理一次才會好。
  * 那種問題在自己的機器上永遠看不到（快取是空的），只有使用者會遇到。
  */
-// navHtml4：加了 [data-nav-level] 等級章
-const NAV_CACHE_KEY = 'navHtml4';
+// navHtml4：加了 [data-nav-level] 等級章；navHtml5：選單加了「家長報告」
+const NAV_CACHE_KEY = 'navHtml5';
 
 function fetchNavHtml() {
   return fetch('/partials/nav.html')
@@ -41,6 +42,8 @@ export async function mountNav(user, activePage) {
   if (!mountPoint) return;
 
   mountPoint.innerHTML = await navHtmlPromise;
+  // 行為紀錄：每一頁都掛導覽列，所以「看了哪一頁、停多久」在這裡記一次就好
+  startTelemetry(user, activePage);
 
   coinsEl = mountPoint.querySelector('[data-nav-coins]');
   currentCoins = user.coins;

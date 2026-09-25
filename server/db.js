@@ -90,6 +90,26 @@ async function ensureIndexes(database) {
     { unique: true, partialFilterExpression: { opId: { $type: 'string' } } }
   );
 
+  /*
+   * 行為紀錄（server/routes/telemetry.js）。
+   *
+   * TTL 索引：90 天後資料庫自己刪。孩子的行為資料不該無限期留著——
+   * 平衡要的是最近的樣子，三個月前的打字速度已經不是現在的他了。
+   */
+  const NINETY_DAYS = 90 * 24 * 60 * 60;
+  await database.collection('events').createIndex({ at: 1 }, { expireAfterSeconds: NINETY_DAYS });
+  await database.collection('events').createIndex({ userId: 1, at: 1 });
+  await database.collection('battleLogs').createIndex({ at: 1 }, { expireAfterSeconds: NINETY_DAYS });
+  await database.collection('battleLogs').createIndex(
+    { userId: 1, opId: 1 },
+    { unique: true, partialFilterExpression: { opId: { $type: 'string' } } }
+  );
+  await database.collection('eventBatches').createIndex({ at: 1 }, { expireAfterSeconds: NINETY_DAYS });
+  await database.collection('eventBatches').createIndex(
+    { userId: 1, opId: 1 },
+    { unique: true, partialFilterExpression: { opId: { $type: 'string' } } }
+  );
+
   // 每個帳號在每一組上只有一列進度
   await database.collection('groupProgress').createIndex({ userId: 1, groupId: 1 }, { unique: true });
   // 戰役進度：一個帳號一列
