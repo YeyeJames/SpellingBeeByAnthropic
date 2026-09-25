@@ -22,7 +22,12 @@ class LazyMongoStore extends session.Store {
   attachMongo(client) {
     if (this.realStore) return true;
     try {
-      this.realStore = MongoStore.create({ client, collectionName: 'sessions' });
+      /*
+       * touchAfter：資料庫裡的 session 期限最多一天更新一次。
+       * 登入改成「有在用就延長」之後（index.js 的 rolling），不設這個的話
+       * 每一個請求都會寫一次資料庫，只為了把期限往後推幾秒。
+       */
+      this.realStore = MongoStore.create({ client, collectionName: 'sessions', touchAfter: 24 * 3600 });
       console.log('✅ Session 已切換為 MongoDB 儲存');
       return true;
     } catch (err) {

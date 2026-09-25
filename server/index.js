@@ -68,6 +68,15 @@ function main() {
     secret: process.env.SESSION_SECRET || 'insecure-fallback-secret',
     resave: false,
     saveUninitialized: false,
+    /*
+     * 有在用就自動延長（每次回應都把 cookie 的期限往後推 30 天）。
+     *
+     * 沒有這一行的話，登入是「選名字那天起算 30 天」就失效，不管這中間
+     * 他每天都在用。孩子平常不會回選人畫面，所以某一天會突然被登出——
+     * 剛好在練習途中的話，那之後的答案會送不出去（見 docs/audit/step2）。
+     * 改成 30 天**完全沒用**才失效。
+     */
+    rolling: true,
     store: sessionStore,
     cookie: {
       httpOnly: true,
