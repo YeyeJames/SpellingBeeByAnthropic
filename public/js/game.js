@@ -857,7 +857,7 @@ async function fetchWords() {
 }
 
 /*
- * 解鎖關卡：這一組在練習模式完整做完兩次了嗎？
+ * 解鎖關卡：這一組在練習模式完整做完一次了嗎？
  *
  * 目的不是防弊，是**順序**：練習模式看得到中文、例句，答完還會把正確拼法
  * 亮出來；遊戲模式是考試。沒看過就直接考，他只會一直被沒見過的字打死。
@@ -1236,7 +1236,7 @@ function showLocked(access) {
   const el = document.getElementById('locked-panel');
   document.body.classList.remove('page-loading');
   if (!el) return;
-  const need = access.completionsNeeded ?? access.unlockAfter ?? 2;
+  const need = access.completionsNeeded ?? access.unlockAfter ?? 1;
   document.getElementById('locked-group').textContent = access.group?.label || '這一組';
   document.getElementById('locked-detail').textContent =
     `已經在練習模式完整做完 ${access.practiceCompletions || 0} 次，` +

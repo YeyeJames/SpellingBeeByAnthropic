@@ -135,14 +135,21 @@ let sister = null;
 console.log('\n2) 新帳號每一組都是鎖的');
 const GROUP = 'w18'; // 14 個字，測試打得完
 const GROUP_SIZE = wordBank.wordsByGroup(GROUP).length;
+/*
+ * 門檻本來是「練兩次」，家長試玩後改成「練一次」（2026-09）：兩兄弟的語感
+ * 練一次就夠了，沒記住的字在遊戲裡被扣分很快就記得了。
+ * 這裡照伺服器的常數測，不寫死數字——下次再調不必回來改測試。
+ */
+const UNLOCK = require('../server/models/GroupProgress.js').UNLOCK_AFTER_COMPLETIONS;
 {
   const access = await call('GET', `/api/game/access?group=${GROUP}`, { as: brother });
   check('遊戲端說還沒解鎖', access.body.unlocked === false, JSON.stringify(access.body.unlocked));
-  check('還要練兩次', access.body.completionsNeeded === 2, String(access.body.completionsNeeded));
+  check(`還要練 ${UNLOCK} 次`, access.body.completionsNeeded === UNLOCK, String(access.body.completionsNeeded));
 
   const prog = await call('GET', '/api/practice/progress', { as: brother });
   check('練習端也是鎖的', !prog.body.progress[GROUP]?.unlocked, JSON.stringify(prog.body.progress[GROUP]));
-  check('兩邊講同一個門檻', prog.body.unlockAfter === 2, String(prog.body.unlockAfter));
+  check('兩邊講同一個門檻', prog.body.unlockAfter === UNLOCK, String(prog.body.unlockAfter));
+  check('門檻是「練一次」', UNLOCK === 1, String(UNLOCK));
 }
 
 async function completeGroup(userId, opId, answered = GROUP_SIZE) {
@@ -152,27 +159,23 @@ async function completeGroup(userId, opId, answered = GROUP_SIZE) {
   });
 }
 
-console.log('\n3) 練完一次還不夠');
+console.log('\n3) 練完一次就解鎖');
 {
   const r = await completeGroup(brother, 'op-1');
   check('記下來了', r.status === 200, `${r.status} ${r.body?.error || ''}`);
   check('練習次數是 1', r.body.progress.practiceCompletions === 1, String(r.body.progress.practiceCompletions));
-  check('還是鎖的', r.body.progress.unlocked === false, String(r.body.progress.unlocked));
-
-  const access = await call('GET', `/api/game/access?group=${GROUP}`, { as: brother });
-  check('遊戲還是開不起來', access.body.unlocked === false, String(access.body.unlocked));
-  check('還差一次', access.body.completionsNeeded === 1, String(access.body.completionsNeeded));
-}
-
-console.log('\n4) 練完兩次才解鎖');
-{
-  const r = await completeGroup(brother, 'op-2');
-  check('練習次數是 2', r.body.progress.practiceCompletions === 2, String(r.body.progress.practiceCompletions));
   check('解鎖了', r.body.progress.unlocked === true, String(r.body.progress.unlocked));
 
   const access = await call('GET', `/api/game/access?group=${GROUP}`, { as: brother });
   check('遊戲端也說可以玩了', access.body.unlocked === true, String(access.body.unlocked));
   check('還差 0 次', access.body.completionsNeeded === 0, String(access.body.completionsNeeded));
+}
+
+console.log('\n4) 解鎖之後再練，次數照記、也不會又鎖回去');
+{
+  const r = await completeGroup(brother, 'op-2');
+  check('練習次數是 2', r.body.progress.practiceCompletions === 2, String(r.body.progress.practiceCompletions));
+  check('還是解鎖的', r.body.progress.unlocked === true, String(r.body.progress.unlocked));
 }
 
 /* ── 5. 沒做完不算 ───────────────────────────────────────── */

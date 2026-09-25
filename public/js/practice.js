@@ -85,7 +85,8 @@ let selectedGroup = null;
  * 拿不到（離線、剛換帳號）時是空的，畫面就只是少標記號，不會壞掉。
  */
 let progress = {};
-let unlockAfter = 2;
+// 真正的數字由伺服器給（GroupProgress.UNLOCK_AFTER_COMPLETIONS）；這只是拿到之前的預設
+let unlockAfter = 1;
 
 function progressFor(groupId) {
   return progress[groupId] || { practiceCompletions: 0, unlocked: false, bestScore: 0 };
@@ -144,7 +145,7 @@ function renderPartPicker() {
 /*
  * 遊戲鈕會隨著選到的組別改變。
  *
- * 規則：同一組單字要先在練習模式**完整做完兩次**，遊戲才開得起來。
+ * 規則：同一組單字要先在練習模式**完整做完一次**，遊戲才開得起來。
  * 不然他會在一堆沒看過的字上一直被打死，學到的只有挫折。
  * 鎖住時不是把鈕藏起來，而是直接在鈕上寫還差幾次——看得到目標才有動力。
  */
@@ -194,7 +195,7 @@ async function loadProgress() {
     if (res.ok) {
       const data = await res.json();
       progress = data.progress || {};
-      unlockAfter = data.unlockAfter || 2;
+      unlockAfter = data.unlockAfter || 1;
       writeUser(userId, 'groupProgress', { progress, unlockAfter });
     }
   } catch (err) {
