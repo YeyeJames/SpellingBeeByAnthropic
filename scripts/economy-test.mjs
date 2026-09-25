@@ -128,6 +128,24 @@ console.log('4) 接金幣小遊戲（他最愛的那個）不會給真金幣');
   check('它只寫字，不碰金幣',
     !!body && !/(setNavCoins|currentUser\.coins|enqueue|api\.)/.test(body[1]),
     body ? body[1].trim().slice(0, 80) : '');
+
+  /*
+   * 小遊戲本身也不可以碰錢。
+   *
+   * 商店的小遊戲會一直加（家長希望商店「非常豐富」），每一個新遊戲都是
+   * 一次「不小心讓分數變成錢」的機會。這裡掃全部的遊戲模組：
+   * 不可以呼叫任何 API、不可以碰金幣——它們只回報分數給商店。
+   */
+  const { readdirSync } = await import('node:fs');
+  const dir = new URL('../public/js/game/minigames/', import.meta.url);
+  const files = readdirSync(dir).filter((f) => f.endsWith('.js') && f !== 'registry.js');
+  const touching = files.filter((f) => {
+    const src = readFileSync(new URL(f, dir), 'utf8');
+    // 不直接比對 coins 這個字：接金幣畫面上掉下來的金幣就叫 this.coins，那不是錢
+    return /(fetch\(|\bapi\.|\/api\/|currentUser|setNavCoins|enqueue|localStorage)/.test(src);
+  });
+  check(`全部 ${files.length} 個小遊戲都不碰錢、不打 API`, files.length >= 3 && touching.length === 0,
+    touching.length ? `有問題的：${touching.join(', ')}` : files.join(', '));
 }
 
 /* ── 5. 等級在遊戲外面看得到 ─────────────────────────────── */

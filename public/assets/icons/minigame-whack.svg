@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <ellipse cx="30" cy="54" rx="22" ry="7" fill="#5b3a1a"/>
+  <circle cx="30" cy="38" r="15" fill="#e63946"/>
+  <circle cx="25" cy="30" r="3" fill="#fff"/>
+  <circle cx="35" cy="30" r="3" fill="#fff"/>
+  <text x="30" y="46" font-family="Arial Black, sans-serif" font-size="14" fill="#fff" text-anchor="middle">A</text>
+  <rect x="40" y="4" width="20" height="11" rx="2" fill="#8d5524" transform="rotate(30 50 10)"/>
+  <rect x="44" y="12" width="5" height="22" rx="2" fill="#c68642" transform="rotate(30 50 10)"/>
+</svg>

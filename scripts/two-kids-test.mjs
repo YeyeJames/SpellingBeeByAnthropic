@@ -69,6 +69,21 @@ for (let i = 0; i < 50; i += 1) {
 }
 console.log = realLog;
 console.error = realErr;
+/*
+ * server/index.js 為了不讓網站整個掛掉，會把未捕捉的例外吞掉繼續跑。
+ * 這對網站是對的，對測試是錯的：測試自己的逾時也會被吞掉，
+ * 結果就是整支卡住、永遠不結束（第一次跑就是這樣）。
+ * 所以在這裡把它們接過來：記一條失敗、印出來、直接結束。
+ */
+process.removeAllListeners('uncaughtException');
+process.removeAllListeners('unhandledRejection');
+const bail = (err) => {
+  console.log(`  [FAIL] 測試中途出錯 — ${err && err.message ? err.message.split('\n')[0] : err}`);
+  console.log('\n測試中途出錯');
+  process.exit(1);
+};
+process.on('uncaughtException', bail);
+process.on('unhandledRejection', bail);
 
 const wordBank = require('../server/data/word-bank.js');
 const allenWords = new Set(wordBank.getBank('allen').words.map((w) => w.english.toLowerCase()));

@@ -62,11 +62,14 @@
 
   <div id="minigame-overlay" class="shop-overlay hidden">
     <div class="panel minigame-panel">
-      <h2>🪙 接金幣小遊戲</h2>
-      <p>用滑鼠移動或方向鍵左右移動拼字蜂，接住掉下來的金幣！30 秒倒數。</p>
+      <!-- 標題與玩法由 game/minigames/registry.js 填，每個小遊戲各自的 -->
+      <h2 id="minigame-title"></h2>
+      <p id="minigame-howto"></p>
       <div id="minigame-container"></div>
       <p id="minigame-result" class="display-font" style="text-align:center;"></p>
-      <div style="text-align:center; margin-top:1rem;">
+      <p id="minigame-note" hidden></p>
+      <div class="minigame-actions">
+        <button class="btn gold" id="minigame-again" type="button" hidden></button>
         <button class="btn secondary" id="close-minigame-btn" type="button">關閉</button>
       </div>
     </div>

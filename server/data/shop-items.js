@@ -78,13 +78,51 @@ const SHOP_ITEMS = [
     iconAsset: '/assets/sprites/accessory-medal.svg',
     active: true
   },
+  /*
+   * ── 小遊戲 ────────────────────────────────────────────────
+   *
+   * cost 是「解鎖」的價格（買一次）；playCost 是**每玩一次**的價格。
+   *
+   * 為什麼每玩一次要付錢（家長決定的）：孩子練累了會先去商店，買了就
+   * 無限玩的話，小遊戲很容易變成取代練習的東西。每玩一次付一點，
+   * 要玩就得先去練習賺——練習和小遊戲自然形成一個循環。
+   *
+   * 為什麼是 150：練習一輪（20～30 字）大約賺 400～900，也就是
+   * **練一輪可以玩三到六次**，每次 30 秒左右——大約兩三分鐘的休息。
+   * 太便宜的話一輪就能玩十幾次，循環就不見了；太貴的話練完一輪
+   * 只夠玩一次，那就不像獎勵了。
+   *
+   * 玩的分數**不會**換成真的金幣（見 economy-test 第 4 節）。
+   * 小遊戲如果會產金幣，練拼字就變成賺錢最慢的方法。
+   */
   {
     key: 'minigame_coincatch',
     type: 'minigame',
     name: '接金幣小遊戲',
-    description: '解鎖後可以在商店裡玩「接金幣」小遊戲放鬆一下！',
+    description: '移動拼字蜂接住掉下來的金幣，30 秒內接越多越好！',
     cost: 1500,
+    playCost: 150,
     iconAsset: '/assets/icons/coin.svg',
+    active: true
+  },
+  {
+    key: 'minigame_beeflap',
+    type: 'minigame',
+    name: '蜜蜂飛行',
+    description: '按空白鍵讓蜜蜂往上飛，穿過花莖之間的空隙，看你能飛多遠！',
+    cost: 1800,
+    playCost: 150,
+    iconAsset: '/assets/icons/minigame-beeflap.svg',
+    active: true
+  },
+  {
+    key: 'minigame_whack',
+    type: 'minigame',
+    name: '打蟲大作戰',
+    description: '蟲從蜂巢洞裡冒出來，按牠身上的字母把牠打回去，30 秒內打越多越好！',
+    cost: 1800,
+    playCost: 150,
+    iconAsset: '/assets/icons/minigame-whack.svg',
     active: true
   }
 ];

@@ -167,6 +167,74 @@ router.get('/items', async (req, res, next) => {
   }
 });
 
+/**
+ * 玩一次小遊戲：先付錢，付成功才能玩。
+ *
+ * 家長決定小遊戲「每玩一次付一點金幣」：買了就無限玩的話，孩子練累了
+ * 會直接去玩，小遊戲變成取代練習的東西。
+ *
+ * ── 跟 /purchase 不一樣的地方 ─────────────────────────────
+ * 購買走背景佇列（先在畫面上扣、之後再補送），這一支**不是**：
+ * 伺服器說付成功了，遊戲才開始。先讓他玩、之後才發現錢不夠，
+ * 那一場就等於免費，而且畫面上的金幣會先變負的再彈回來。
+ *
+ * ── 順序很重要 ────────────────────────────────────────────
+ *   1. 先把這一筆 opId 登記起來（唯一索引擋重送、擋連點）
+ *   2. 再用「錢夠才扣」的條件式扣款（擋兩個請求同時到）
+ *   3. 錢不夠就把登記撤掉——不然他之後用同一個 opId 也付不了
+ * 反過來「先扣款、再登記」的話，重送會在登記失敗之前就已經扣了第二次。
+ *
+ * 價格以程式碼裡的清單為準（shop-items.js），不看資料庫那一份：
+ * 那一份是部署時同步過去的，還沒同步的空檔不可以拿到舊價格或沒有價格。
+ */
+router.post('/play', async (req, res, next) => {
+  try {
+    const { itemKey, opId } = req.body || {};
+    if (!opId || typeof opId !== 'string') return res.status(400).json({ error: '缺少 opId' });
+
+    const { SHOP_ITEMS } = require('../data/shop-items');
+    const item = SHOP_ITEMS.find((i) => i.key === itemKey && i.type === 'minigame' && i.active);
+    if (!item || !(item.playCost > 0)) return res.status(404).json({ error: '找不到這個小遊戲' });
+    if (!(req.user.ownedItemKeys || []).includes(item.key)) {
+      return res.status(403).json({ error: '還沒買這個小遊戲喔' });
+    }
+
+    const plays = getDB().collection('minigamePlays');
+    const already = await plays.findOne({ userId: req.user._id, opId });
+    if (already) {
+      return res.json({ ok: true, duplicate: true, coins: req.user.coins, playCost: item.playCost });
+    }
+
+    try {
+      await plays.insertOne({
+        userId: req.user._id,
+        itemKey: item.key,
+        opId,
+        cost: item.playCost,
+        playedAt: new Date()
+      });
+    } catch (err) {
+      if (err.code === 11000) {
+        return res.json({ ok: true, duplicate: true, coins: req.user.coins, playCost: item.playCost });
+      }
+      throw err;
+    }
+
+    const updated = await User.spendCoins(req.user._id, item.playCost);
+    if (!updated) {
+      await plays.deleteOne({ userId: req.user._id, opId });
+      return res.status(400).json({
+        error: `金幣不夠喔，玩一次要 🪙${item.playCost}，再去練習賺一點吧！`,
+        coins: req.user.coins,
+        playCost: item.playCost
+      });
+    }
+    res.json({ ok: true, coins: updated.coins, playCost: item.playCost });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post('/purchase', async (req, res, next) => {
   try {
     const { itemKey, opId } = req.body || {};

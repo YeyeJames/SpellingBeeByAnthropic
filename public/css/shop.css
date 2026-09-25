@@ -58,15 +58,51 @@
 
 .minigame-panel {
   width: 100%;
-  max-width: 380px;
-  padding: 1.5rem;
+  max-width: 420px;
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 1.25rem;
   text-align: center;
 }
 
+/*
+ * 小遊戲的畫布是 360×400 邏輯座標、用 FIT 縮放（registry.js），
+ * 所以容器要給它一個寬度跟比例，它才知道要縮多小。
+ * 手機上視窗只有 300 像素左右寬，寫死像素的話畫布會凸出去。
+ */
 #minigame-container {
+  width: 100%;
+  max-width: 360px;
+  aspect-ratio: 9 / 10;
+  margin: 0.5rem auto;
+  background: linear-gradient(#e0f2fe, #fef9c3);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.minigame-actions {
   display: flex;
+  gap: 0.6rem;
   justify-content: center;
-  margin: 0.5rem 0;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+
+.minigame-actions [hidden] {
+  display: none;
+}
+
+/* 「玩一次 🪙150」不可以斷成兩行——價格斷到下一行，看起來像兩個不相干的東西 */
+[data-minigame-play],
+#minigame-again {
+  white-space: nowrap;
+}
+
+/* 「好玩用的，不會變成真的金幣」自己一行、小一點，不要擠進分數那一行 */
+#minigame-note {
+  margin: 0.2rem 0 0;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
 }
 
 /* ── 裝備區（C5） ─────────────────────────────────────── */

@@ -225,6 +225,25 @@ async function addOwnedItem(id, itemKey, cost) {
   return findById(id);
 }
 
+/**
+ * 扣金幣，但**只在錢夠的時候**扣。
+ *
+ * 檢查與扣款是同一個動作（條件寫在 updateOne 的查詢裡）。先讀餘額、
+ * 再決定要不要扣的寫法，在兩個請求同時到的時候會雙雙通過檢查，
+ * 金幣就被扣成負的——孩子連點兩下「玩」就會遇到。
+ *
+ * 回傳更新後的 user；錢不夠回 null，而且什麼都沒動。
+ */
+async function spendCoins(id, amount) {
+  const cost = Math.max(0, Math.floor(Number(amount) || 0));
+  const r = await collection().updateOne(
+    { _id: new ObjectId(id), coins: { $gte: cost } },
+    { $inc: { coins: -cost } }
+  );
+  if (!r.matchedCount) return null;
+  return findById(id);
+}
+
 async function equipItem(id, type, itemKey) {
   if (type === 'theme') {
     await collection().updateOne({ _id: new ObjectId(id) }, { $set: { activeTheme: itemKey } });
@@ -262,6 +281,7 @@ module.exports = {
   setEquipped,
   setWordBank,
   addOwnedItem,
+  spendCoins,
   equipItem,
   unequipAccessory,
   sanitizeUser

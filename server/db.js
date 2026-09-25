@@ -75,6 +75,11 @@ async function ensureIndexes(database) {
     { userId: 1, opId: 1 },
     { unique: true, partialFilterExpression: { opId: { $type: 'string' } } }
   );
+  // 小遊戲每玩一次付一次錢。按鈕連點、網路重送都不可以扣兩次
+  await database.collection('minigamePlays').createIndex(
+    { userId: 1, opId: 1 },
+    { unique: true, partialFilterExpression: { opId: { $type: 'string' } } }
+  );
   // 練完一組、打完一場也都走背景佇列，同樣會重試
   await database.collection('groupCompletions').createIndex(
     { userId: 1, opId: 1 },
