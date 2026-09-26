@@ -18,8 +18,17 @@
 
 import { isSeparator } from '../game/core/charset.js';
 
+/*
+ * NFKC：把全形字母、全形空白轉成一般的半形。
+ *
+ * 注音輸入法不小心切到全形（Shift＋空白鍵）時，打出來的是 ａｌａｒｍ——
+ * 在畫面上跟 alarm 幾乎分不出來，卻被判錯。他會看到「再加油」，
+ * 下面顯示的正確拼法又跟自己打的「一模一樣」（docs/audit/step4 的 P4-1）。
+ * 這一步只換字元的寫法，不放寬拼字：拼錯一個字母照樣算錯。
+ */
 export function normalizeAnswer(str) {
   return String(str == null ? '' : str)
+    .normalize('NFKC')
     .trim()
     .toLowerCase();
 }
