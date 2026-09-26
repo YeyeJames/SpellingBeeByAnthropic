@@ -266,21 +266,30 @@ console.log('\n6) 狂蜂狀態下，飄的數字要跟著加倍');
 /* ── 7. 池子不會被打爆 ─────────────────────────────────── */
 console.log('\n7) 飄分不會把物件池打爆');
 {
-  const before = await page.evaluate(() => window.__spellbee.effects());
-  // 連打一整組，製造最密集的飄分
+  /*
+   * 用設計假設的「最快手速」連打（effects.js：每 120ms 一個字母，飄分活 800ms，
+   * 同時大約 8~9 個，12 是上限），一邊打一邊量同時存在幾個。
+   *
+   * 本來是一個延遲都沒有地連按——每秒幾百個鍵，遠超過任何人。那樣量到的是
+   * 「這台機器畫得多快」：機器一慢，飄分就疊到 12 個，同一份程式在不同機器上
+   * 有時過、有時不過（docs/audit/step8）。
+   */
+  let peak = 0;
   for (let i = 0; i < 30; i += 1) {
     const st = await state();
     if (!st || st.status !== 'running') break;
-    await typeWord();
+    for (const ch of st.target) {
+      await page.keyboard.press(ch === ' ' ? 'Space' : ch);
+      await page.waitForTimeout(120);
+      peak = Math.max(peak, (await page.evaluate(() => window.__spellbee.effects())).floats);
+    }
   }
-  const after = await page.evaluate(() => window.__spellbee.effects());
   /*
    * 回收本身不是問題（池子就是要回收），被中途抽掉才是。
    * 所以看的是「同時存在的數量有沒有頂到池子上限」。
    */
-  check('同時存在的飄分沒有頂到上限', after.floats < 12, `最多 ${after.floats} / 12`);
+  check('同時存在的飄分沒有頂到上限（最快手速連打）', peak < 12, `最多 ${peak} / 12`);
   check('沒有瀏覽器錯誤', consoleErrors.length === 0, consoleErrors.slice(0, 3).join(' | '));
-  void before;
 }
 
 await browser.close();
