@@ -76,6 +76,7 @@ const page = await ctx.newPage();
 const errs = [];
 page.on('pageerror', (e) => errs.push(e.message));
 
+let wantOrder = null;
 async function waitReady() {
   for (let i = 0; i < 150; i += 1) {
     const s = await page.evaluate(() => ({
@@ -85,8 +86,12 @@ async function waitReady() {
     })).catch(() => ({}));
     if (s.locked) return 'locked';
     if (s.pregame) {
-      // 開場畫面：按第一顆開始鍵（出題順序由關卡決定，這裡只是開始）
-      await page.click('#pregame button.btn >> nth=0').catch(() => {});
+      /*
+       * 開場畫面的兩顆開始鍵就是出題順序（照順序／打亂）。按關卡設計的那一顆——
+       * 按另一顆會把關卡的設計蓋掉（docs/audit/step5 的 P5-2），那是另外驗的事。
+       */
+      const want = wantOrder || 'random';
+      await page.click(`#pregame .btn-order[data-order="${want}"]`, { timeout: 3000 }).catch(() => {});
       await sleep(300);
       continue;
     }
@@ -133,6 +138,7 @@ for (const n of LEVELS) {
   const xp0 = (await db.collection('users').findOne({ _id: uid })).xp || 0;
   const serverLevel = await fetch(`${BASE}/api/campaign/level/${n}`, { headers: { cookie } }).then((r) => r.json());
   const t0 = Date.now();
+  wantOrder = lvl.order;
   await page.goto(`${BASE}/game?level=${n}&show=1`, { waitUntil: 'domcontentloaded' });
   const how = await waitReady();
   check('開得起來', how === 'ready', how);
@@ -142,8 +148,9 @@ for (const n of LEVELS) {
   const ids = new Set(serverLevel.wordIds);
   check('題目是伺服器給的那一批', words.length === expectCount && words.every((w) => ids.has(w.id)),
     `${words.length} 字（伺服器 ${serverLevel.wordIds.length}、上限 ${serverLevel.limit ?? '無'}）`);
-  const st0 = await page.evaluate(() => window.__spellbee.state());
-  check('速度跟關卡表一致', Math.abs((st0.speed || 1) - lvl.speed) < 1e-6, `${st0.speed} / ${lvl.speed}`);
+  // 速度不在 state() 的快照裡；錄影檔的 setup 記著這一場實際用的速度
+  const speed = await page.evaluate(() => window.__spellbee.log()?.setup?.speed);
+  check('速度跟關卡表一致', Math.abs((speed || 1) - lvl.speed) < 1e-6, `${speed} / ${lvl.speed}`);
   if (lvl.enemyTraits && lvl.enemyTraits.length) {
     const traits = await page.evaluate(() => window.__spellbee.traitState());
     check('這一關有特殊敵人', traits && (traits.assigned || traits.count || JSON.stringify(traits) !== '{}'), JSON.stringify(traits).slice(0, 80));
@@ -161,6 +168,7 @@ for (const n of LEVELS) {
   check('成績記成「戰役第 ' + n + ' 關」', !!gr && gr.won === true);
   if (n < campaign.length) {
     check(`有「➡️ 第 ${n + 1} 關」按鈕`, pg && pg.again.includes(`第 ${n + 1} 關`), pg && pg.again);
+    wantOrder = campaign[n]?.order;
     await page.click('#postgame-again');
     await page.waitForURL(new RegExp(`level=${n + 1}`), { timeout: 8000 }).catch(() => {});
     check(`按下去真的到第 ${n + 1} 關`, page.url().includes(`level=${n + 1}`), page.url());
