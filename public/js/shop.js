@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { requireLogin } from './auth.js';
+import { requireLogin, updateCachedUser, fetchCurrentUser } from './auth.js';
 import { mountNav, setNavCoins } from './nav-partial.js';
 import { applyTheme } from './theme.js';
 import * as sound from './sound-manager.js';
@@ -144,6 +144,23 @@ function buildActionElement(item) {
  * 若伺服器最後不接受（例如在別台裝置上已經把金幣花掉了），
  * onApplied 會把本地狀態改回來並說明原因。
  */
+/*
+ * 買了什麼、穿了什麼、換了哪個主題，都要寫回本機的「現在是誰」。
+ *
+ * 別的頁面一打開，是先用那一份把畫面畫出來的（auth.js 的 requireLogin）。
+ * 本來這裡只有金幣會寫回去，所以換一頁之後主題會先變回舊的、個人檔案看不到
+ * 剛穿上的配件——要再換一次頁才對（docs/audit/step6 的 R2）。
+ */
+function rememberUser() {
+  if (!currentUser) return;
+  updateCachedUser({
+    coins: currentUser.coins,
+    ownedItemKeys: currentUser.ownedItemKeys,
+    activeTheme: currentUser.activeTheme,
+    avatar: currentUser.avatar
+  });
+}
+
 function purchaseItem(item) {
   shopError.textContent = '';
   if ((currentUser.ownedItemKeys || []).includes(item.key)) return;
@@ -155,6 +172,7 @@ function purchaseItem(item) {
   currentUser.coins -= item.cost;
   currentUser.ownedItemKeys = [...(currentUser.ownedItemKeys || []), item.key];
   setNavCoins(currentUser.coins);
+  rememberUser();
   sound.playCoin();
   renderFromCache();
 
@@ -171,6 +189,7 @@ function equipTheme(themeKey) {
   sound.playClick();
   currentUser.activeTheme = themeKey;
   applyTheme(themeKey);
+  rememberUser();
   renderFromCache();
   enqueue({ kind: 'equip', path: '/user/equip', body: { type: 'theme', itemKey: themeKey } });
 }
@@ -181,6 +200,7 @@ function toggleAccessory(itemKey, currentlyEquipped) {
   currentUser.avatar.accessories = currentlyEquipped
     ? list.filter((k) => k !== itemKey)
     : [...list, itemKey];
+  rememberUser();
   renderFromCache();
   enqueue({
     kind: 'equip',
@@ -323,19 +343,56 @@ document.getElementById('close-minigame-btn').addEventListener('click', () => {
 
 // 伺服器是金幣與擁有清單的最終權威。若購買被拒絕（例如在別台裝置上
 // 已經把金幣花掉了），把本地的樂觀更新收回來並說明原因。
-onApplied('purchase', (result, op, err) => {
+onApplied('purchase', async (result, op, err) => {
   if (err) {
     currentUser.coins += op.body.cost;
     currentUser.ownedItemKeys = (currentUser.ownedItemKeys || []).filter((k) => k !== op.body.itemKey);
     setNavCoins(currentUser.coins);
+    rememberUser();
     shopError.textContent = `「${op.body.name || op.body.itemKey}」購買失敗：${err.message}`;
     renderFromCache();
+    /*
+     * 伺服器不收，代表這一頁以為的狀態跟伺服器不一樣（例如錢在別的地方花掉了）。
+     * 把伺服器的拿回來：不然畫面上還是那個「以為的」金幣數，他會一直按、一直被拒絕。
+     * 導覽列平常只往上校正（怕看起來錢變少），這裡是明確的「伺服器說了算」，直接照它。
+     */
+    const fresh = await fetchCurrentUser().catch(() => null);
+    if (fresh) {
+      currentUser = fresh;
+      setNavCoins(fresh.coins);
+      renderFromCache();
+    }
     return;
   }
   if (result && result.user) {
     currentUser = result.user;
     setNavCoins(currentUser.coins);
+    rememberUser();
     renderFromCache();
+  }
+});
+
+/*
+ * 穿脫配件、換主題的結果。
+ *
+ * 本來沒有人聽：伺服器不收的時候（例如主題 key 對不上，step6 的 R3），畫面照樣
+ * 顯示換好了，換一頁才默默變回去。現在伺服器不收就講出來，並以伺服器的為準。
+ */
+onApplied('equip', async (result, op, err) => {
+  if (result && result.user) {
+    currentUser.activeTheme = result.user.activeTheme;
+    currentUser.avatar = result.user.avatar;
+    rememberUser();
+    return;
+  }
+  if (err) {
+    shopError.textContent = `沒有換成功：${err.message}`;
+    const fresh = await fetchCurrentUser().catch(() => null);
+    if (fresh) {
+      currentUser = fresh;
+      applyTheme(currentUser.activeTheme);
+      renderFromCache();
+    }
   }
 });
 

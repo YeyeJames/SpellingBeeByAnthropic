@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { requireLogin } from './auth.js';
+import { requireLogin, updateCachedUser } from './auth.js';
 import { mountNav } from './nav-partial.js';
 import { applyTheme } from './theme.js';
 import * as sound from './sound-manager.js';
@@ -79,9 +79,18 @@ async function switchTheme(themeKey) {
     const { user } = await api.post('/user/equip', { type: 'theme', itemKey: themeKey });
     currentUser = user;
     applyTheme(themeKey);
+    // 寫回本機的「現在是誰」：不然下一頁一打開又是舊的主題（step6 的 R2）
+    updateCachedUser({ activeTheme: user.activeTheme });
     renderThemeSwitcher();
   } catch (err) {
-    // 主題一定是已擁有的才會顯示按鈕，理論上不會失敗
+    /*
+     * 本來這裡寫「理論上不會失敗」然後什麼都不做——而它其實每一次都失敗
+     * （主題 key 對不上，step6 的 R3），按下去沒有任何反應。失敗就講出來。
+     */
+    const msg = document.createElement('p');
+    msg.className = 'error-text';
+    msg.textContent = `沒有換成功：${err.message}`;
+    themeSwitcher.appendChild(msg);
   }
 }
 
@@ -144,7 +153,10 @@ document.getElementById('save-audio-btn').addEventListener('click', async () => 
   sound.playClick();
 
   try {
-    await api.put('/auth/audio-prefs', { bgmVolume, sfxVolume, muted });
+    const saved = await api.put('/auth/audio-prefs', { bgmVolume, sfxVolume, muted });
+    // 寫回本機的「現在是誰」：不然重新整理之後滑桿又回到舊的數字（step6 的 R5）
+    currentUser.audioPrefs = saved.audioPrefs || { bgmVolume, sfxVolume, muted };
+    updateCachedUser({ audioPrefs: currentUser.audioPrefs });
     audioSaveMsg.textContent = '✅ 已儲存';
     audioSaveMsg.style.color = 'var(--color-success)';
   } catch (err) {

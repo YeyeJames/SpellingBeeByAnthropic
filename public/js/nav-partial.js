@@ -1,7 +1,7 @@
 import { api } from './api.js';
 import { onSyncState } from './outbox.js';
 import { readShared, writeShared } from './local-store.js';
-import { updateCachedUser } from './auth.js';
+import { updateCachedUser, getCachedUser } from './auth.js';
 import * as sound from './sound-manager.js';
 import { levelFromXp } from './shared/levels.js';
 import { startTelemetry } from './telemetry.js';
@@ -165,6 +165,12 @@ export async function mountNav(user, activePage) {
       const nowMuted = !sound.isMuted();
       sound.setMuted(nowMuted);
       muteBtn.textContent = nowMuted ? '🔇' : '🔊';
+      /*
+       * 寫回本機的「現在是誰」。每一頁都是用那一份決定要不要出聲（sound.loadPrefs），
+       * 本來沒寫回去：按了靜音、換一頁，聲音又回來了（docs/audit/step6 的 R6）。
+       */
+      const cached = getCachedUser();
+      updateCachedUser({ audioPrefs: { ...(cached && cached.audioPrefs), muted: nowMuted } });
       try {
         await api.put('/auth/audio-prefs', { muted: nowMuted });
       } catch (err) {
