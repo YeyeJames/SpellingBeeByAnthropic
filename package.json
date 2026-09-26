@@ -53,6 +53,7 @@
     "test:telemetry": "node scripts/telemetry-test.mjs",
     "test:audit": "node scripts/audit-fixes-test.mjs",
     "test:session": "node scripts/session-test.mjs",
+    "test:realdb": "node scripts/real-mongo-test.mjs",
     "test:traits": "node scripts/enemy-trait-test.mjs",
     "test:economy": "node scripts/economy-test.mjs",
     "test:minigames": "node scripts/minigame-test.mjs",
