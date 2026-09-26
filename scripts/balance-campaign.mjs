@@ -43,7 +43,7 @@ const args = Object.fromEntries(
 const { createBattle, applyAction, stepBattle, clearEvents } = await import('../public/js/game/core/battle.js');
 const { createPlayerModel, pollPlayer, PLAYER_PRESETS } = await import('../public/js/game/core/player-model.js');
 const { createRng } = await import('../public/js/game/core/rng.js');
-const { buildCampaign } = await import('../public/js/shared/campaign.js');
+const { buildCampaign, pickLevelWordIds } = await import('../public/js/shared/campaign.js');
 const { levelFromXp } = await import('../public/js/shared/levels.js');
 const { GEAR, gearAvailability } = await import('../public/js/shared/equipment.js');
 const wordBank = require('../server/data/word-bank.js');
@@ -66,10 +66,15 @@ const MAX_TRIES = 8;
 
 const campaign = buildCampaign(wordBank.listGroups('g3a'));
 
-function wordsForLevel(level) {
-  const pool = level.groupIds.flatMap((g) => wordBank.wordsByGroup(g));
-  const limit = level.wordLimit || pool.length;
-  return pool.slice(0, limit);
+/* 跟伺服器出題同一份規則（shared/campaign.js）：混合關每一組平均抽。亂數用這一場的種子，模擬才重現得出來 */
+function wordsForLevel(level, seed) {
+  const rng = createRng((seed ^ 0x2f6b1a3d) >>> 0);
+  return pickLevelWordIds(
+    level,
+    (g) => wordBank.wordsByGroup(g).map((w) => w.id),
+    () => rng.next(),
+    (id) => wordBank.getWordById(id)?.english || id
+  ).map((id) => wordBank.getWordById(id));
 }
 
 /** 一解鎖、一買得起就買：武器 → 護甲 → 飾品。每一欄只換更高階的。 */
@@ -90,7 +95,7 @@ function shop(kid) {
 }
 
 function playOnce(kid, level, seed, typist, speedOf) {
-  const words = wordsForLevel(level);
+  const words = wordsForLevel(level, seed);
   const st = createBattle({
     words,
     seed,

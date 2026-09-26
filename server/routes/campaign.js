@@ -118,7 +118,7 @@ router.get('/review', async (req, res, next) => {
  */
 router.get('/level/:level', async (req, res, next) => {
   try {
-    const { buildCampaign, levelAt, isUnlocked } = await campaignRules();
+    const { buildCampaign, levelAt, isUnlocked, pickLevelWordIds } = await campaignRules();
     const campaign = buildCampaign(wordBank.listGroups(req.user.wordBankId));
     const level = levelAt(campaign, req.params.level);
     if (!level) return res.status(404).json({ error: '沒有這一關' });
@@ -148,7 +148,17 @@ router.get('/level/:level', async (req, res, next) => {
      * 下一關就輪到下一批最弱的——「24 關把弱點掃過一遍」就是這樣發生的，
      * 不需要事先把 24 關的題目分好。
      */
-    let wordIds = fallback;
+    /*
+     * 混合關與中王：每一組平均抽，每次開都重抽（shared/campaign.js 的 pickLevelWordIds）。
+     * 本來是整串接起來送出去、遊戲頁取前面 N 個，後面幾組一個都輪不到（step5 的 P5-1）。
+     * 單一組、沒有上限的關，回來的就是整組照原本的順序，跟以前一樣。
+     */
+    let wordIds = pickLevelWordIds(
+      level,
+      (gid) => wordBank.wordsByGroup(gid).map((w) => w.id),
+      Math.random,
+      (id) => wordBank.getWordById(id)?.english || id
+    );
     let weakCount = 0;
     if (level.weakness) {
       const size = level.wordLimit || fallback.length;

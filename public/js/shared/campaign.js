@@ -272,3 +272,63 @@ export function campaignSummary(campaign, highestCleared = 0) {
     next
   };
 }
+
+/**
+ * 一關要打哪些字（弱點章以外）。伺服器出題與難度模擬器用同一份，兩邊才對得起來。
+ *
+ * ── 為什麼要有這個 ──────────────────────────────────────────
+ * 混合關（第 3 章一關三週）與中王（好幾組混在一起）有字數上限。本來是把各組
+ * 照順序接起來、再**取前面 N 個**——第一組就有 40 個字的話，後面幾組一個都
+ * 輪不到：第 25 關「前半本課本混合」20 個字全部是 Week 1、第 75 關「Part 3 +
+ * Part 4」全部是 Part 3（docs/audit/step5 的 P5-1）。
+ *
+ * 現在是**每一組平均分**：三週各 10 個、十二週各 1～2 個；每一組之內隨機挑，
+ * 哪幾組多分到一個也是隨機的。每次開這一關都重抽，重打同一關會遇到不同的字。
+ * 有一組字不夠分，就由其他組補上。
+ *
+ * 單一組、或沒有上限的關（第 1～2 章、大魔王）：整組照原本的順序，完全不變。
+ *
+ * @param level      關卡表的一列（要有 groupIds、wordLimit）
+ * @param idsOfGroup (groupId) => 這一組的單字 id 陣列（照課本順序）
+ * @param random     () => [0, 1) 的亂數；伺服器用 Math.random，模擬器用可重現的
+ * @param keyOf      (id) => 這個字的拼法。同一個字出現在兩組（後面的週複習前面的字），
+ *                   id 不同但拼法一樣——同一關不要抽到兩次（docs/audit/step4 的 P4-4）
+ */
+export function pickLevelWordIds(level, idsOfGroup, random = Math.random, keyOf = (id) => id) {
+  const groups = level.groupIds.map((g) => [...idsOfGroup(g)]);
+  const all = groups.flat();
+  const limit = level.wordLimit;
+  if (!limit || groups.length <= 1 || all.length <= limit) {
+    return limit ? all.slice(0, limit) : all;
+  }
+  const shuffle = (arr) => {
+    for (let i = arr.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  };
+  // 每一組先各自洗牌；組的先後也洗牌，這樣「多分到一個」的不會永遠是第一組
+  const pools = shuffle(groups.map((ids) => shuffle(ids)));
+  const picked = [];
+  const seen = new Set();
+  // 輪流從每一組拿一個，直到拿滿；某一組拿完了就跳過它（其他組補上）
+  const cursor = pools.map(() => 0);
+  while (picked.length < limit) {
+    let tookAny = false;
+    for (let g = 0; g < pools.length && picked.length < limit; g += 1) {
+      const pool = pools[g];
+      // 跳過拼法已經抽過的（別組的同一個字）
+      while (cursor[g] < pool.length && seen.has(keyOf(pool[cursor[g]]))) cursor[g] += 1;
+      if (cursor[g] < pool.length) {
+        const id = pool[cursor[g]];
+        cursor[g] += 1;
+        seen.add(keyOf(id));
+        picked.push(id);
+        tookAny = true;
+      }
+    }
+    if (!tookAny) break;
+  }
+  return picked;
+}
