@@ -12,12 +12,21 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function request(method, path, body) {
+/*
+ * quiet：背景同步用，不蓋那一層「正在喚醒伺服器」。
+ *
+ * 那一層是整頁不透明、擋住所有點擊的，本來是給「頁面剛打開、真的要等
+ * 伺服器」用的。背景佇列送練習答案時也走這裡：網路閃一下、伺服器重開，
+ * 孩子每答一題就被擋 15～20 秒（docs/audit/step3 的 N1～N3）——而練習
+ * 本來就設計成沒網路也能繼續，答案會留在佇列裡之後再送。
+ * 背景同步的狀態看導覽列的小圖示（📤 N）就好。重試的次數與間隔不變。
+ */
+async function request(method, path, body, { quiet = false } = {}) {
   let lastError = null;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
     if (attempt > 0) {
-      showWaking(`正在喚醒伺服器…（第 ${attempt}/${MAX_RETRIES} 次嘗試）`);
+      if (!quiet) showWaking(`正在喚醒伺服器…（第 ${attempt}/${MAX_RETRIES} 次嘗試）`);
       await sleep(RETRY_DELAY_MS);
     }
 
@@ -54,7 +63,7 @@ async function request(method, path, body) {
       continue;
     }
 
-    hideWaking();
+    if (!quiet) hideWaking();
 
     let data = null;
     const text = await res.text();
@@ -78,13 +87,13 @@ async function request(method, path, body) {
     return data;
   }
 
-  hideWaking();
+  if (!quiet) hideWaking();
   throw lastError || new Error('請求失敗');
 }
 
 export const api = {
   get: (path) => request('GET', path),
-  post: (path, body) => request('POST', path, body),
+  post: (path, body, opts) => request('POST', path, body, opts),
   put: (path, body) => request('PUT', path, body),
   // DELETE 也吃 body：刪帳號要把名字打一次才算數，那個確認字串得送過去
   del: (path, body) => request('DELETE', path, body)

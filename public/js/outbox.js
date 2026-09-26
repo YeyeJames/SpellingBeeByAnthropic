@@ -86,7 +86,8 @@ export async function flush() {
 
       let result;
       try {
-        result = await api.post(op.path, { ...op.body, opId: op.opId });
+        // 背景同步：失敗時不要蓋住孩子正在用的畫面（見 api.js 的 quiet）
+        result = await api.post(op.path, { ...op.body, opId: op.opId }, { quiet: true });
       } catch (err) {
         if (err.status && err.status >= 400 && err.status < 500) {
           // 用戶端錯誤（資料有問題、金幣不足）重試也不會成功，
