@@ -1579,12 +1579,22 @@ async function boot() {
           .map((line) => `<p>${escapeHtml(line)}</p>`)
           .join('');
       }
+      /*
+       * 戰役關卡與複習關的出題順序是關卡定的（第 1 章照順序、第 2 章起打亂），
+       * 只留那一顆開始鍵。本來兩顆都在，而按下去就會蓋掉關卡的設計——
+       * 第 2 章按「照順序」就不亂了（docs/audit/step5 的 P5-2）。
+       * 組別遊戲不變：兩顆都在，他自己選，也記住他選的。
+       */
+      const fixedOrder = ctx.campaignLevel || ctx.review ? ctx.order : null;
       pregameEl.querySelectorAll('[data-order]').forEach((btn) => {
-        // 把上次選的標起來：他會知道上一場是怎麼打的
-        btn.classList.toggle('is-last', btn.dataset.order === storedOrder());
+        btn.hidden = !!fixedOrder && btn.dataset.order !== fixedOrder;
+        // 把上次選的標起來：他會知道上一場是怎麼打的（只有他能選的時候才有意義）
+        btn.classList.toggle('is-last', !fixedOrder && btn.dataset.order === storedOrder());
         btn.onclick = () => {
-          ctx.order = btn.dataset.order;
-          writePref(ORDER_KEY, ctx.order);
+          if (!fixedOrder) {
+            ctx.order = btn.dataset.order;
+            writePref(ORDER_KEY, ctx.order);
+          }
           pregameEl.hidden = true;
           ctx.sfx.unlock(); // 這一下點擊就是瀏覽器要的使用者手勢
           onChosen();

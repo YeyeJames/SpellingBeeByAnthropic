@@ -738,6 +738,11 @@ body.is-touch #listen-buttons {
   background: #334155;
 }
 
+/* 戰役關卡只留關卡定的那一顆（game.js 的 showPregame）；明寫出來，免得以後有人給它加 display */
+.btn-order[hidden] {
+  display: none;
+}
+
 /* 上次選的標一下，讓他知道上一場是怎麼打的。兩顆都能按 */
 .btn-order.is-last {
   border-color: #f5b301;
