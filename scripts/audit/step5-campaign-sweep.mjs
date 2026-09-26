@@ -114,7 +114,29 @@ async function play({ idle = false, maxMs = 8 * 60 * 1000 } = {}) {
   return page.evaluate(() => window.__spellbee.state());
 }
 
+/*
+ * 結算畫面：一開始寫「結算中…」，伺服器回來才換成星等與「下一關」。
+ * 回傳時一併量「結算中…」停了多久——那段時間按「再打一場」會重打同一關。
+ */
 async function postgame() {
+  const t0 = Date.now();
+  let shownAt = null;
+  for (let i = 0; i < 80; i += 1) {
+    const p = await page.evaluate(() => {
+      const el = document.getElementById('postgame');
+      return el && !el.hidden ? {
+        title: document.getElementById('postgame-title')?.textContent || '',
+        level: document.getElementById('postgame-level')?.textContent || '',
+        again: document.getElementById('postgame-again')?.textContent || ''
+      } : null;
+    });
+    if (p && shownAt === null) shownAt = Date.now();
+    if (p && p.level && !/結算中/.test(p.level)) return { ...p, pendingMs: Date.now() - (shownAt || t0) };
+    await sleep(100);
+  }
+  return page.evaluate(() => ({ level: document.getElementById('postgame-level')?.textContent || '', again: document.getElementById('postgame-again')?.textContent || '', pendingMs: null }));
+}
+async function postgameOld() {
   for (let i = 0; i < 60; i += 1) {
     const p = await page.evaluate(() => {
       const el = document.getElementById('postgame');
@@ -159,7 +181,7 @@ for (const n of LEVELS) {
   const secs = Math.round((Date.now() - t0) / 1000);
   check('機器人打贏了', end.status === 'won', `${end.status}，${secs} 秒`);
   const pg = await postgame();
-  check('結算畫面有星等', pg && /★/.test(pg.level), pg && pg.level);
+  check('結算畫面有星等', pg && /★/.test(pg.level), pg && `${pg.level}（「結算中…」停了 ${pg.pendingMs} 毫秒）`);
   for (let i = 0; i < 40 && (await highest()) < n; i += 1) await sleep(200);
   check('伺服器記了過關（進度到第 ' + n + ' 關）', (await highest()) === n, String(await highest()));
   const u = await db.collection('users').findOne({ _id: uid });
