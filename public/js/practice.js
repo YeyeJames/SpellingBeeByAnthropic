@@ -38,6 +38,8 @@ const revealSentence = document.getElementById('reveal-sentence');
 const nextBtn = document.getElementById('next-btn');
 const summaryText = document.getElementById('summary-text');
 const playAgainBtn = document.getElementById('play-again-btn');
+const summaryUnlock = document.getElementById('summary-unlock');
+const summaryGameBtn = document.getElementById('summary-game-btn');
 const reviewBtn = document.getElementById('review-practice-btn');
 
 let phaserGame = null;
@@ -474,8 +476,18 @@ function finishSession() {
    * 跟作答一樣丟進背景佇列：離線練完的那一次不可以不算。
    * 伺服器會用 opId 去重，重試不會把一次變成兩次。
    */
+  // 總結畫面的「遊戲解鎖了」與「去玩遊戲」：只有練的是一組（不是複習）才有
+  summaryUnlock.classList.add('hidden');
+  summaryGameBtn.classList.add('hidden');
   if (session.groupId) {
+    const wasUnlocked = progressFor(session.groupId).unlocked;
     recordCompletionLocally(session.groupId);
+    if (progressFor(session.groupId).unlocked) {
+      // 「解鎖了」只在這一次剛解鎖時講；已經解鎖過的組只給按鈕
+      if (!wasUnlocked) summaryUnlock.classList.remove('hidden');
+      summaryGameBtn.classList.remove('hidden');
+      summaryGameBtn.dataset.group = session.groupId;
+    }
     enqueue({
       kind: 'group-complete',
       path: '/practice/group-complete',
@@ -546,6 +558,13 @@ document.getElementById('go-game-btn')?.addEventListener('click', () => {
   }
   sound.playClick();
   location.href = `/game?group=${encodeURIComponent(selectedGroup)}&n=200`;
+});
+// 總結畫面的「去玩這一組的遊戲」：剛練完的那一組（n=200 的理由同上）
+summaryGameBtn?.addEventListener('click', () => {
+  const group = summaryGameBtn.dataset.group;
+  if (!group) return;
+  sound.playClick();
+  location.href = `/game?group=${encodeURIComponent(group)}&n=200`;
 });
 submitBtn.addEventListener('click', () => {
   sound.playClick();

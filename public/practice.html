@@ -114,7 +114,17 @@
     <div class="panel container hidden" id="summary-panel">
       <h2 class="display-font">🏁 完成！</h2>
       <p id="summary-text"></p>
-      <button class="btn gold" id="play-again-btn" type="button">再玩一次</button>
+      <!--
+        練完一組正好是遊戲解鎖的那一刻。本來這裡只有「再玩一次」（它其實是回到
+        選組畫面，「玩遊戲」在那裡）：路是通的，但畫面沒說解鎖了，也沒有直接
+        過去的按鈕（docs/audit/step4 的 P4-3）。「再玩一次」保留不動，孩子已經習慣它。
+      -->
+      <p id="summary-unlock" class="summary-unlock hidden">🎉 這一組的遊戲解鎖了！</p>
+      <!-- 兩顆按鈕包在一起：這一塊永遠是最後一個，版面的上下置中（practice.css）才不會因為第二顆藏起來而跑掉 -->
+      <div class="summary-actions">
+        <button class="btn gold" id="play-again-btn" type="button">再玩一次</button>
+        <button class="btn secondary hidden" id="summary-game-btn" type="button">🐝 去玩這一組的遊戲</button>
+      </div>
     </div>
   </div>
 

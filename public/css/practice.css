@@ -358,6 +358,20 @@
   text-align: center;
 }
 
+/* 練完一組、遊戲剛解鎖（practice.js 的 finishSession） */
+.summary-unlock {
+  font-weight: bold;
+  color: var(--color-success);
+  margin: 0.2rem 0 0.8rem;
+}
+
+.summary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  justify-content: center;
+}
+
 /* 窄螢幕：輔助鍵只留圖示 */
 @media (max-width: 420px) {
   .tool-label {

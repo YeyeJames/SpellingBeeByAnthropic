@@ -10,6 +10,7 @@
  *   5. 練完一組：畫面立刻解鎖，伺服器也記了一次；按「玩遊戲」真的進得去
  *   6. 答錯的字進了複習；按複習拿到的就是那幾個字
  *   7. 練到一半重新整理：答過的題目有記到，不會重複計分
+ *   8. 總結畫面（4-B）：剛解鎖時說「解鎖了」、有「去玩這一組的遊戲」；複習練完則沒有
  *
  * 用法：node scripts/practice-e2e-test.mjs（自己起伺服器）
  */
@@ -179,11 +180,11 @@ const cookie = (await ctx.cookies()).map((c) => `${c.name}=${c.value}`).join('; 
 const prog = await fetch(`${BASE}/api/practice/progress`, { headers: { cookie } }).then((r) => r.json());
 check('伺服器也認為解鎖了', prog.progress?.[target.id]?.unlocked === true, JSON.stringify(prog.progress?.[target.id]));
 check('「練完一組」只記一次', mine('groupCompletions').length === 1);
-// 總結畫面只有「再玩一次」：它回到選組畫面，「玩遊戲」在那裡
-check('總結畫面有路回去（再玩一次）', await page.isVisible('#play-again-btn'));
-await page.click('#play-again-btn');
-await page.waitForSelector('#go-game-btn', { state: 'visible', timeout: 5000 });
-await page.click('#go-game-btn');
+// 總結畫面（4-B）：剛解鎖要說出來，而且可以直接去玩；原本的「再玩一次」還在
+check('總結畫面寫「這一組的遊戲解鎖了」', await page.isVisible('#summary-unlock'));
+check('總結畫面有「去玩這一組的遊戲」', await page.isVisible('#summary-game-btn'));
+check('原本的「再玩一次」還在', await page.isVisible('#play-again-btn'));
+await page.click('#summary-game-btn');
 await page.waitForURL(/\/game/, { timeout: 10000 });
 await page.waitForFunction(() => window.__spellbee && window.__spellbee.ready, null, { timeout: 20000 }).catch(() => {});
 // 新帳號第一次玩會先做手速校準，所以不等「開打」：只看有沒有被鎖住
@@ -192,7 +193,7 @@ const gameState = await page.evaluate(() => ({
   url: location.pathname + location.search,
   locked: !!document.getElementById('locked-panel') && !document.getElementById('locked-panel').hidden
 }));
-check('按「玩遊戲」真的進得去（沒有被鎖）', /\/game\?group=/.test(gameState.url) && !gameState.locked, JSON.stringify(gameState));
+check('按下去真的進得了這一組的遊戲（沒有被鎖）', gameState.url.includes(`group=${target.id}`) && !gameState.locked, JSON.stringify(gameState));
 const wrongCount = plan.filter((p) => !p.correct).length;
 
 /* ── 6. 複習 ──────────────────────────────────────────── */
@@ -239,6 +240,32 @@ console.log('\n7) 練到一半重新整理');
   check('重新整理前答的兩題都有記到', after === before + 2, `${after - before} 題`);
   check('沒有重複計分', new Set(mine('attempts').map((a) => a.opId)).size === mine('attempts').length);
   check('練完一組的次數沒有因為半途離開而增加', mine('groupCompletions').length === 1);
+}
+
+/* ── 8. 複習練完：總結畫面不該有「去玩遊戲」 ─────────── */
+console.log('\n8) 複習練完的總結畫面');
+{
+  const resp = page.waitForResponse((r) => r.url().includes('/api/practice/session') && r.request().method() === 'POST');
+  await page.click('#review-practice-btn');
+  const rw = (await (await resp).json()).words || [];
+  for (const w of rw) {
+    await page.waitForSelector('#answer-input:not([disabled])', { timeout: 10000 });
+    await page.fill('#answer-input', w.english);
+    await page.click('#submit-answer-btn');
+    await page.waitForSelector('#reveal-panel:not(.hidden)', { timeout: 5000 });
+    await page.click('#next-btn');
+  }
+  await page.waitForSelector('#summary-panel:not(.hidden)', { timeout: 10000 });
+  check(`（前提）複習 ${rw.length} 個字練完了`, rw.length > 0);
+  check('複習的總結沒有「解鎖了」', await page.isHidden('#summary-unlock'));
+  check('複習的總結沒有「去玩這一組的遊戲」', await page.isHidden('#summary-game-btn'));
+  check('「再玩一次」照樣在', await page.isVisible('#play-again-btn'));
+  const box = await page.evaluate(() => {
+    const p = document.getElementById('summary-panel').getBoundingClientRect();
+    const b = document.getElementById('play-again-btn').getBoundingClientRect();
+    return { panelBottom: p.bottom, btnBottom: b.bottom };
+  });
+  check('按鈕在畫面裡（沒有跑出面板）', box.btnBottom <= box.panelBottom + 1, JSON.stringify(box));
 }
 
 check('沒有 JS 例外', errs.length === 0, errs.join(' | '));
