@@ -1,0 +1,315 @@
+From 6b484ced23955306d6c63ec6afa0cb10bf933c7a Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 25 Sep 2026 23:10:02 +0000
+Subject: [PATCH] Keep queued data when the login is lost (audit 2-B)
+
+A 401 used to be treated like any other 4xx: the outbox dropped the
+item, so every answer after a mid-practice logout vanished silently.
+Now the outbox keeps the item, stops, and the nav sends the child back
+to the picker with an explanation; once they pick their name again the
+queue is resent unchanged (opId prevents double counting). Telemetry
+and battle reports keep their data on 401 the same way.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01WUbHSQPhe2C6SfdgHzcHBA
+---
+ public/js/game.js        |   4 +-
+ public/js/login.js       |   5 ++
+ public/js/nav-partial.js |  13 ++++-
+ public/js/outbox.js      |  21 +++++++-
+ public/js/telemetry.js   |   9 ++++
+ scripts/session-test.mjs | 108 ++++++++++++++++++++++++++++++++++++++-
+ 6 files changed, 155 insertions(+), 5 deletions(-)
+
+diff --git a/public/js/game.js b/public/js/game.js
+index c6d2ff7..8af2e40 100644
+--- a/public/js/game.js
++++ b/public/js/game.js
+@@ -1127,7 +1127,7 @@ async function reportLevelClear(state, won) {
+  *
+  * 伺服器兩支都認得重送：/game/result 用 opId 去重，/campaign/clear 本身
+  * 就是「取較高的那一關」，送兩次結果一樣。所以重送是安全的。
+- * 4xx 是資料本身有問題，重送也不會好，不排。
++ * 4xx 是資料本身有問題，重送也不會好，不排——只有 401（沒有登入）例外，那一場要留著。
+  */
+ async function postBattleReport(path, body) {
+   for (let i = 0; i < 3; i += 1) {
+@@ -1139,6 +1139,8 @@ async function postBattleReport(path, body) {
+         body: JSON.stringify(body)
+       });
+       if (res.ok) return await res.json();
++      // 沒有登入：重試也不會好，直接排進佇列，等他重新登入後補送（資料本身沒問題）
++      if (res.status === 401) break;
+       if (res.status < 500) return null;
+     } catch (err) {
+       /* 網路不通：等一下再試 */
+diff --git a/public/js/login.js b/public/js/login.js
+index 6658359..3209731 100644
+--- a/public/js/login.js
++++ b/public/js/login.js
+@@ -282,6 +282,11 @@ runPageInit(async () => {
+   currentUser = user;
+   renderProfiles();
+ 
++  // 從別的頁面因為登入失效被帶回來的（nav-partial.js）：講清楚發生什麼事、東西沒有不見
++  if (new URLSearchParams(location.search).get('relogin') === '1') {
++    profileError.textContent = '剛剛登入過期了，再點一次你的名字就好。剛剛答的題目都還在，會自動補送。';
++  }
++
+   if (user) {
+     document.getElementById('logged-in-name').textContent = user.nickname;
+     document.getElementById('logged-in-hint').classList.remove('hidden');
+diff --git a/public/js/nav-partial.js b/public/js/nav-partial.js
+index b36606e..e711d1a 100644
+--- a/public/js/nav-partial.js
++++ b/public/js/nav-partial.js
+@@ -85,8 +85,19 @@ export async function mountNav(user, activePage) {
+ 
+   // 同步狀態：讓家長看得出來練習紀錄有沒有真的存到伺服器
+   const syncEl = mountPoint.querySelector('[data-sync-status]');
++  let relogging = false;
+   if (syncEl) {
+-    onSyncState(({ pending, flushing }) => {
++    onSyncState(({ pending, flushing, authLost }) => {
++      /*
++       * 登入失效了：帶他回選人畫面。剛剛的答案都還在佇列裡，
++       * 他點回自己的名字之後會自動補送（outbox.js）。
++       * 不帶回去的話，他會繼續練、繼續答，而每一題都送不出去。
++       */
++      if (authLost && !relogging) {
++        relogging = true;
++        window.location.href = '/index.html?relogin=1';
++        return;
++      }
+       if (pending === 0) {
+         syncEl.textContent = '✅';
+         syncEl.title = '資料已全部同步';
+diff --git a/public/js/outbox.js b/public/js/outbox.js
+index 871ba70..d507e32 100644
+--- a/public/js/outbox.js
++++ b/public/js/outbox.js
+@@ -14,6 +14,12 @@ import { readUser, writeUser, newId } from './local-store.js';
+ const listeners = new Set();
+ let flushing = false;
+ let currentUserId = null;
++/*
++ * 伺服器說「沒有登入」（401）：登入過期、或別的分頁按了登出。
++ * 這時候資料**不丟**，留在佇列裡，等他重新選回自己的名字再送。
++ * 導覽列看到這個旗子會帶他回選人畫面（見 nav-partial.js）。
++ */
++let authLost = false;
+ 
+ export function initOutbox(userId) {
+   currentUserId = userId;
+@@ -34,7 +40,7 @@ export function pendingCount() {
+ }
+ 
+ function notify() {
+-  const state = { pending: pendingCount(), flushing };
++  const state = { pending: pendingCount(), flushing, authLost };
+   listeners.forEach((fn) => {
+     try {
+       fn(state);
+@@ -46,7 +52,7 @@ function notify() {
+ 
+ export function onSyncState(fn) {
+   listeners.add(fn);
+-  fn({ pending: pendingCount(), flushing });
++  fn({ pending: pendingCount(), flushing, authLost });
+   return () => listeners.delete(fn);
+ }
+ 
+@@ -88,6 +94,16 @@ export async function flush() {
+       try {
+         result = await api.post(op.path, { ...op.body, opId: op.opId });
+       } catch (err) {
++        /*
++         * 401 不是「資料有問題」，是「現在沒有登入」——這筆資料本身完全沒錯。
++         * 本來跟其他 4xx 一起被丟掉：登入剛好在練習途中失效的話，之後答的每一題
++         * 都無聲無息地消失（docs/audit/step2 的 S4）。改成留著、停下來，
++         * 重新登入之後照原樣補送；opId 讓伺服器不會重複計分。
++         */
++        if (err.status === 401) {
++          authLost = true;
++          break;
++        }
+         if (err.status && err.status >= 400 && err.status < 500) {
+           // 用戶端錯誤（資料有問題、金幣不足）重試也不會成功，
+           // 丟掉這筆避免卡住整個佇列，並通知畫面回復先前的樂觀更新
+@@ -100,6 +116,7 @@ export async function flush() {
+         break;
+       }
+ 
++      authLost = false;
+       setQueue(getQueue().slice(1));
+       const handler = appliedHandlers.get(op.kind);
+       if (handler) handler(result, op, null);
+diff --git a/public/js/telemetry.js b/public/js/telemetry.js
+index db35ec8..00b97a6 100644
+--- a/public/js/telemetry.js
++++ b/public/js/telemetry.js
+@@ -79,6 +79,11 @@ export async function flush(keepalive = false) {
+     }
+     if (batch) {
+       const status = await post('/events', { opId: batch.opId, events: batch.events }, keepalive).catch(() => 0);
++      // 沒有登入（401）不是資料的問題：留著、不算次數，重新登入之後再送
++      if (status === 401) {
++        write('telemetryBatch', batch);
++        return;
++      }
+       batch.tries += 1;
+       // 成功、或是資料本身有問題（4xx，重送也不會好）、或送太多次了：丟掉這一批
+       if ((status >= 200 && status < 500) || batch.tries >= MAX_TRIES) write('telemetryBatch', null);
+@@ -89,6 +94,10 @@ export async function flush(keepalive = false) {
+     const keep = [];
+     for (const item of logs) {
+       const status = await post('/battle-log', { opId: item.opId, log: item.log }).catch(() => 0);
++      if (status === 401) {
++        keep.push(item);
++        continue;
++      }
+       item.tries += 1;
+       if (!(status >= 200 && status < 500) && item.tries < MAX_TRIES) keep.push(item);
+     }
+diff --git a/scripts/session-test.mjs b/scripts/session-test.mjs
+index 27fc0de..5aa3082 100644
+--- a/scripts/session-test.mjs
++++ b/scripts/session-test.mjs
+@@ -5,12 +5,16 @@
+  *   1. 有在用就自動延長：每次請求都把 cookie 的期限往後推，不是「選名字那天＋30 天」
+  *   2. 沒登入的請求不會被塞一個 cookie
+  *   3. 資料庫裡的 session 期限最多一天更新一次（不是每個請求寫一次資料庫）
++ *   4. ⭐ 練習途中登入失效：答案不丟，留在佇列；帶回選人畫面並說明；
++ *      點回自己的名字後照原樣補送，一筆不少、一筆不多（2-B）
++ *   5. 遊戲結算遇到「沒有登入」：那一場排進佇列，不是丟掉
+  *
+  * 用法：node scripts/session-test.mjs（自己起伺服器）
+  */
+ 
+ import { createRequire } from 'node:module';
+ import { readFileSync } from 'node:fs';
++import { chromium } from 'playwright-core';
+ import { createFakeDb, installFakeDb } from './lib/fake-mongo.mjs';
+ 
+ const require = createRequire(import.meta.url);
+@@ -21,8 +25,11 @@ function check(name, ok, detail = '') {
+   console.log(`  [${ok ? 'PASS' : 'FAIL'}] ${name}${detail ? ` — ${detail}` : ''}`);
+ }
+ 
++const CHROME = process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+ const store = {};
+-installFakeDb(createFakeDb(store, { uniqueIndexes: {} }));
++installFakeDb(createFakeDb(store, {
++  uniqueIndexes: { attempts: ['userId', 'opId'], eventBatches: ['userId', 'opId'], gameResults: ['userId', 'opId'] }
++}));
+ const PORT = 9000 + Math.floor(Math.random() * 900);
+ process.env.PORT = String(PORT);
+ const realLog = console.log;
+@@ -87,5 +94,104 @@ console.log('\n3) 資料庫裡的期限不會每個請求都寫一次');
+   check('MongoDB 的 session 設了 touchAfter（一天）', /touchAfter:\s*24\s*\*\s*3600/.test(src));
+ }
+ 
++console.log('\n4) ⭐ 練習途中登入失效');
++const pierceId = String(store.users.find((u) => u.nickname === 'Pierce')._id);
++const outboxOf = (page) => page.evaluate((id) => JSON.parse(localStorage.getItem(`sb:v2:u:${id}:outbox`) || '[]'), pierceId);
++const attempts = () => (store.attempts || []).filter((a) => String(a.userId) === pierceId);
++const browser = await chromium.launch({ executablePath: CHROME });
++{
++  const ctx = await browser.newContext();
++  const page = await ctx.newPage();
++  const errs = [];
++  page.on('pageerror', (e) => errs.push(e.message));
++  const pickPierce = async () => {
++    await page.waitForSelector('.profile-tile', { timeout: 10000 });
++    await page.click('.profile-tile:has-text("Pierce")');
++    await page.waitForURL(/practice/, { timeout: 10000 });
++    await page.waitForSelector('#part-picker .part-btn', { timeout: 10000 });
++    await page.waitForTimeout(500);
++  };
++  const answer = async () => {
++    await page.fill('#answer-input', 'zzz');
++    await page.click('#submit-answer-btn');
++    await page.waitForTimeout(250);
++  };
++  await page.goto(`${BASE}/index.html`, { waitUntil: 'domcontentloaded' });
++  await pickPierce();
++  await page.click('#part-picker .part-btn >> nth=0');
++  await page.click('#start-practice-btn');
++  await page.waitForSelector('#answer-input:not([disabled])', { timeout: 10000 });
++  await answer();
++  for (let i = 0; i < 30 && attempts().length < 1; i += 1) await page.waitForTimeout(100);
++  check('（前提）登入中的第一題有記到', attempts().length === 1);
++
++  // 另一個分頁按了登出：跟登入過期是同一個結果
++  const other = await ctx.newPage();
++  await other.goto(`${BASE}/index.html`);
++  await other.evaluate(() => fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }));
++  await other.close();
++
++  await page.click('#next-btn');
++  await page.waitForSelector('#answer-input:not([disabled])', { timeout: 10000 });
++  const q2 = await page.evaluate(() => document.getElementById('progress-label').textContent);
++  await answer();
++  await page.waitForURL(/index\.html\?relogin=1/, { timeout: 10000 }).catch(() => {});
++  check('帶回選人畫面', /index\.html\?relogin=1/.test(page.url()), page.url());
++  const msg = await page.evaluate(() => document.getElementById('profile-error')?.textContent || '');
++  check('畫面說明登入過期、答案還在', /登入過期/.test(msg) && /還在/.test(msg), msg);
++  const queued = await outboxOf(page);
++  check('失效之後那一題留在佇列裡（沒有被丟掉）', queued.length === 1 && queued[0].kind === 'attempt', `${q2} → 佇列 ${queued.length} 筆`);
++  check('伺服器那時候還沒有那一題', attempts().length === 1);
++
++  // 點回自己的名字
++  await pickPierce();
++  for (let i = 0; i < 40 && attempts().length < 2; i += 1) await page.waitForTimeout(150);
++  await page.waitForTimeout(500);
++  check('重新登入後補送了，一筆不少', attempts().length === 2, `${attempts().length} 筆`);
++  check('也一筆不多（沒有重複計分）', new Set(attempts().map((a) => a.opId)).size === attempts().length);
++  check('佇列清空了', (await outboxOf(page)).length === 0);
++  check('補送的那一題記在 Pierce 名下、金幣統計也跟著加', store.users.find((u) => u.nickname === 'Pierce').stats.totalWordsPracticed === 2);
++  check('沒有 JS 例外', errs.length === 0, errs.join(' | '));
++  await ctx.close();
++}
++
++console.log('\n5) 遊戲結算遇到「沒有登入」');
++{
++  const ctx = await browser.newContext();
++  const page = await ctx.newPage();
++  await page.goto(`${BASE}/index.html`, { waitUntil: 'domcontentloaded' });
++  await page.waitForSelector('.profile-tile', { timeout: 10000 });
++  await page.click('.profile-tile:has-text("Pierce")');
++  await page.waitForURL(/practice/, { timeout: 10000 });
++  const no = (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"尚未登入"}' });
++  await page.route('**/api/game/result', no);
++  await page.route('**/api/campaign/clear', no);
++  // 戰役第 1 關：新帳號就開著（組別要先練過才解鎖）
++  await page.goto(`${BASE}/game?level=1&n=3&difficulty=easy&order=sequential&show=0`, { waitUntil: 'domcontentloaded' });
++  await page.waitForFunction(() => window.__spellbee && window.__spellbee.ready, null, { timeout: 20000 });
++  for (let i = 0; i < 10; i += 1) {
++    const st = await page.evaluate(() => window.__spellbee.state());
++    if (st.status !== 'running') break;
++    if (st.perkOffer) { await page.waitForTimeout(400); await page.keyboard.press('1'); continue; }
++    await page.keyboard.type(st.target, { delay: 30 });
++    await page.waitForTimeout(150);
++  }
++  let q = [];
++  for (let i = 0; i < 40; i += 1) {
++    q = await outboxOf(page);
++    if (q.some((o) => o.path === '/game/result')) break;
++    await page.waitForTimeout(150);
++  }
++  for (let i = 0; i < 20 && !q.some((o) => o.path === '/campaign/clear'); i += 1) {
++    await page.waitForTimeout(150);
++    q = await outboxOf(page);
++  }
++  check('那一場的成績排進佇列（不是丟掉）', q.some((o) => o.path === '/game/result'), `佇列 ${q.length} 筆`);
++  check('過關也排進佇列', q.some((o) => o.path === '/campaign/clear'));
++  check('遊戲頁沒有被硬拉去選人畫面（結算畫面還在）', /\/game/.test(page.url()), page.url());
++  await ctx.close();
++}
++await browser.close();
++
+ console.log(failures === 0 ? '\n全部通過' : `\n${failures} 項失敗`);
+ process.exit(failures === 0 ? 0 : 1);
+-- 
+2.43.0
+
