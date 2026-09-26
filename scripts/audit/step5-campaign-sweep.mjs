@@ -111,7 +111,11 @@ async function play({ idle = false, maxMs = 8 * 60 * 1000 } = {}) {
     if (!idle && st.target) await page.keyboard.type(st.target.slice(st.typed || 0), { delay: 25 });
     await sleep(idle ? 500 : 60);
   }
-  return page.evaluate(() => window.__spellbee.state());
+  // 時間到還沒打完：把當下的狀態印出來，才查得出是卡住還是只是慢
+  const st = await page.evaluate(() => window.__spellbee.state());
+  const focus = await page.evaluate(() => `${document.activeElement?.tagName}#${document.activeElement?.id || ''}`);
+  console.log(`    （時間到仍在進行：word=${st.wordIndex} typed=${st.typed}/${(st.target || '').length} target=${JSON.stringify(st.target)} perk=${!!st.perkOffer} paused=${st.paused} hp=${st.hp} kills=${st.stats?.wordsKilled} missed=${st.stats?.wordsMissed} 焦點=${focus}）`);
+  return st;
 }
 
 /*
