@@ -151,7 +151,7 @@ console.log('\n4) 練習頁選組');
   await context.addInitScript(() => {
     localStorage.setItem(
       'sb:v2:shared:currentUser',
-      JSON.stringify({ _id: 'test-user', username: '測試', coins: 0, activeTheme: null, stats: { currentStreak: 0 } })
+      JSON.stringify({ _id: 'test-user', nickname: '測試', coins: 0, activeTheme: null, stats: { currentStreak: 0 } })
     );
   });
   const page = await context.newPage();
@@ -166,7 +166,7 @@ console.log('\n4) 練習頁選組');
     route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ user: { _id: 'test-user', username: '測試', coins: 0, activeTheme: null, stats: { currentStreak: 0 } } })
+      body: JSON.stringify({ user: { _id: 'test-user', nickname: '測試', coins: 0, activeTheme: null, stats: { currentStreak: 0 } } })
     })
   );
   await page.route('**/api/practice/review-queue', (route) =>

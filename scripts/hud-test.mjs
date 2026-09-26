@@ -186,7 +186,7 @@ console.log('\n6) 練習頁 → 遊戲');
     localStorage.setItem('sb:v2:u:test-user:gameDifficulty', JSON.stringify('normal'));
     localStorage.setItem(
       'sb:v2:shared:currentUser',
-      JSON.stringify({ _id: 'test-user', username: '測試', coins: 0, activeTheme: null, stats: { currentStreak: 0 } })
+      JSON.stringify({ _id: 'test-user', nickname: '測試', coins: 0, activeTheme: null, stats: { currentStreak: 0 } })
     );
   });
   const page = await context.newPage();
@@ -196,7 +196,7 @@ console.log('\n6) 練習頁 → 遊戲');
     r.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ user: { _id: 'test-user', username: '測試', coins: 0, activeTheme: null, stats: { currentStreak: 0 } } })
+      body: JSON.stringify({ user: { _id: 'test-user', nickname: '測試', coins: 0, activeTheme: null, stats: { currentStreak: 0 } } })
     })
   );
   await page.route('**/api/practice/review-queue', (r) =>
