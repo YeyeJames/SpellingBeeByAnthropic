@@ -52,9 +52,10 @@
 
   <!-- 觸控裝置專用：桌機用方向鍵，這三顆只在有觸控時才顯示 -->
   <div id="listen-buttons">
-    <button type="button" class="listen-btn" data-listen="replay">🔊 再聽</button>
-    <button type="button" class="listen-btn" data-listen="slow">🐢 慢唸</button>
-    <button type="button" class="listen-btn" data-listen="sentence">💬 例句</button>
+    <!-- 字包在 span 裡：手機叫出鍵盤、位置不夠時只留圖示（css 的 kb-open） -->
+    <button type="button" class="listen-btn" data-listen="replay" aria-label="再聽">🔊<span class="listen-label"> 再聽</span></button>
+    <button type="button" class="listen-btn" data-listen="slow" aria-label="慢唸">🐢<span class="listen-label"> 慢唸</span></button>
+    <button type="button" class="listen-btn" data-listen="sentence" aria-label="例句">💬<span class="listen-label"> 例句</span></button>
   </div>
 
   <!--

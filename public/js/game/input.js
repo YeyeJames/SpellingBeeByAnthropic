@@ -212,6 +212,10 @@ export function createInput({
     focusForTyping() {
       if (touchInput) touchInput.focus();
     },
+    /** 收起螢幕鍵盤（一場打完時）。桌機沒有這個框，什麼都不做。 */
+    releaseTyping() {
+      if (touchInput && document.activeElement === touchInput) touchInput.blur();
+    },
     hasTouchInput() {
       return !!touchInput;
     },

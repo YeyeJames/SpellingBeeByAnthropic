@@ -14,6 +14,7 @@ import { BALANCE } from './game/core/balance.js';
 import { levelFromXp } from './shared/levels.js';
 import { createRecorder, recordAction, serializeLog } from './game/core/recorder.js';
 import { createInput, isTouchDevice } from './game/input.js';
+import { watchKeyboardViewport } from './game/viewport.js';
 import { createInputQueue, enqueueInput, drainInput, clearInputQueue } from './game/input-queue.js';
 import { createLatency, markApplied, markRendered, resetLatency } from './game/latency.js';
 import { installDebugApi } from './game/debug-api.js';
@@ -942,6 +943,13 @@ async function fetchGroupAccess(group) {
 function setChromeAbovePostgame(on) {
   const chrome = document.getElementById('game-chrome');
   if (chrome) chrome.style.zIndex = on ? '25' : '';
+  /*
+   * 工具列蓋在結算上面，結算就要把那一段讓出來。
+   * 手機直式時工具列會換成三、四行（兩百多 px），不讓的話
+   * 「再打一場」「回練習」剛好被它蓋住、按不到。
+   */
+  const post = document.getElementById('postgame');
+  if (post) post.style.setProperty('--chrome-h', on && chrome ? `${chrome.offsetHeight}px` : '0px');
 }
 
 /*
@@ -1091,10 +1099,17 @@ function showPostgame(state, won) {
     again.onclick = () => {
       el.hidden = true;
       ctx.sfx?.unlock();
+      // 手機：打完時收起了鍵盤，這一下點擊正好把它叫回來
+      ctx.input?.focusForTyping();
       // 換一顆新種子：同一組不會每次都照同樣的順序打
       ctx.restart();
     };
   }
+  /*
+   * 打完就不用打字了，手機上把螢幕鍵盤收起來：
+   * 不收的話，結算的按鈕剛好在鍵盤底下，他得自己去按鍵盤上的 ✓ 才看得到。
+   */
+  ctx.input?.releaseTyping();
   el.hidden = false;
   setChromeAbovePostgame(true);
 }
@@ -1445,9 +1460,29 @@ async function boot() {
         tapEl.addEventListener('click', start);
         tapEl.addEventListener('touchstart', start, { passive: true });
       }
-      // 點畫面任何地方都把鍵盤叫回來（切出去再回來時很常需要）
+      /*
+       * 點畫面任何地方都把鍵盤叫回來（切出去再回來時很常需要），
+       * 暫停中就順便繼續。
+       *
+       * 切到別的 App、跳出通知都會暫停，而原本唯一的繼續方法是 Esc——
+       * 手機的螢幕鍵盤沒有 Esc，等於永遠停在「已暫停」。
+       */
       document.getElementById('game-root')?.addEventListener('click', () => {
+        if (ctx.paused && !rulesOpen()) setPaused(false);
         input.focusForTyping();
+      });
+      /*
+       * 螢幕鍵盤蓋住的那一塊不能拿來畫戰場（見 game/viewport.js）。
+       * 看得到的範圍一變，就讓 Phaser 重新量畫布，戰場跟著重排。
+       */
+      watchKeyboardViewport(() => {
+        // 工具列的高度跟著鍵盤開關變，結算要讓的空間也要重量
+        if (document.getElementById('postgame')?.hidden === false) setChromeAbovePostgame(true);
+        const scale = ctx.phaserGame?.scale;
+        if (!scale) return;
+        // refresh() 本身不會重量外框，要先 getParentBounds()
+        scale.getParentBounds();
+        scale.refresh();
       });
       // iPad 上把三個聽力鍵放回螢幕
       document.querySelectorAll('[data-listen]').forEach((btn) => {

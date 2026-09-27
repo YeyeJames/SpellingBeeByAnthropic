@@ -241,7 +241,11 @@ body.page-loading #loading-note {
 .touch-input {
   position: fixed;
   left: 0;
-  bottom: 0;
+  /*
+   * 放在最上面，不是最下面：iOS 會把有焦點的輸入框捲到鍵盤上方，
+   * 放在底部的話整頁會被往上推。
+   */
+  top: 0;
   width: 1px;
   height: 1px;
   padding: 0;
@@ -495,6 +499,8 @@ body.is-touch #listen-buttons {
  */
 #postgame {
   padding-bottom: 6rem;
+  /* 手機直式的工具列有兩百多 px，6rem 不夠：照量到的高度讓（--chrome-h 由 game.js 填） */
+  padding-bottom: max(6rem, calc(var(--chrome-h, 0px) + 1rem));
 }
 
 #postgame-actions {
@@ -871,5 +877,90 @@ body.is-touch #listen-buttons {
 
 /* 「按 1」不可以斷成兩行 */
 .perk-key {
+  white-space: nowrap;
+}
+
+/* ── 螢幕鍵盤開著（手機、iPad）──────────────────────────────
+ *
+ * iOS 叫出鍵盤時版面高度不變，鍵盤直接蓋在網頁上（見 js/game/viewport.js）。
+ * 那支程式量出看得到的範圍：
+ *   --vv-top    看得到的那一塊離版面頂端多遠（通常是 0）
+ *   --vv-h      看得到的高度
+ *   --kb-bottom 被鍵盤蓋住的高度
+ * 這裡把畫布、工具列、面板全部收進看得到的範圍。筆電、桌機永遠不會有 kb-open。
+ */
+body.kb-open #game-root {
+  top: var(--vv-top, 0px);
+  bottom: auto;
+  height: var(--vv-h, 100%);
+}
+
+/*
+ * 工具列貼在鍵盤上緣，只留狀態列。
+ * 下面那排按鈕（回練習、重開、剛剛怪怪的…）打字時用不到，而手機上它會
+ * 換成三、四行，把戰場擠到只剩一條縫。收起鍵盤（按 ✓）就回來了。
+ * 右邊空出位置給三個聽力鍵。
+ */
+body.kb-open #game-chrome {
+  bottom: var(--kb-bottom, 0px);
+  min-height: 3.1rem;
+  justify-content: center;
+  padding: 0.3rem 10.5rem 0.3rem 0.7rem;
+}
+body.kb-open .chrome-controls,
+body.kb-open .chrome-difficulty {
+  display: none;
+}
+body.kb-open .chrome-status {
+  font-size: 0.95rem;
+  gap: 0.2rem 0.7rem;
+}
+
+body.kb-open #listen-buttons {
+  top: auto;
+  bottom: calc(var(--kb-bottom, 0px) + 0.35rem);
+  right: 0.5rem;
+  transform: none;
+  flex-direction: row;
+  gap: 0.35rem;
+}
+body.kb-open .listen-btn {
+  min-width: 3.1rem;
+  padding: 0.45rem 0.6rem;
+  font-size: 1.15rem;
+}
+body.kb-open .listen-label {
+  display: none;
+}
+
+/*
+ * 全螢幕的面板（三選一、結算、校準、說明…）也只用看得到的那一塊。
+ * 從上面排下來、放不下就捲：置中的話，內容一高，最上面那段會被切掉而且捲不回來。
+ */
+body.kb-open #ime-warning,
+body.kb-open #tap-to-start,
+body.kb-open #calibrate,
+body.kb-open #pregame,
+body.kb-open #postgame,
+body.kb-open #locked-panel,
+body.kb-open #rules-panel,
+body.kb-open #perk-panel {
+  top: var(--vv-top, 0px);
+  bottom: auto;
+  height: var(--vv-h, 100%);
+  overflow-y: auto;
+  justify-content: flex-start;
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
+body.kb-open #postgame {
+  padding-bottom: calc(var(--chrome-h, 0px) + 1rem);
+}
+
+/* 觸控裝置沒有 Esc：點一下畫面就繼續（game.js 的 game-root click） */
+body.is-touch.is-paused #game-root::after {
+  content: "已暫停　點一下繼續";
+}
+body.kb-open .chrome-progress > * {
   white-space: nowrap;
 }
