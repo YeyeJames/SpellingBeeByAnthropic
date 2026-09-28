@@ -47,6 +47,7 @@ let gameScene = null;
 let currentUser = null;
 let session = null; // { id, words, index, sessionCoins, streak }
 let readMode = 'word';
+let revealedAt = 0; // 答案出來的時間（Enter 下一題用，見檔案下面）
 
 async function whenSceneReady() {
   if (gameScene) return gameScene;
@@ -424,6 +425,7 @@ function submitAnswer() {
   revealChinese.textContent = `🀄 ${word.chinese}`;
   revealSentence.textContent = word.exampleSentence ? `💬 ${word.exampleSentence}` : '';
   revealPanel.classList.remove('hidden');
+  revealedAt = performance.now();
 
   enqueue({
     kind: 'attempt',
@@ -571,7 +573,13 @@ submitBtn.addEventListener('click', () => {
   submitAnswer();
 });
 answerInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') submitAnswer();
+  if (e.key !== 'Enter' || e.repeat || e.isComposing) return;
+  /*
+   * 題目剛出來的 400ms 內不送出：Enter 現在也是「下一題」，
+   * 他很可能連按兩下——第二下不能把空白答案送出去算錯。
+   */
+  if (session && performance.now() - (session.shownAt || 0) < 400) return;
+  submitAnswer();
 });
 replayBtn.addEventListener('click', () => {
   sound.playClick();
@@ -590,6 +598,26 @@ sentenceBtn.addEventListener('click', () => {
   if (word.exampleSentence) speakSentence(word.exampleSentence);
 });
 nextBtn.addEventListener('click', () => {
+  sound.playClick();
+  nextQuestion();
+});
+
+/*
+ * 看完答案，按 Enter 就是「下一題」。
+ *
+ * 送出後輸入框被停用、焦點離開了，原本 Enter 什麼都不做，他得伸手去拿滑鼠。
+ * 三個地方要擋：
+ * - 送出答案的那一下 Enter 會一路冒泡到這裡，那時答案才剛出來——不能順便跳題，
+ *   所以答案出來 400ms 內的 Enter 不算（也擋掉按住不放的連發）
+ * - 焦點本來就在某顆按鈕上時，Enter 是那顆按鈕自己的事，不要多跳一次
+ * - 注音選字時按的 Enter 是在選字
+ */
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' || e.repeat || e.isComposing) return;
+  if (practicePanel.classList.contains('hidden') || revealPanel.classList.contains('hidden')) return;
+  if (e.target instanceof Element && e.target.closest('button, a, select, textarea')) return;
+  if (performance.now() - revealedAt < 400) return;
+  e.preventDefault();
   sound.playClick();
   nextQuestion();
 });
