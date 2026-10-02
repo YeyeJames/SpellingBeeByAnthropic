@@ -125,6 +125,10 @@
       <button type="button" id="pregame-show-word" class="btn-toggle">🙈 不顯示單字</button>
     </div>
 
+    <!-- 難度直接換，不用重測手速。三顆是開關，不會開始遊戲（game.js 的 renderDifficultyPickers） -->
+    <p class="pregame-hint">難度</p>
+    <div class="difficulty-pick" id="pregame-difficulty"></div>
+
     <p class="pregame-hint">要照課本順序，還是打亂？</p>
     <div id="pregame-order">
       <button type="button" class="btn-order" data-order="sequential">照順序</button>
@@ -169,6 +173,14 @@
     <strong id="postgame-title"></strong>
     <p id="postgame-group"></p>
     <div id="postgame-stats"></div>
+    <!--
+      輸了想換簡單一點、贏了想挑戰：在這裡換，「再打一場」就是新的難度。
+      標題跟按鈕擠在同一行：結算本來就很長，再多一整段，矮螢幕上出口會被擠到工具列底下。
+    -->
+    <div class="difficulty-row">
+      <span>下一場的難度</span>
+      <div class="difficulty-pick" id="postgame-difficulty"></div>
+    </div>
     <p class="pregame-hint">接下來要做什麼？</p>
     <!--
       樣式跟開場那兩顆一樣，但不共用 class——btn-order 的意思是「選出題順序」，

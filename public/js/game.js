@@ -529,8 +529,60 @@ function updateHud() {
    * 下一個人默默繼承上一個人的難度。爸爸測完換小孩玩，小孩就會拿到
    * 為大人手速調的設定——模擬顯示那是 100% 失敗率，不是「比較難」。
    */
+  renderDifficultyLabel();
+}
+
+function renderDifficultyLabel() {
   const dl = document.getElementById('difficulty-label');
   if (dl) dl.textContent = `難度 ${DIFFICULTY_LABELS[ctx.difficulty] || ctx.difficulty}`;
+}
+
+/*
+ * 直接換難度（開場與結算各有一排）。
+ *
+ * 原本唯一的方法是「重測手速」：重打三個字、量完再挑。他明明知道自己要哪一個，
+ * 卻得先考一次試。量手速還是第一次玩的預設——那是為了不讓他用猜的——
+ * 但之後想換，按一下就好。
+ *
+ * 只放在「還沒開打」的地方（開場、結算）：打到一半換難度等於換一場遊戲，
+ * 那要用「重開一場」。選了就記住（跟校準記在同一個地方），下一場也沿用。
+ */
+const DIFFICULTY_CHOICES = ['easy', 'normal', 'hard'];
+
+function renderDifficultyPickers() {
+  document.querySelectorAll('.difficulty-pick').forEach((box) => {
+    if (!box.childElementCount) {
+      box.innerHTML = DIFFICULTY_CHOICES.map(
+        (d) => `<button type="button" class="btn-toggle" data-pick-difficulty="${d}">${DIFFICULTY_LABELS[d]}</button>`
+      ).join('');
+      box.querySelectorAll('[data-pick-difficulty]').forEach((btn) => {
+        btn.addEventListener('click', () => setDifficulty(btn.dataset.pickDifficulty));
+      });
+    }
+    box.querySelectorAll('[data-pick-difficulty]').forEach((btn) => {
+      const on = btn.dataset.pickDifficulty === ctx.difficulty;
+      btn.classList.toggle('is-on', on);
+      btn.setAttribute('aria-pressed', String(on));
+    });
+  });
+}
+
+function setDifficulty(d) {
+  if (!DIFFICULTY_CHOICES.includes(d)) return;
+  ctx.difficulty = d;
+  writePref(DIFFICULTY_KEY, d);
+  renderDifficultyPickers();
+  renderDifficultyLabel();
+  renderQuickRules(); // 開場的規則是照難度產生的（buildQuickRules），換了就重畫
+}
+
+/* 開場的三行規則。難度可能在校準之後、或在開場畫面上才決定，所以要能重畫 */
+function renderQuickRules() {
+  const quick = document.getElementById('pregame-rules');
+  if (!quick) return;
+  quick.innerHTML = buildQuickRules(ctx.difficulty)
+    .map((line) => `<p>${escapeHtml(line)}</p>`)
+    .join('');
 }
 
 /*
@@ -1110,6 +1162,7 @@ function showPostgame(state, won) {
    * 不收的話，結算的按鈕剛好在鍵盤底下，他得自己去按鍵盤上的 ✓ 才看得到。
    */
   ctx.input?.releaseTyping();
+  renderDifficultyPickers();
   el.hidden = false;
   setChromeAbovePostgame(true);
 }
@@ -1608,12 +1661,8 @@ async function boot() {
        * 最容易誤會的三件事，每一場都放一次。
        * 難度可能在校準之後才決定，所以這裡才生成，不是載入時。
        */
-      const quick = document.getElementById('pregame-rules');
-      if (quick) {
-        quick.innerHTML = buildQuickRules(ctx.difficulty)
-          .map((line) => `<p>${escapeHtml(line)}</p>`)
-          .join('');
-      }
+      renderQuickRules();
+      renderDifficultyPickers();
       /*
        * 戰役關卡與複習關的出題順序是關卡定的（第 1 章照順序、第 2 章起打亂），
        * 只留那一顆開始鍵。本來兩顆都在，而按下去就會蓋掉關卡的設計——
