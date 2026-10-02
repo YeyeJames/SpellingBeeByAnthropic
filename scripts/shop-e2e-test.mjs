@@ -120,6 +120,11 @@ console.log('\n2) 個人檔案的主題切換');
   await page.click('#theme-switcher button:has-text("太空")');
   check('再切回太空：伺服器存了', await waitFor(() => me().activeTheme === 'space'), me().activeTheme);
   check('沒有錯誤訊息', !/沒有換成功/.test(await page.textContent('#theme-switcher')));
+  /*
+   * 等瀏覽器收到回應、套上主題再換頁。伺服器寫進資料庫比回應送回瀏覽器早一點，
+   * 只等資料庫的話，偶爾回應還在路上就換頁了，下一頁的第一格會是舊主題（測試的時序，不是 bug）。
+   */
+  await page.waitForFunction(() => document.body.dataset.theme === 'space', null, { timeout: 5000 }).catch(() => {});
   const theme = await firstPaint('/wordbank.html', () => (document.body && document.body.dataset.theme) || null);
   check('換一頁，一打開就是太空', theme === 'space', theme);
 }
