@@ -102,7 +102,15 @@ console.log('\n2) 建議之後仍然可以自己選別的');
   watch(page);
   await page.goto(`${BASE}/game?n=8&part=all&order=sequential`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#calibrate:not([hidden])', { timeout: 10000 });
+  /*
+   * 量完之前，三顆難度鈕不能看得到：那時候按下去沒有作用（onclick 量完才接上），
+   * 看得到卻按不動，他只會覺得壞掉了。只看 hidden 屬性抓不到——CSS 的 display:flex
+   * 會把 hidden 蓋掉，所以要看「畫面上真的有沒有」。
+   */
+  check('量完之前看不到難度鈕', !(await page.isVisible('#calibrate-choice')));
+  check('有講這是第一次玩才量、以後不會再問', /第一次/.test(await page.textContent('#calibrate')) && /不會再問/.test(await page.textContent('#calibrate')));
   await typeCalibration(page, 900); // 會建議 easy
+  check('量完看得到難度鈕', await page.isVisible('#calibrate-choice'));
   await page.waitForSelector('#calibrate-choice:not([hidden])', { timeout: 10000 });
 
   const count = await page.evaluate(() => document.querySelectorAll('.btn-difficulty').length);

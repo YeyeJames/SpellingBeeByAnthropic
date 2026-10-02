@@ -386,6 +386,13 @@ body.is-touch #listen-buttons {
   gap: 0.6rem;
   margin-top: 0.8rem;
 }
+/*
+ * 量完之前不可以出現：那時候按下去沒有作用（calibrate.js 量完才接上 onclick）。
+ * 上面的 display:flex 會蓋掉 hidden 屬性，所以要自己補這一條。
+ */
+#calibrate-choice[hidden] {
+  display: none;
+}
 
 .btn-difficulty {
   background: #1e293b;
