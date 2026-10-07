@@ -243,6 +243,47 @@ await page.evaluate(() => window.__minigame.finish());
 await page.click('#close-minigame-btn');
 
 /*
+ * 2026-10 加的三個，一樣真的按鍵盤，並確認「放著不動」不會一打開就輸
+ * （打開視窗時他常常還在看說明，那一局不該白付錢）。
+ */
+async function openGame(key) {
+  await page.click(`[data-minigame-play="${key}"]`);
+  await page.waitForFunction((k) => window.__minigame.key === k && window.__minigame.ready, key, { timeout: 15000 });
+}
+const peek = (name) => page.evaluate((n) => window.__minigame.peek(n), name);
+
+setUser(kid.user._id, { coins: 5000 });
+await openGame('minigame_stack');
+await page.waitForTimeout(1500);
+check('疊疊樂：放著不動不會輸', (await peek('peekStack')).over === false);
+await page.keyboard.press('Space');
+await page.waitForTimeout(150);
+check('疊疊樂：按空白鍵會放下一塊', (await peek('peekStack')).layers === 1, JSON.stringify(await peek('peekStack')));
+await page.evaluate(() => window.__minigame.finish());
+await page.click('#close-minigame-btn');
+
+await openGame('minigame_memory');
+await page.keyboard.press('ArrowRight');
+await page.keyboard.press('Space');
+await page.waitForTimeout(150);
+const mem = await peek('peekMemory');
+check('翻牌：方向鍵移動、空白鍵翻牌', mem.cursor === 1 && mem.open.length === 1 && mem.open[0] === 1, JSON.stringify(mem));
+await page.evaluate(() => window.__minigame.finish());
+await page.click('#close-minigame-btn');
+
+await openGame('minigame_jump');
+await page.waitForTimeout(2000);
+const idle = await peek('peekJump');
+check('跳跳蜂：放著不動不會掉下去（踩在草地上一直彈）', idle.over === false);
+await page.keyboard.down('ArrowRight');
+await page.waitForTimeout(300);
+await page.keyboard.up('ArrowRight');
+const moved = await peek('peekJump');
+check('跳跳蜂：按 → 會往右移', moved.x > idle.x + 20, `${Math.round(idle.x)} → ${Math.round(moved.x)}`);
+await page.evaluate(() => window.__minigame.finish());
+await page.click('#close-minigame-btn');
+
+/*
  * 錢不夠的時候：按鈕要是灰的，而且寫出差多少——
  * 不是按下去才跳錯誤。
  */

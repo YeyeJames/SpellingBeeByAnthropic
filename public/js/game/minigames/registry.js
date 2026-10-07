@@ -42,6 +42,21 @@ export const MINIGAMES = {
     title: '🔨 打蟲大作戰',
     howTo: '蟲冒出來時，按牠身上的字母（或直接點牠）把牠打回去！30 秒倒數。',
     load: () => import('./whack.js')
+  },
+  minigame_stack: {
+    title: '🍯 蜂巢疊疊樂',
+    howTo: '蜂巢塊左右滑，按空白鍵（或點一下）放下去。放歪的會被切掉，疊得越高越好！',
+    load: () => import('./stack.js')
+  },
+  minigame_memory: {
+    title: '🃏 翻牌配對',
+    howTo: '點牌（或方向鍵＋空白鍵）翻開，找出一樣的兩張！60 秒倒數，全配完還有加分。',
+    load: () => import('./memory.js')
+  },
+  minigame_jump: {
+    title: '🌼 跳跳蜂',
+    howTo: '蜜蜂踩到花會自己彈起來，用 ← →（或滑鼠）讓牠接住上面的花，看能爬多高！',
+    load: () => import('./jump.js')
   }
 };
 

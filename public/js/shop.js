@@ -237,7 +237,9 @@ window.__minigame = {
   scoreEventCount: () => testHandle.scoreEvents,
   resetScoreEventCount: () => { testHandle.scoreEvents = 0; },
   peekLetter: () => (minigameInstance && minigameInstance.peekLetter ? minigameInstance.peekLetter() : null),
-  peekStarted: () => (minigameInstance && minigameInstance.peekStarted ? minigameInstance.peekStarted() : null)
+  peekStarted: () => (minigameInstance && minigameInstance.peekStarted ? minigameInstance.peekStarted() : null),
+  // 新的小遊戲各自有自己的 peekXxx（測試用、只讀），用名字取，不用每加一個就在這裡多寫一行
+  peek: (name) => (minigameInstance && typeof minigameInstance[name] === 'function' ? minigameInstance[name]() : null)
 };
 
 function stopMinigame() {

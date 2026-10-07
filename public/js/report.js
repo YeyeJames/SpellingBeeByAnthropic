@@ -23,7 +23,10 @@ const PERK_NAMES = {
   lightning: '⚡ 閃電手', rush: '🔥 加速挑戰', firstStrike: '🎯 首字重擊',
   rewind: '⏪ 倒帶', freeze: '❄️ 冰凍針', clover: '🍀 幸運草'
 };
-const GAME_NAMES = { minigame_coincatch: '接金幣', minigame_beeflap: '蜜蜂飛行', minigame_whack: '打蟲大作戰' };
+const GAME_NAMES = {
+  minigame_coincatch: '接金幣', minigame_beeflap: '蜜蜂飛行', minigame_whack: '打蟲大作戰',
+  minigame_stack: '蜂巢疊疊樂', minigame_memory: '翻牌配對', minigame_jump: '跳跳蜂'
+};
 
 function esc(str) {
   const d = document.createElement('div');

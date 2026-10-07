@@ -124,6 +124,41 @@ const SHOP_ITEMS = [
     playCost: 150,
     iconAsset: '/assets/icons/minigame-whack.svg',
     active: true
+  },
+  /*
+   * 2026-10 加的三個。價格跟上面兩個一樣（家長說現在的價格剛好）：
+   * 解鎖 1800、每玩一次 150。三個玩法刻意都不一樣——
+   * 疊疊樂是抓時機、翻牌是記性、跳跳蜂是左右操控，跟接金幣／飛行／打蟲也不重複。
+   */
+  {
+    key: 'minigame_stack',
+    type: 'minigame',
+    name: '蜂巢疊疊樂',
+    description: '蜂巢塊左右滑，抓準時機放下去，放歪的會被切掉——看你能疊幾層！',
+    cost: 1800,
+    playCost: 150,
+    iconAsset: '/assets/icons/minigame-stack.svg',
+    active: true
+  },
+  {
+    key: 'minigame_memory',
+    type: 'minigame',
+    name: '翻牌配對',
+    description: '16 張牌裡藏著 8 對，60 秒內把一樣的兩張翻出來！',
+    cost: 1800,
+    playCost: 150,
+    iconAsset: '/assets/icons/minigame-memory.svg',
+    active: true
+  },
+  {
+    key: 'minigame_jump',
+    type: 'minigame',
+    name: '跳跳蜂',
+    description: '蜜蜂踩著花一路往上彈，左右移動接住下一朵，看能爬多高！',
+    cost: 1800,
+    playCost: 150,
+    iconAsset: '/assets/icons/minigame-jump.svg',
+    active: true
   }
 ];
 
