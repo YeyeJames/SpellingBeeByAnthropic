@@ -5,11 +5,12 @@ import { applyTheme } from './theme.js';
 import * as sound from './sound-manager.js';
 import { loadPhaser } from './game/load-phaser.js';
 import { runPageInit } from './ui-status.js';
-import { initOutbox, enqueue, onApplied } from './outbox.js';
+import { initOutbox, enqueue, onApplied, pendingOfKind } from './outbox.js';
 import { readShared, writeShared, newId } from './local-store.js';
 import { readPref, writePref } from './prefs.js';
 import { track } from './telemetry.js';
 import { initGearShop } from './gear-shop.js';
+import { beeSprite } from './shared/cosmetics.js';
 
 const shopGrid = document.getElementById('shop-grid');
 const shopError = document.getElementById('shop-error');
@@ -55,6 +56,7 @@ async function loadItems() {
 
 function renderItems(items) {
   shopGrid.innerHTML = '';
+  renderLeaderboard();
   /*
    * 一件商品都沒有的時候要說話。
    *
@@ -71,7 +73,35 @@ function renderItems(items) {
     shopGrid.appendChild(note);
     return;
   }
-  items.forEach((item) => {
+  /*
+   * 分區。品項越來越多（小遊戲、主題、配件、顏色、特效、音效、稱號），
+   * 全部擠在同一格裡他找不到東西——尤其是「我買過的那個在哪」。
+   */
+  const groups = SECTIONS.map((sec) => ({ ...sec, items: items.filter(sec.match) }));
+  const known = new Set(groups.flatMap((g) => g.items));
+  const rest = items.filter((i) => !known.has(i));
+  if (rest.length) groups.push({ title: '✨ 其他', items: rest });
+  groups.filter((g) => g.items.length).forEach((g) => {
+    const head = document.createElement('h2');
+    head.className = 'shop-section';
+    head.textContent = g.title;
+    shopGrid.appendChild(head);
+    g.items.forEach(renderCard);
+  });
+}
+
+const SECTIONS = [
+  { title: '🎮 小遊戲', match: (i) => i.type === 'minigame' },
+  { title: '🎨 主題', match: (i) => i.type === 'theme' },
+  { title: '🕶️ 拼字蜂配件', match: (i) => i.type === 'avatarAccessory' },
+  { title: '🐝 拼字蜂顏色', match: (i) => i.type === 'cosmetic' && i.slot === 'beeColor' },
+  { title: '💥 打怪特效（只改外觀，不影響輸贏）', match: (i) => i.type === 'cosmetic' && i.slot === 'killFx' },
+  { title: '🔊 答對音效', match: (i) => i.type === 'cosmetic' && i.slot === 'soundPack' },
+  { title: '🏅 稱號', match: (i) => i.type === 'cosmetic' && i.slot === 'title' }
+];
+
+function renderCard(item) {
+  {
     const card = document.createElement('div');
     card.className = 'shop-card';
     card.innerHTML = `
@@ -82,8 +112,17 @@ function renderItems(items) {
     `;
     const actionEl = card.querySelector('.sc-action');
     actionEl.appendChild(buildActionElement(item));
+    // 音效包買之前就要能聽：不然他只能看著「咚咚鏘」三個字猜
+    if (item.type === 'cosmetic' && item.slot === 'soundPack') {
+      const listen = document.createElement('button');
+      listen.className = 'btn secondary sc-preview';
+      listen.type = 'button';
+      listen.textContent = '🔊 試聽';
+      listen.addEventListener('click', () => sound.previewPack(item.key));
+      actionEl.appendChild(listen);
+    }
     shopGrid.appendChild(card);
-  });
+  }
 }
 
 function buildActionElement(item) {
@@ -115,6 +154,17 @@ function buildActionElement(item) {
     btn.className = equipped ? 'btn secondary' : 'btn';
     btn.textContent = equipped ? '卸下' : '穿上';
     btn.addEventListener('click', () => toggleAccessory(item.key, equipped));
+    return btn;
+  }
+
+  if (item.type === 'cosmetic') {
+    // 每一格只能穿一件：穿上別的會自動換掉這一件；卸下就回到預設
+    const equipped = (currentUser.cosmetics || {})[item.slot] === item.key;
+    const btn = document.createElement('button');
+    btn.className = equipped ? 'btn secondary' : 'btn';
+    btn.textContent = equipped ? '✅ 使用中（按一下卸下）' : '使用';
+    btn.dataset.cosmetic = item.key;
+    btn.addEventListener('click', () => toggleCosmetic(item, equipped));
     return btn;
   }
 
@@ -157,7 +207,9 @@ function rememberUser() {
     coins: currentUser.coins,
     ownedItemKeys: currentUser.ownedItemKeys,
     activeTheme: currentUser.activeTheme,
-    avatar: currentUser.avatar
+    avatar: currentUser.avatar,
+    cosmetics: currentUser.cosmetics || {},
+    titleText: currentUser.titleText || null
   });
 }
 
@@ -206,6 +258,24 @@ function toggleAccessory(itemKey, currentlyEquipped) {
     kind: 'equip',
     path: currentlyEquipped ? '/user/unequip' : '/user/equip',
     body: currentlyEquipped ? { itemKey } : { type: 'avatarAccessory', itemKey }
+  });
+}
+
+function toggleCosmetic(item, currentlyEquipped) {
+  sound.playClick();
+  const cosmetics = { ...(currentUser.cosmetics || {}) };
+  if (currentlyEquipped) delete cosmetics[item.slot];
+  else cosmetics[item.slot] = item.key;
+  currentUser.cosmetics = cosmetics;
+  if (item.slot === 'title') currentUser.titleText = currentlyEquipped ? null : item.titleText || null;
+  // 音效包換了，這一頁馬上就是新的聲音（不用換頁）
+  if (item.slot === 'soundPack') sound.setSoundPack(currentlyEquipped ? null : item.key);
+  rememberUser();
+  renderFromCache();
+  enqueue({
+    kind: 'equip',
+    path: currentlyEquipped ? '/user/unequip' : '/user/equip',
+    body: { type: 'cosmetic', itemKey: item.key }
   });
 }
 
@@ -288,6 +358,7 @@ async function openMinigame(item) {
   testHandle.scoreEvents = 0;
   minigameStartedAt = performance.now();
   minigameInstance = mod.create('minigame-container', {
+    bee: beeSprite(currentUser),
     onReady: () => { testHandle.ready = true; },
     onScore: () => {
       testHandle.scoreEvents += 1;
@@ -323,6 +394,7 @@ function onMinigameEnded(item, score) {
   minigameNote.textContent = '（分數是好玩用的，不會加到真正的金幣喔）';
   minigameNote.hidden = false;
   showAgainButton(item);
+  reportScore(item.key, score);
 }
 
 /* 「再玩一次」要再付一次，所以跟商店的按鈕一樣寫價格、錢不夠就灰掉 */
@@ -380,10 +452,90 @@ onApplied('purchase', async (result, op, err) => {
  * 本來沒有人聽：伺服器不收的時候（例如主題 key 對不上，step6 的 R3），畫面照樣
  * 顯示換好了，換一頁才默默變回去。現在伺服器不收就講出來，並以伺服器的為準。
  */
+function hasPendingEquip() {
+  return pendingOfKind('equip') > 0;
+}
+
+/* ── 全家排行榜 ────────────────────────────────────────────
+ *
+ * 每個小遊戲一張榜，列出家裡每個人的最高分（兄弟和爸爸一起比）。
+ * 分數只拿來排名，跟金幣完全無關（server/routes/shop.js 的 /score）。
+ */
+const leaderboardEl = document.getElementById('leaderboard');
+let leaderboard = null;
+const MEDALS = ['🥇', '🥈', '🥉'];
+
+async function loadLeaderboard() {
+  if (!leaderboardEl) return;
+  const data = await api.get('/shop/leaderboard', { quiet: true });
+  leaderboard = data.boards || {};
+  renderLeaderboard();
+  syncLocalBests();
+}
+
+function renderLeaderboard() {
+  if (!leaderboardEl || !leaderboard) return;
+  const games = (cachedItems || []).filter((i) => i.type === 'minigame');
+  const parts = games.map((g) => {
+    const rows = (leaderboard[g.key] || []).slice(0, 5);
+    const body = rows.length
+      ? rows.map((r, i) => `<li class="${r.me ? 'me' : ''}">
+          <span class="lb-rank">${MEDALS[i] || `${i + 1}.`}</span>
+          <span class="lb-name">${escapeHtml(r.nickname)}${r.title ? ` <small>${escapeHtml(r.title)}</small>` : ''}</span>
+          <span class="lb-score">${r.best} 分</span></li>`).join('')
+      : '<li class="lb-empty">還沒有人玩過，搶第一名！</li>';
+    return `<div class="lb-game"><h3>${escapeHtml(g.name)}</h3><ol>${body}</ol></div>`;
+  });
+  leaderboardEl.innerHTML = parts.join('');
+}
+
+/*
+ * 回報這一局的分數。排行榜只是好玩的，送不出去就算了（下次打開商店會補，見下面）。
+ * 只在比自己的紀錄高的時候才送：伺服器本來就只留最高的，少送幾次而已。
+ */
+function reportScore(itemKey, score) {
+  if (!(score > 0)) return;
+  const mine = myBest(itemKey);
+  if (mine !== null && score <= mine) return;
+  api.post('/shop/score', { itemKey, score }, { quiet: true })
+    .then(() => loadLeaderboard())
+    .catch(() => {});
+}
+
+function myBest(itemKey) {
+  if (!leaderboard) return null;
+  const row = (leaderboard[itemKey] || []).find((r) => r.me);
+  return row ? row.best : 0;
+}
+
+/*
+ * 排行榜上線之前，最高紀錄只存在這台電腦裡（prefs 的 minigameBest:*）。
+ * 第一次看到排行榜時，把本機比較高的那幾個補送上去——不然他會看到
+ * 「我明明打過 30 分，怎麼榜上是 0」。
+ */
+let syncedLocal = false;
+function syncLocalBests() {
+  if (syncedLocal || !leaderboard) return;
+  syncedLocal = true;
+  const owned = new Set(currentUser.ownedItemKeys || []);
+  (cachedItems || []).filter((i) => i.type === 'minigame' && owned.has(i.key)).forEach((g) => {
+    const local = Number(readPref(`minigameBest:${g.key}`)) || 0;
+    if (local > (myBest(g.key) || 0)) reportScore(g.key, local);
+  });
+}
+
 onApplied('equip', async (result, op, err) => {
   if (result && result.user) {
     currentUser.activeTheme = result.user.activeTheme;
     currentUser.avatar = result.user.avatar;
+    /*
+     * 外觀以「最後一次換的」為準：連按好幾件時，伺服器回來的是當時那一次的狀態，
+     * 可能比畫面上的舊。佇列裡還有換裝的請求，就先不要拿舊的蓋掉畫面。
+     */
+    if (!hasPendingEquip()) {
+      currentUser.cosmetics = result.user.cosmetics || {};
+      currentUser.titleText = result.user.titleText || null;
+    }
     rememberUser();
     return;
   }
@@ -404,4 +556,5 @@ runPageInit(async () => {
   currentUser = user;
   initOutbox(user._id);
   await Promise.all([mountNav(user, 'shop'), loadItems(), initGearShop()]);
+  loadLeaderboard().catch(() => {});
 });

@@ -5,6 +5,7 @@ import { applyTheme } from './theme.js';
 import * as sound from './sound-manager.js';
 import { listEnglishVoices, getPreferredVoiceURI, setPreferredVoiceURI, speakWord } from './audio-player.js';
 import { runPageInit } from './ui-status.js';
+import { beeSprite, titleFor } from './shared/cosmetics.js';
 
 const THEME_NAMES = { sports: '🏅 運動風（預設）', space: '🚀 太空', dino: '🦖 恐龍' };
 const ACCESSORY_SPRITES = {
@@ -24,7 +25,12 @@ const audioSaveMsg = document.getElementById('audio-save-msg');
 let currentUser = null;
 
 function renderAvatar() {
-  avatarPreview.innerHTML = `<img src="/assets/sprites/bee-mascot.svg" alt="拼字蜂" />`;
+  const titleEl = document.getElementById('avatar-title');
+  if (titleEl) {
+    titleEl.textContent = titleFor(currentUser) || '';
+    titleEl.hidden = !titleFor(currentUser);
+  }
+  avatarPreview.innerHTML = `<img src="${beeSprite(currentUser)}" alt="拼字蜂" />`;
   (currentUser.avatar.accessories || []).forEach((key) => {
     const src = ACCESSORY_SPRITES[key];
     if (!src) return;

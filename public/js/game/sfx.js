@@ -14,6 +14,7 @@
 
 import { readShared, writeShared } from '../local-store.js';
 import { semitoneForIndex, comboShift, freqFor } from './core/scale.js';
+import { playPack } from '../shared/sound-packs.js';
 
 const MUTE_KEY = 'gameMuted';
 const VOLUME_KEY = 'gameSfxVolume';
@@ -26,6 +27,7 @@ export function createSfx({ onPlayed } = {}) {
   let bgmBus = null;
   let noiseBuffer = null;
   let muted = readShared(MUTE_KEY) === '1';
+  let soundPack = null; // 商店買的答對音效包（user.cosmetics.soundPack）
   /*
    * 注意 Number(null) === 0。
    *
@@ -186,6 +188,11 @@ export function createSfx({ onPlayed } = {}) {
     kill(wordLength, t0) {
       const c = ensureCtx();
       if (!c) return;
+      // 商店的音效包只換「打掉一隻」這一聲；接在 sfxBus 上，靜音與音量照樣有效
+      if (soundPack && !muted && playPack(soundPack, c, sfxBus, 1)) {
+        played('kill', t0);
+        return;
+      }
       const at = c.currentTime;
       // 用這個字最後一個音往上收尾，聽起來像「完成了一段」
       const top = semitoneForIndex(Math.max(0, wordLength - 1));
@@ -303,6 +310,11 @@ export function createSfx({ onPlayed } = {}) {
         outputLatencyMs: ctx ? Number(((ctx.outputLatency || 0) * 1000).toFixed(2)) : null,
         contextState: ctx ? ctx.state : 'none'
       };
+    },
+
+    /** 商店的答對音效包；null 就是預設的那一聲 */
+    setSoundPack(key) {
+      soundPack = key || null;
     },
 
     isMuted() {

@@ -5,7 +5,15 @@ const { requireAuth } = require('../middleware/auth');
 const router = express.Router();
 router.use(requireAuth);
 
-const VALID_TYPES = ['theme', 'avatarAccessory'];
+const { SHOP_ITEMS } = require('../data/shop-items');
+
+const VALID_TYPES = ['theme', 'avatarAccessory', 'cosmetic'];
+
+/* 外觀放在哪一格，以程式碼裡的清單為準——不信前端送來的 slot */
+function cosmeticSlot(itemKey) {
+  const item = SHOP_ITEMS.find((i) => i.key === itemKey && i.type === 'cosmetic');
+  return item ? item.slot : null;
+}
 
 router.post('/equip', async (req, res, next) => {
   try {
@@ -28,6 +36,13 @@ router.post('/equip', async (req, res, next) => {
       return res.status(400).json({ error: '你還沒有解鎖這個造型' });
     }
 
+    if (type === 'cosmetic') {
+      const slot = cosmeticSlot(itemKey);
+      if (!slot) return res.status(400).json({ error: '找不到這個造型' });
+      const updated = await User.equipCosmetic(req.user._id, slot, itemKey);
+      return res.json({ user: User.sanitizeUser(updated) });
+    }
+
     const updatedUser = await User.equipItem(req.user._id, type, itemKey);
     res.json({ user: User.sanitizeUser(updatedUser) });
   } catch (err) {
@@ -37,7 +52,13 @@ router.post('/equip', async (req, res, next) => {
 
 router.post('/unequip', async (req, res, next) => {
   try {
-    const { itemKey } = req.body || {};
+    const { itemKey, type } = req.body || {};
+    if (type === 'cosmetic') {
+      const slot = cosmeticSlot(itemKey);
+      if (!slot) return res.status(400).json({ error: '找不到這個造型' });
+      const updated = await User.unequipCosmetic(req.user._id, slot, itemKey);
+      return res.json({ user: User.sanitizeUser(updated) });
+    }
     const updatedUser = await User.unequipAccessory(req.user._id, itemKey);
     res.json({ user: User.sanitizeUser(updatedUser) });
   } catch (err) {

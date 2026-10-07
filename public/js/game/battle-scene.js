@@ -502,7 +502,7 @@ export function createBattleScene(ctx) {
       this.enemyKind = '';
       this.enemy.add(this.enemyBody);
 
-      this.effects = createEffects(this, ctx.getSeed());
+      this.effects = createEffects(this, ctx.getSeed(), { killFx: ctx.killFx || null });
       this.effects.attachCracksTo(this.enemy);
 
       // ── HUD ────────────────────────────────────────────────
@@ -953,7 +953,7 @@ export function createBattleScene(ctx) {
                 { color: '#fb923c', scale: 1.2, fan: false }
               );
             }
-            this.effects.burst(this.enemy.x, this.enemy.y, 18);
+            this.effects.burst(this.enemy.x, this.enemy.y, 18, { kill: true });
             this.effects.setCrackProgress(0);
             this.cameras.main.shake(70, 0.004);
             // 頓挫：凍結世界，同時讓輸入排隊而不是打在看不見的畫面上

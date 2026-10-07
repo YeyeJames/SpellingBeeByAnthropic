@@ -1,4 +1,6 @@
 import { api } from './api.js';
+import { playPack } from './shared/sound-packs.js';
+import { soundPackFor } from './shared/cosmetics.js';
 
 /**
  * 拼字蜂音效/背景音樂管理。
@@ -11,6 +13,8 @@ let ctx = null;
 let sfxVolume = 0.8;
 let bgmVolume = 0.5;
 let muted = false;
+// 商店買的「答對」音效包（user.cosmetics.soundPack），沒有就是預設那三個音
+let soundPack = null;
 
 let bgmTimer = null;
 let bgmStep = 0;
@@ -47,6 +51,11 @@ function scaledGain(base) {
 }
 
 export function playCorrect() {
+  if (!muted && soundPack && playPack(soundPack, getCtx(), getCtx().destination, sfxVolume)) return;
+  playCorrectDefault();
+}
+
+function playCorrectDefault() {
   const t = getCtx().currentTime;
   [523.25, 659.25, 783.99].forEach((freq, i) => {
     tone({ freq, start: t + i * 0.09, duration: 0.16, type: 'triangle', gain: scaledGain(0.22) });
@@ -142,6 +151,18 @@ export function loadPrefs(user) {
   sfxVolume = user.audioPrefs.sfxVolume ?? 0.8;
   bgmVolume = user.audioPrefs.bgmVolume ?? 0.5;
   muted = !!user.audioPrefs.muted;
+  soundPack = soundPackFor(user);
+}
+
+/** 換音效包（商店換了之後，同一頁馬上生效） */
+export function setSoundPack(key) {
+  soundPack = key || null;
+}
+
+/** 商店的「試聽」：還沒買也能聽，不管現在用的是哪一個 */
+export function previewPack(key) {
+  if (muted) return;
+  if (!playPack(key, getCtx(), getCtx().destination, sfxVolume)) playCorrectDefault();
 }
 
 export async function savePrefs() {

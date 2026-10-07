@@ -145,7 +145,7 @@ async function findById(id) {
 
 async function listProfiles() {
   return collection()
-    .find({}, { projection: { nickname: 1, avatar: 1, activeTheme: 1, coins: 1, stats: 1, wordBankId: 1 } })
+    .find({}, { projection: { nickname: 1, avatar: 1, activeTheme: 1, coins: 1, stats: 1, wordBankId: 1, cosmetics: 1 } })
     .sort({ nickname: 1 })
     .toArray();
 }
@@ -178,7 +178,9 @@ const OWNED_COLLECTIONS = [
    */
   'events',
   'eventBatches',
-  'battleLogs'
+  'battleLogs',
+  // 小遊戲的最高分（全家排行榜）。刪掉帳號，他在榜上的名字也要一起走
+  'minigameBests'
 ];
 
 async function deleteUser(id) {
@@ -275,15 +277,48 @@ async function equipItem(id, type, itemKey) {
   return findById(id);
 }
 
+/*
+ * 外觀的「格子」（cosmetics.killFx / beeColor / soundPack / title）。
+ * 每一格只放一個：換一個就直接蓋過去；卸下就把那一格拿掉、回到預設。
+ * 卸下時只拿掉「現在穿的就是這一件」的情況——背景佇列晚到的舊請求
+ * 不可以把他後來換上的另一件卸掉。
+ */
+async function equipCosmetic(id, slot, itemKey) {
+  await collection().updateOne({ _id: new ObjectId(id) }, { $set: { [`cosmetics.${slot}`]: itemKey } });
+  return findById(id);
+}
+
+async function unequipCosmetic(id, slot, itemKey) {
+  await collection().updateOne(
+    { _id: new ObjectId(id), [`cosmetics.${slot}`]: itemKey },
+    { $unset: { [`cosmetics.${slot}`]: '' } }
+  );
+  return findById(id);
+}
+
 async function unequipAccessory(id, itemKey) {
   await collection().updateOne({ _id: new ObjectId(id) }, { $pull: { 'avatar.accessories': itemKey } });
   return findById(id);
+}
+
+/* 這個帳號掛的稱號文字（商店的 title_*）；沒有就是 null */
+function titleTextOf(user) {
+  const key = user && user.cosmetics && user.cosmetics.title;
+  if (!key) return null;
+  const { SHOP_ITEMS } = require('../data/shop-items');
+  const item = SHOP_ITEMS.find((i) => i.key === key);
+  return item ? item.titleText : null;
 }
 
 function sanitizeUser(user) {
   if (!user) return null;
   // pinHash 是舊帳號留下來的欄位，現在不再產生，但既有資料還有，照樣不外流
   const { pinHash, nicknameLower, ...safe } = user;
+  /*
+   * 稱號的文字跟著使用者一起送：導覽列、個人檔案一打開就要寫出來，
+   * 不必每一頁都先去抓商店清單才知道 title_star 是「🌟 拼字新星」。
+   */
+  safe.titleText = titleTextOf(user);
   return safe;
 }
 
@@ -306,5 +341,8 @@ module.exports = {
   spendCoins,
   equipItem,
   unequipAccessory,
+  equipCosmetic,
+  unequipCosmetic,
+  titleTextOf,
   sanitizeUser
 };

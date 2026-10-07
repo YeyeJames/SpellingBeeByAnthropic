@@ -32,7 +32,8 @@ class CoinCatchScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.svg('bee', '/assets/sprites/bee-mascot.svg', { width: 220, height: 220 });
+    // 商店買的拼字蜂顏色由商店傳進來（小遊戲自己不讀使用者資料，見 economy-test 第 4 節）
+    this.load.svg('bee', this.hooks.bee || '/assets/sprites/bee-mascot.svg', { width: 220, height: 220 });
     this.load.svg('coin', '/assets/icons/coin.svg', { width: 48, height: 48 });
   }
 
@@ -108,8 +109,8 @@ class CoinCatchScene extends Phaser.Scene {
   }
 }
 
-export function create(parentId, { onScore, onEnd, onReady }) {
-  const scene = new CoinCatchScene({ onScore, onEnd, onReady });
+export function create(parentId, { onScore, onEnd, onReady, bee }) {
+  const scene = new CoinCatchScene({ onScore, onEnd, onReady, bee });
   const game = new Phaser.Game(phaserConfig(parentId, scene));
   return {
     game,

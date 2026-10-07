@@ -33,6 +33,11 @@ export function pendingCount() {
   return getQueue().length;
 }
 
+/** 佇列裡還有幾筆某一類的操作（例如還沒送出的換裝） */
+export function pendingOfKind(kind) {
+  return getQueue().filter((op) => op.kind === kind).length;
+}
+
 function notify() {
   const state = { pending: pendingCount(), flushing };
   listeners.forEach((fn) => {

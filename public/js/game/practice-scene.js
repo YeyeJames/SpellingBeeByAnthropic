@@ -4,13 +4,16 @@
  * 聽寫練習畫面的 Phaser 場景：吉祥物蜜蜂反應動畫、金幣飛入、連擊特效。
  * 這裡直接用全域 Phaser（由 /vendor/phaser.min.js 載入），不用 npm 打包。
  */
+/* 拼字蜂的圖：商店買的顏色（shared/cosmetics.js 的 beeSprite），由 createPracticeGame 傳進來 */
+let beeAsset = '/assets/sprites/bee-mascot.svg';
+
 export class PracticeScene extends Phaser.Scene {
   constructor() {
     super('PracticeScene');
   }
 
   preload() {
-    this.load.svg('bee', '/assets/sprites/bee-mascot.svg', { width: 220, height: 220 });
+    this.load.svg('bee', beeAsset, { width: 220, height: 220 });
     this.load.svg('coin', '/assets/icons/coin.svg', { width: 48, height: 48 });
     this.load.svg('star', '/assets/icons/star.svg', { width: 40, height: 40 });
     this.load.svg('fire', '/assets/icons/fire-streak.svg', { width: 48, height: 48 });
@@ -156,7 +159,8 @@ export class PracticeScene extends Phaser.Scene {
   }
 }
 
-export function createPracticeGame(containerId) {
+export function createPracticeGame(containerId, { bee } = {}) {
+  if (bee) beeAsset = bee;
   return new Phaser.Game({
     type: Phaser.AUTO,
     transparent: true,

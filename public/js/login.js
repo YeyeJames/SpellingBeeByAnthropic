@@ -68,6 +68,7 @@ function renderProfiles() {
     tile.innerHTML = `
       <div class="avatar-circle">${escapeHtml(p.nickname.slice(0, 1).toUpperCase())}</div>
       <div class="nickname">${escapeHtml(p.nickname)}</div>
+      ${p.titleText ? `<div class="tile-title">${escapeHtml(p.titleText)}</div>` : ''}
       <div class="tile-sub">🪙 ${coins}${bankLabelFor(p)}</div>
       ${isCurrent ? '<div class="current-badge">繼續玩</div>' : ''}
     `;

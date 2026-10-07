@@ -112,7 +112,8 @@ export async function mountNav(user, activePage) {
   const menu = mountPoint.querySelector('[data-nav-user-menu]');
   const switchBtn = mountPoint.querySelector('[data-nav-switch]');
   const nicknameMenuEl = mountPoint.querySelector('[data-nav-nickname-menu]');
-  if (nicknameMenuEl) nicknameMenuEl.textContent = user.nickname;
+  // 稱號寫在選單裡：導覽列那顆按鈕連名字都快塞不下了（手機上只剩四個字寬）
+  if (nicknameMenuEl) nicknameMenuEl.textContent = user.titleText ? `${user.nickname}・${user.titleText}` : user.nickname;
 
   /*
    * 萬一仍然拿到舊版樣板（快取剛好卡在中間狀態），退回原本的行為：

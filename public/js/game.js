@@ -37,6 +37,7 @@ import { newId } from './local-store.js';
 import { readPref, writePref } from './prefs.js';
 import { startTelemetry, track, uploadBattleLog } from './telemetry.js';
 import { getCachedUser } from './auth.js';
+import { killFxFor, soundPackFor } from './shared/cosmetics.js';
 import { initOutbox, enqueue } from './outbox.js';
 
 const params = new URLSearchParams(location.search);
@@ -1463,6 +1464,12 @@ async function boot() {
     }
 
     ctx.sfx = createSfx({ onPlayed: (name) => ctx.debug._record('sfx', { name }) });
+    /*
+     * 商店買的外觀（只有外觀）：答對音效包、打掉蟲的特效。
+     * 戰鬥邏輯完全讀不到這些——它們只改聲音和畫面，輸贏、分數、錄影檔都跟沒買一樣。
+     */
+    ctx.sfx.setSoundPack(soundPackFor(getCachedUser()));
+    ctx.killFx = killFxFor(getCachedUser());
     ctx.bgm = createBgm(ctx.sfx);
     ctx.soundBridge = createSoundBridge(ctx.sfx, ctx.debug);
 

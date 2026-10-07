@@ -92,7 +92,7 @@ async function request(method, path, body, { quiet = false } = {}) {
 }
 
 export const api = {
-  get: (path) => request('GET', path),
+  get: (path, opts) => request('GET', path, undefined, opts),
   post: (path, body, opts) => request('POST', path, body, opts),
   put: (path, body) => request('PUT', path, body),
   // DELETE 也吃 body：刪帳號要把名字打一次才算數，那個確認字串得送過去

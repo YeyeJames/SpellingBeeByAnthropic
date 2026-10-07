@@ -237,3 +237,61 @@
   color: #fde047;
   font-weight: 700;
 }
+
+/* 商店分區的標題：橫跨整排 */
+.shop-section {
+  grid-column: 1 / -1;
+  margin: 0.8rem 0 0;
+  font-size: 1.1rem;
+  color: var(--color-secondary);
+}
+.shop-section:first-child {
+  margin-top: 0;
+}
+
+.sc-preview {
+  margin-top: 0.4rem;
+}
+
+/* 全家排行榜 */
+.leaderboard {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.lb-game {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-raised);
+  padding: 0.8rem 1rem;
+}
+.lb-game h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
+  color: var(--color-secondary);
+}
+.lb-game ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.lb-game li {
+  display: flex;
+  gap: 0.4rem;
+  align-items: baseline;
+  padding: 0.2rem 0;
+}
+.lb-game li.me {
+  font-weight: bold;
+}
+.lb-name {
+  flex: 1;
+}
+.lb-name small {
+  color: var(--color-text-muted);
+}
+.lb-empty {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}

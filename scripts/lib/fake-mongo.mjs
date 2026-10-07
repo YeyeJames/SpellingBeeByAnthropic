@@ -51,7 +51,8 @@ function matchValue(actual, expected) {
 }
 
 function matches(doc, query) {
-  return Object.entries(query).every(([k, v]) => matchValue(doc[k], v));
+  // 'cosmetics.beeColor' 這種帶點的條件也要比得到（外觀的「卸下」就是這種形狀）
+  return Object.entries(query).every(([k, v]) => matchValue(k.includes('.') ? getPath(doc, k) : doc[k], v));
 }
 
 /** 'stats.coins' 這種帶點的路徑要寫得進去，計分用的更新全是這種形狀。 */
@@ -81,6 +82,15 @@ function applyUpdate(doc, update) {
   }
   for (const [path, value] of Object.entries(update.$pull || {})) {
     setPath(doc, path, (getPath(doc, path) || []).filter((v) => v !== value));
+  }
+  for (const path of Object.keys(update.$unset || {})) {
+    const parts = path.split('.');
+    const parent = parts.length > 1 ? getPath(doc, parts.slice(0, -1).join('.')) : doc;
+    if (parent && typeof parent === 'object') delete parent[parts[parts.length - 1]];
+  }
+  for (const [path, value] of Object.entries(update.$max || {})) {
+    const cur = getPath(doc, path);
+    if (cur === undefined || cur === null || value > cur) setPath(doc, path, value);
   }
   return doc;
 }

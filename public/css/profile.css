@@ -20,6 +20,24 @@
   height: 100%;
 }
 
+.avatar-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+/* 商店買的稱號：掛在拼字蜂下面 */
+.avatar-title {
+  margin: 0;
+  padding: 0.25rem 0.8rem;
+  border-radius: 999px;
+  background: var(--color-accent, #ffc93c);
+  color: #3b2a00;
+  font-weight: bold;
+}
+
 .stats-grid {
   flex: 1;
   min-width: 220px;

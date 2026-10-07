@@ -150,6 +150,10 @@ console.log('\n4) 音量設定');
   await page.evaluate(() => { document.getElementById('bgm-volume').value = '0.2'; });
   await page.click('#save-audio-btn');
   check('伺服器存了', await waitFor(() => me().audioPrefs.bgmVolume === 0.2), JSON.stringify(me().audioPrefs));
+  // 等瀏覽器收到回應、寫回本機快取再換頁（資料庫比回應早一點寫好；同第 2 節主題的那個時序）
+  await page.waitForFunction(() => {
+    try { return JSON.parse(localStorage.getItem('sb:v2:shared:currentUser')).audioPrefs.bgmVolume === 0.2; } catch (e) { return false; }
+  }, null, { timeout: 5000 }).catch(() => {});
   const v = await firstPaint('/profile.html', () => {
     const el = document.getElementById('bgm-volume');
     return el && !document.body.classList.contains('page-loading') ? el.value : null;

@@ -16,7 +16,8 @@ const {
   deleteUser,
   touchLastLogin,
   updateAudioPrefs,
-  sanitizeUser
+  sanitizeUser,
+  titleTextOf
 } = require('../models/User');
 const { isValidNickname } = require('../utils/nickname');
 const { requireAuth } = require('../middleware/auth');
@@ -27,7 +28,7 @@ const router = express.Router();
 
 router.get('/profiles', async (req, res, next) => {
   try {
-    const profiles = await listProfiles();
+    const profiles = (await listProfiles()).map((p) => ({ ...p, titleText: titleTextOf(p) }));
     res.json({ profiles, banks: wordBank.listBanks() });
   } catch (err) {
     next(err);

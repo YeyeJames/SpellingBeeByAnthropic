@@ -20,6 +20,7 @@
 
 import { createPool, obtain, activeCount, releaseAll } from './pool.js';
 import { createRng } from './core/rng.js';
+import { KILL_FX } from '../shared/cosmetics.js';
 
 /*
  * 池子大小是算出來的，不是猜的：同時存在的上限 = 生成頻率 × 存活時間。
@@ -32,6 +33,7 @@ const STINGER_COUNT = 10; // 130ms 存活，最快約 35ms 一發
 const FRAGMENT_COUNT = 18; // 420ms 存活，最快約 35ms 一片
 const SPLASH_COUNT = 64; // 620ms 存活，一次擊殺 18 顆，要容得下連續三次
 const CRACK_COUNT = 14;
+const FX_COUNT = 54; // 商店的擊殺特效：一次 18 顆，跟蜂蜜噴濺一樣容得下連續三次
 /*
  * 飄分：每打對一個字母、每擊殺、每次懲罰都飄一個。
  *
@@ -58,8 +60,16 @@ function easeOutCubic(t) {
   return 1 - u * u * u;
 }
 
-export function createEffects(scene, seed) {
+export function createEffects(scene, seed, { killFx = null } = {}) {
   const rng = createRng((seed ^ 0x9e3779b9) >>> 0);
+  /*
+   * 商店買的擊殺特效（純外觀，見 shared/cosmetics.js）。
+   * 用自己的亂數：預設的蜂蜜噴濺抽亂數的順序一點都不能變，
+   * 不然沒買特效的人看到的畫面也會跟以前不一樣。
+   */
+  const fx = killFx && KILL_FX[killFx] ? KILL_FX[killFx] : null;
+  const fxRng = createRng((seed ^ 0x51ed2701) >>> 0);
+  const stingerColor = fx ? fx.stinger : COLOR_STINGER;
   /* 飄分的排位序號，見 floatText */
   let floatSeq = 0;
 
@@ -82,14 +92,14 @@ export function createEffects(scene, seed) {
    * 縮放是變換矩陣，一定生效，而且不必每格重建幾何。
    */
   const stingers = createPool(STINGER_COUNT, () => ({
-    node: scene.add.rectangle(0, 0, 1, 1, COLOR_STINGER).setOrigin(0, 0.5).setVisible(false),
+    node: scene.add.rectangle(0, 0, 1, 1, stingerColor).setOrigin(0, 0.5).setVisible(false),
     t: 0,
     len: 0
   }));
 
   // 蜂巢的發射閃光，讓「從這裡射出去」有個起點
   const muzzles = createPool(MUZZLE_COUNT, () => ({
-    node: scene.add.circle(0, 0, 16, COLOR_STINGER).setVisible(false),
+    node: scene.add.circle(0, 0, 16, stingerColor).setVisible(false),
     t: 0
   }));
 
@@ -144,6 +154,23 @@ export function createEffects(scene, seed) {
     rise: 0,
     scale: 1
   }));
+
+  /* 擊殺特效的粒子。只有買了才建立——沒買的人不多背任何物件 */
+  const fxParts = fx
+    ? createPool(FX_COUNT, (i) => {
+      const color = fx.colors[i % fx.colors.length];
+      let node;
+      if (fx.kind === 'glyph') {
+        node = scene.add.text(0, 0, fx.glyph, { fontFamily: 'system-ui, sans-serif', fontSize: `${fx.size}px`, color })
+          .setOrigin(0.5);
+      } else if (fx.round) {
+        node = scene.add.circle(0, 0, fx.w / 2, color);
+      } else {
+        node = scene.add.rectangle(0, 0, fx.w, fx.h, color);
+      }
+      return { node: node.setVisible(false), t: 0, x0: 0, y0: 0, vx: 0, vy: 0 };
+    })
+    : null;
 
   // 敵人身上的裂痕：固定掛在敵人容器裡，按進度一道一道顯示
   const cracks = createPool(CRACK_COUNT, (i) => ({
@@ -263,8 +290,26 @@ export function createEffects(scene, seed) {
       f.node.setPosition(f.x0, f.y0).setVisible(true).setAlpha(1).setScale(scale);
     },
 
-    /** 擊殺時的蜂蜜噴濺。 */
-    burst(x, y, count) {
+    /**
+     * 擊殺時的蜂蜜噴濺（外殼碎掉也用這個）。
+     * kill 而且買了擊殺特效：換成那個特效的粒子，不噴蜂蜜。
+     */
+    burst(x, y, count, { kill = false } = {}) {
+      if (kill && fxParts) {
+        for (let i = 0; i < count; i += 1) {
+          const p = obtain(fxParts);
+          // 煙火要一圈均勻散開才像煙火；其他的亂一點才自然
+          const angle = fx.lift === 0 ? (i / count) * Math.PI * 2 : fxRng.next() * Math.PI * 2;
+          const speed = fx.speed[0] + fxRng.next() * (fx.speed[1] - fx.speed[0]);
+          p.t = 0;
+          p.x0 = x;
+          p.y0 = y;
+          p.vx = Math.cos(angle) * speed;
+          p.vy = Math.sin(angle) * speed + fx.lift;
+          p.node.setPosition(x, y).setVisible(true).setAlpha(1).setScale(1).setRotation(fxRng.next() * Math.PI);
+        }
+        return;
+      }
       for (let i = 0; i < count; i += 1) {
         const p = obtain(splashes);
         const angle = rng.next() * Math.PI * 2;
@@ -346,6 +391,25 @@ export function createEffects(scene, seed) {
         p.node.setScale(1 - k * 0.6);
       }
 
+      if (fxParts) {
+        for (let i = 0; i < fxParts.size; i += 1) {
+          const p = fxParts.items[i];
+          if (!p.active) continue;
+          p.t += dtMs;
+          const k = p.t / fx.ms;
+          if (k >= 1) {
+            p.active = false;
+            p.node.setVisible(false);
+            continue;
+          }
+          const secs = p.t / 1000;
+          p.vy += fx.gravity * dt;
+          p.node.setPosition(p.x0 + p.vx * secs, p.y0 + p.vy * secs);
+          if (fx.spin) p.node.rotation += dt * 9;
+          p.node.setAlpha(k < 0.6 ? 1 : 1 - (k - 0.6) / 0.4);
+        }
+      }
+
       for (let i = 0; i < floats.size; i += 1) {
         const f = floats.items[i];
         if (!f.active) continue;
@@ -373,6 +437,7 @@ export function createEffects(scene, seed) {
         fragments: activeCount(fragments),
         splashes: activeCount(splashes),
         floats: activeCount(floats),
+        fx: fxParts ? activeCount(fxParts) : 0,
         recycled:
           stingers.recycled + fragments.recycled + splashes.recycled + muzzles.recycled +
           floats.recycled,
@@ -394,6 +459,7 @@ export function createEffects(scene, seed) {
       releaseAll(fragments);
       releaseAll(splashes);
       releaseAll(floats);
+      if (fxParts) releaseAll(fxParts);
       for (let i = 0; i < CRACK_COUNT; i += 1) cracks.items[i].node.setVisible(false);
     }
   };

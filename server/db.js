@@ -114,6 +114,8 @@ async function ensureIndexes(database) {
   await database.collection('groupProgress').createIndex({ userId: 1, groupId: 1 }, { unique: true });
   // 戰役進度：一個帳號一列
   await database.collection('campaignProgress').createIndex({ userId: 1 }, { unique: true });
+  // 小遊戲最高分：一個人一個遊戲一列（排行榜，見 routes/shop.js）
+  await database.collection('minigameBests').createIndex({ userId: 1, itemKey: 1 }, { unique: true });
 }
 
 function getDB() {

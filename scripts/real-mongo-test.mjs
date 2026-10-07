@@ -257,6 +257,28 @@ console.log('\n4) 經驗與蜂蜜：回傳給畫面的數字等於資料庫裡�
     `xp ${f.body.xp}/${fu.xp} honey ${fu.honey}`);
 }
 
+/* ── 4.5 外觀與排行榜（真的 Mongo 的 $unset、帶點的條件、$max upsert） ── */
+console.log('\n4.5) 外觀與排行榜');
+{
+  check('排行榜一人一個遊戲一列', (await idx('minigameBests')).some((i) => i.unique && i.key.userId === 1 && i.key.itemKey === 1));
+  await setUser(pierce, { coins: 50000, ownedItemKeys: ['bee_pink', 'bee_sky', 'minigame_stack'] });
+  await api(pierce.cookie, 'POST', '/user/equip', { type: 'cosmetic', itemKey: 'bee_pink' });
+  await api(pierce.cookie, 'POST', '/user/equip', { type: 'cosmetic', itemKey: 'bee_sky' });
+  check('同一格換一件：蓋掉上一件', (await user(pierce)).cosmetics?.beeColor === 'bee_sky');
+  await api(pierce.cookie, 'POST', '/user/unequip', { type: 'cosmetic', itemKey: 'bee_pink' });
+  check('晚到的舊「卸下」不動到現在穿的', (await user(pierce)).cosmetics?.beeColor === 'bee_sky');
+  await api(pierce.cookie, 'POST', '/user/unequip', { type: 'cosmetic', itemKey: 'bee_sky' });
+  check('卸下：那一格拿掉了', !('beeColor' in ((await user(pierce)).cosmetics || {})), JSON.stringify((await user(pierce)).cosmetics));
+
+  // 第一次記分同時送三次：唯一索引擋下多的，不會出錯、不會多列
+  const first = await Promise.all([4, 9, 6].map((score) => api(pierce.cookie, 'POST', '/shop/score', { itemKey: 'minigame_stack', score })));
+  check('第一次同時記三次分：都沒有出錯', first.every((r) => r.status === 200), first.map((r) => r.status).join(','));
+  check('第一次同時記三次分：只有一列', (await db.collection('minigameBests').countDocuments({ userId: pierce._id })) === 1);
+  await api(pierce.cookie, 'POST', '/shop/score', { itemKey: 'minigame_stack', score: 3 });
+  const row = await db.collection('minigameBests').findOne({ userId: pierce._id, itemKey: 'minigame_stack' });
+  check('只留最高分', row?.best === 9, String(row?.best));
+}
+
 /* ── 5. session 存在資料庫 ────────────────────────────── */
 console.log('\n5) 登入存在資料庫');
 {

@@ -51,7 +51,8 @@ class JumpScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.svg('bee', '/assets/sprites/bee-mascot.svg', { width: 220, height: 220 });
+    // 商店買的拼字蜂顏色由商店傳進來（小遊戲自己不讀使用者資料，見 economy-test 第 4 節）
+    this.load.svg('bee', this.hooks.bee || '/assets/sprites/bee-mascot.svg', { width: 220, height: 220 });
   }
 
   create() {
@@ -188,8 +189,8 @@ class JumpScene extends Phaser.Scene {
   }
 }
 
-export function create(parentId, { onScore, onEnd, onReady }) {
-  const scene = new JumpScene({ onScore, onEnd, onReady });
+export function create(parentId, { onScore, onEnd, onReady, bee }) {
+  const scene = new JumpScene({ onScore, onEnd, onReady, bee });
   const game = new Phaser.Game(phaserConfig(parentId, scene));
   return {
     game,

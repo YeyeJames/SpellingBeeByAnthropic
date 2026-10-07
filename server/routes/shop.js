@@ -285,4 +285,83 @@ router.post('/purchase', async (req, res, next) => {
   }
 });
 
+/*
+ * ── 全家排行榜（小遊戲的最高分）──────────────────────────────
+ *
+ * 每個小遊戲各一張榜，列出這個家裡每個人的最高分。分數**只拿來排名**，
+ * 跟金幣一點關係都沒有（economy-test 第 4 節）。
+ *
+ * 分數是前端回報的，沒有辦法驗證——這是家裡三個人比好玩的榜，
+ * 不是比賽，所以只擋明顯不合理的值（不是整數、負的、大得離譜）。
+ * 只存最高的那一次（$max），同一局重送幾次都一樣。
+ */
+const MAX_SCORE = 100000;
+
+router.post('/score', async (req, res, next) => {
+  try {
+    const { itemKey } = req.body || {};
+    const score = Number(req.body && req.body.score);
+    const { SHOP_ITEMS } = require('../data/shop-items');
+    const item = SHOP_ITEMS.find((i) => i.key === itemKey && i.type === 'minigame');
+    if (!item) return res.status(404).json({ error: '找不到這個小遊戲' });
+    if (!Number.isInteger(score) || score < 0 || score > MAX_SCORE) {
+      return res.status(400).json({ error: '分數不合理' });
+    }
+    if (!(req.user.ownedItemKeys || []).includes(item.key)) {
+      return res.status(403).json({ error: '還沒買這個小遊戲喔' });
+    }
+    const bests = getDB().collection('minigameBests');
+    const write = () => bests.updateOne(
+      { userId: req.user._id, itemKey: item.key },
+      { $max: { best: score }, $set: { updatedAt: new Date() } },
+      { upsert: true }
+    );
+    try {
+      await write();
+    } catch (err) {
+      /*
+       * 兩個請求同時是「第一次」：兩邊都想新建那一列，唯一索引擋下其中一個。
+       * 被擋下的那一個再寫一次——這時那一列已經在了，就是一般的 $max 更新，
+       * 這一局的分數才不會因為剛好同時送出就不見。
+       */
+      if (!err || err.code !== 11000) throw err;
+      await write();
+    }
+    const row = await bests.findOne({ userId: req.user._id, itemKey: item.key });
+    res.json({ ok: true, best: row ? row.best : score });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/leaderboard', async (req, res, next) => {
+  try {
+    const { SHOP_ITEMS } = require('../data/shop-items');
+    const titleOf = new Map(SHOP_ITEMS.filter((i) => i.slot === 'title').map((i) => [i.key, i.titleText]));
+    const [rows, users] = await Promise.all([
+      getDB().collection('minigameBests').find({}).toArray(),
+      User.listProfiles()
+    ]);
+    const byId = new Map(users.map((u) => [String(u._id), u]));
+    const boards = {};
+    for (const item of SHOP_ITEMS.filter((i) => i.type === 'minigame' && i.active)) {
+      boards[item.key] = rows
+        .filter((r) => r.itemKey === item.key && byId.has(String(r.userId)) && r.best > 0)
+        .map((r) => {
+          const u = byId.get(String(r.userId));
+          return {
+            nickname: u.nickname,
+            title: titleOf.get(u.cosmetics && u.cosmetics.title) || null,
+            best: r.best,
+            me: String(r.userId) === String(req.user._id)
+          };
+        })
+        .sort((a, b) => b.best - a.best);
+    }
+    res.json({ boards });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

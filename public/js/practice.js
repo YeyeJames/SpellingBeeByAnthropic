@@ -9,6 +9,7 @@ import {
   warmUpSpeech
 } from './audio-player.js';
 import * as sound from './sound-manager.js';
+import { beeSprite } from './shared/cosmetics.js';
 import { loadPhaser } from './game/load-phaser.js';
 import { runPageInit } from './ui-status.js';
 import { initOutbox, enqueue, onApplied } from './outbox.js';
@@ -65,7 +66,7 @@ async function whenSceneReady() {
       },
       { once: true }
     );
-    phaserGame = createPracticeGame('game-container');
+    phaserGame = createPracticeGame('game-container', { bee: beeSprite(currentUser) });
   });
 }
 
