@@ -217,9 +217,13 @@ console.log('\n2) ⭐ 同時發生的請求');
 /* ── 3. 戰役過關的 upsert ─────────────────────────────── */
 console.log('\n3) 戰役過關（第一次過關會新建一列）');
 {
-  const r = await api(allen.cookie, 'POST', '/campaign/clear', { level: 1, won: true, accuracy: 1 });
-  // Allen 的課本沒有週單字、沒有關卡：應該是 404，不是 500
-  check('Allen（沒有關卡）過關回 404，不是伺服器錯誤', r.status === 404, String(r.status));
+  /*
+   * 不存在的關卡：應該是 404，不是 500。
+   * 原本用「Allen 的課本沒有週單字、所以沒有關卡」來測；2026-10 補了他的週單字之後
+   * 他也有 100 關了，改用一個不存在的關號測同一件事（而且不會替他建出進度列）。
+   */
+  const r = await api(allen.cookie, 'POST', '/campaign/clear', { level: 999, won: true, accuracy: 1 });
+  check('不存在的關卡過關回 404，不是伺服器錯誤', r.status === 404, String(r.status));
   const p = await api(pierce.cookie, 'POST', '/campaign/clear', { level: 1, won: true, accuracy: 0.95 });
   check('Pierce 第 1 關過關成功', p.status === 200 && p.body.highestCleared === 1, `${p.status} ${JSON.stringify(p.body)}`);
   const row = await db.collection('campaignProgress').findOne({ userId: pierce._id });

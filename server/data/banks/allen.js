@@ -6,7 +6,8 @@
  *
  * ── 現況 ──────────────────────────────────────────────────
  *   ✅ 競賽單字 Part 1~4（75 字，2026-09 對照照片逐格核過）
- *   ⏳ Week 1~18 還在等照片
+ *   ✅ 每週單字 Week 1~7、9~11（Grade 5A Standard Course，2026-10 照片 5 頁）
+ *   ⏳ Week 11 之後還有頁數，等照片（見 ../words/allen-weeks.js 的檔頭）
  *
  * Part 的字數跟 Pierce 那一本不同（他是每個 Part 25 字，Allen 是
  * 20 / 20 / 20 / 15），照課本原樣，不要湊成一樣。
@@ -113,8 +114,8 @@ const CONTEST_WORDS = [
   { id: 'p4-wilderness', part: 4, english: 'wilderness', chinese: '荒野', exampleSentence: 'They camped alone in the wilderness.' }
 ];
 
-/* ⏳ 等 Allen 的每週單字（Week 1~18）——見檔頭的步驟 */
-const WEEKS = [];
+/* 每週單字：Grade 5A Standard Course，見 ../words/allen-weeks.js（目前到 Week 11） */
+const { WEEKS } = require('../words/allen-weeks');
 
 module.exports = {
   id: 'allen',

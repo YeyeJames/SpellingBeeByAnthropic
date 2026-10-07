@@ -171,9 +171,17 @@ console.log('\n3) Allen 走每一頁：看不到 Pierce 的字、拿不到 Pierc
 
 const practiceText = await textOf('/practice.html', '#part-picker .part-btn');
 const titles = await page.$$eval('#part-picker .part-title', (els) => els.map((e) => e.textContent.trim()));
-check('練習頁：組別是 Allen 的 4 個 Part', titles.length === 4 && titles.every((t) => t.startsWith('Part')),
-  titles.join('、'));
-check('練習頁：沒有 Pierce 的 Week', !/Week \d/.test(practiceText));
+/*
+ * 兩本課本都有「Part 1」「Week 1」這種名字，只看名字分不出是誰的。
+ * 所以拿整張清單比：Allen 看到的必須**剛好**是他那一本的組（順序也一樣），
+ * 而且不能有任何只有 Pierce 那一本才有的組名（例如 Week 2①、Week 12）。
+ */
+const allenLabels = wordBank.listGroups('allen').map((g) => g.label);
+const pierceOnlyGroups = wordBank.listGroups('g3a').map((g) => g.label).filter((l) => !allenLabels.includes(l));
+check('練習頁：組別剛好是 Allen 那一本的', titles.join('|') === allenLabels.join('|'), titles.join('、'));
+check('練習頁：沒有 Pierce 才有的組', !titles.some((t) => pierceOnlyGroups.includes(t)),
+  titles.filter((t) => pierceOnlyGroups.includes(t)).join('、'));
+void practiceText;
 const preselected = await page.$$eval('#part-picker .part-btn.selected .part-title',
   (els) => els.map((e) => e.textContent.trim()));
 check('練習頁：沒有預選 Pierce 上次選的組', preselected.length === 0, preselected.join('、') || '（沒有預選）');
@@ -194,9 +202,13 @@ const wbLeak = pierceWordsIn(wbText);
 check('單字庫頁：一個 Pierce 的字都沒有', wbLeak.length === 0, wbLeak.slice(0, 5).join(', '));
 check('單字庫頁：看得到 Allen 自己的字', wbText.toLowerCase().includes('acquaint'));
 
-const campText = await textOf('/campaign.html', 'body');
-check('戰役頁：沒有 Pierce 的關卡', !/Week \d/.test(campText));
-check('戰役頁：講清楚為什麼還打不了', campText.includes('每週單字'));
+await textOf('/campaign.html', 'body');
+// 戰役是從每週單字排出來的：Allen 的每一關都要是他自己那一本的組（a- 開頭）
+const allenCamp = await page.evaluate(() => fetch('/api/campaign', { credentials: 'same-origin' }).then((r) => r.json()));
+const campGroups = (allenCamp.levels || []).flatMap((l) => l.groupIds || []);
+check('戰役：Allen 有自己的關卡', (allenCamp.levels || []).length > 0, `${(allenCamp.levels || []).length} 關`);
+check('戰役：每一關都是 Allen 那一本的組', campGroups.length > 0 && campGroups.every((g) => g.startsWith('a-')),
+  campGroups.filter((g) => !g.startsWith('a-')).slice(0, 5).join(', '));
 
 const profText = await textOf('/profile.html', 'body');
 const profLeak = pierceWordsIn(profText);

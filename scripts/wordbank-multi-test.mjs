@@ -122,8 +122,9 @@ console.log('3) 課本目錄');
   const banks = wordBank.listBanks();
   check('列得出兩本', banks.length === 2, JSON.stringify(banks.map((b) => b.id)));
   const allen = banks.find((b) => b.id === 'allen');
-  check('Allen 那一本有字了（Part 1~4 共 75 字）',
-    allen && allen.ready === true && allen.wordCount === 75,
+  // Part 1~4 共 75 字＋ Week 1~11 共 338 字（2026-10 補）。補了新的週要跟著改這個數字
+  check('Allen 那一本有字了（Part 75 字＋每週 338 字）',
+    allen && allen.ready === true && allen.wordCount === 75 + 338,
     `${allen?.wordCount} 字`);
   check('Pierce 那一本是好的', banks.find((b) => b.id === 'g3a')?.ready === true);
   /*
@@ -231,13 +232,17 @@ console.log('4) 每個帳號只看得到自己那一本');
   const aCamp = await call(aApp, 'GET', '/api/campaign');
   check('Allen 的戰役不會爆掉', aCamp.status === 200, String(aCamp.status));
   /*
-   * 戰役的 96 關都是從**每週單字**排出來的，Allen 那一本還沒有，所以是空表。
-   * 重點是不能爆掉，而且進度百分比不可以是 NaN——接到畫面上會變成
-   * width: NaN%，進度條壞掉而且完全看不出為什麼。
+   * 戰役的關卡是從**每週單字**排出來的。Allen 那一本 2026-10 補了 Week 1~11，
+   * 所以現在有自己的戰役：每一關都要是他那一本的組，第 1 關是他的 Week 1。
+   * 進度百分比不可以是 NaN——接到畫面上會變成 width: NaN%，進度條壞掉而且看不出為什麼。
    */
-  check('（每週單字還沒進來，所以戰役是空的）', aCamp.body?.levels?.length === 0,
-    `${aCamp.body?.levels?.length} 關`);
-  check('空戰役的進度是 0% 而不是 NaN', aCamp.body?.summary?.percent === 0,
+  const aLevels = aCamp.body?.levels || [];
+  check('Allen 的戰役有關卡', aLevels.length > 0, `${aLevels.length} 關`);
+  check('Allen 的第 1 關是他課本的 Week 1', (aLevels[0]?.groupIds || [])[0] === 'a-w01a',
+    JSON.stringify(aLevels[0]?.groupIds));
+  check('Allen 的每一關都是他自己那一本的組',
+    aLevels.every((l) => (l.groupIds || []).every((g) => g.startsWith('a-'))));
+  check('還沒打的戰役進度是 0% 而不是 NaN', aCamp.body?.summary?.percent === 0,
     JSON.stringify(aCamp.body?.summary?.percent));
 
   /* ── 6. ⭐ 頁面真正在用的那兩支 ───────────────────────────
