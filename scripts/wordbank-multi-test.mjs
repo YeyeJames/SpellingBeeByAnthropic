@@ -122,9 +122,9 @@ console.log('3) 課本目錄');
   const banks = wordBank.listBanks();
   check('列得出兩本', banks.length === 2, JSON.stringify(banks.map((b) => b.id)));
   const allen = banks.find((b) => b.id === 'allen');
-  // Part 1~4 共 75 字＋ Week 1~11 共 338 字（2026-10 補）。補了新的週要跟著改這個數字
-  check('Allen 那一本有字了（Part 75 字＋每週 338 字）',
-    allen && allen.ready === true && allen.wordCount === 75 + 338,
+  // Part 1~4 共 75 字＋ Week 1~18 共 542 字（2026-10 補）。課本再加字要跟著改這個數字
+  check('Allen 那一本有字了（Part 75 字＋每週 542 字）',
+    allen && allen.ready === true && allen.wordCount === 75 + 542,
     `${allen?.wordCount} 字`);
   check('Pierce 那一本是好的', banks.find((b) => b.id === 'g3a')?.ready === true);
   /*
@@ -232,7 +232,7 @@ console.log('4) 每個帳號只看得到自己那一本');
   const aCamp = await call(aApp, 'GET', '/api/campaign');
   check('Allen 的戰役不會爆掉', aCamp.status === 200, String(aCamp.status));
   /*
-   * 戰役的關卡是從**每週單字**排出來的。Allen 那一本 2026-10 補了 Week 1~11，
+   * 戰役的關卡是從**每週單字**排出來的。Allen 那一本 2026-10 補了 Week 1~18，
    * 所以現在有自己的戰役：每一關都要是他那一本的組，第 1 關是他的 Week 1。
    * 進度百分比不可以是 NaN——接到畫面上會變成 width: NaN%，進度條壞掉而且看不出為什麼。
    */

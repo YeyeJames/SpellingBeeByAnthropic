@@ -1,30 +1,34 @@
 /**
- * Allen 的每週單字：Grade 5A Standard Course（Week 1~11）。
+ * Allen 的每週單字：Grade 5A Standard Course（Week 1~18）。
  *
- * 來源是課本的 Word List（2026-10 家長拍的 5 頁照片）。格式與規矩跟
+ * 來源是課本的 Word List（2026-10 家長拍的照片，共 8 頁）。格式與規矩跟
  * Pierce 那一本（./weeks.js）一樣：
  *   - 每一週的 Phonics / Spelling / Reading Plus 合併成「一週一組」
- *   - 超過 40 字的週會自動切成上下兩半（Week 1①②、Week 6①②），id 不變
+ *   - 超過 40 字的週會自動切成上下兩半（Week 1、6、11、13、15），id 不變
  *   - 資料是三元組 [英文, 中文, 例句]
  *   - 例句要包含那個單字本身、十二個英文字以內、句尾有標點
  *     （scripts/validate-words.mjs 逐條在管）
  *
- * 照片上的 Word List 只有 Week 1~7、9~11。Week 8 不在清單上（跟 Pierce 那本
- * 一樣是空的），不是漏掉。第 5 頁背面透出來的字看得出後面還有頁數
- * （Week 11 Reading Plus 之後），拿到時接在後面——**要在 Allen 開始打戰役之前
- * 一次補齊**，不然戰役的關卡內容會跟著變（docs/audit/step1 的 Q4）。
+ * Week 8、12、14 不在清單上（Pierce 那本也有空週），不是漏掉。
+ * 第 1~5 頁在 2026-10-07 先補（Week 1~11 的前半），第 6~8 頁隨後補齊。
+ * 以後如果課本改版要再加字，**要在 Allen 開始打戰役之前**——
+ * 戰役的關卡是從這些組排出來的，加組會讓已經打過的關變成別的內容（docs/audit/step1 的 Q4）。
  *
  * 照課本原樣抄、但有幾格要說明：
  *   - Mexico、Venice 是專有名詞，這裡存小寫：單字庫一律小寫（判定不分大小寫），
  *     中文註明是地名
- *   - 「sharp(turn)」「capture(a scene)」「flat(writing)」：括號裡是課本給的
- *     用法提示，不是要拼的字。只考 sharp / capture / flat，提示寫進中文與例句
- *   - 「focus/ the focus」：同一個字的兩種用法，只考 focus
- *   - 「set limits」是片語，照原樣（空白鍵在遊戲裡就是一個字母）
+ *   - 括號裡是課本給的用法提示，不是要拼的字，提示寫進中文與例句：
+ *       sharp(turn)、capture(a scene)、flat(writing)、(head is) swimming、
+ *       to pick(a lock) → 只考 sharp / capture / flat / swimming / pick
+ *       jack up(something) → 考 jack up
+ *   - 「focus/ the focus」只考 focus；「to go on strike/ a strike」只考 strike
+ *   - 片語照原樣：set limits、my pleasure、stop to think、become engaged、jack up
+ *     （空白鍵在遊戲裡就是一個字母）
  *   - Week 2 的 knock 課本列了兩次（KN 一次、CK 一次），同一組只留一筆
  *
- * 跨週重複的字（awful、caught 在 Week 5 與 11；mutter 在 Week 3 與 10；
- * struggle 在 Week 4 與 10）照課本保留——它們在不同組，id 也不同。
+ * 跨週重複的字（awful、caught、mutter、struggle、thunder、brief、boast、
+ * although、enough、rough、smooth、soup、nuisance、cruise……）照課本保留——
+ * 它們在不同組，id 也不同。
  */
 
 const WEEKS = [
@@ -446,7 +450,255 @@ const WEEKS = [
       ['stew', '燉菜', 'Grandma made beef stew for dinner.'],
       ['suit', '西裝；適合', 'Dad wore a suit to the wedding.'],
       ['suitable', '適合的', 'This movie is suitable for kids.'],
-      ['view', '景色；觀點', 'The view from the hill is lovely.']
+      ['view', '景色；觀點', 'The view from the hill is lovely.'],
+      // Reading Plus — Tom Joins Uncle Max
+      ['compliment', '稱讚', 'She gave me a nice compliment on my drawing.'],
+      ['my pleasure', '不客氣；我的榮幸', 'It was my pleasure to help you.'],
+      ['embarrassment', '尷尬；難為情', 'His face turned red with embarrassment.'],
+      ['cheer', '歡呼；加油', 'We cheer for our team at every game.'],
+      ['file', '檔案；文件夾', 'Put the papers in the blue file.'],
+      ['bustling', '熙熙攘攘的', 'The market was bustling with people.'],
+      ['despite', '儘管', 'We played outside despite the rain.'],
+      ['press', '按；壓', 'Press the button to start the machine.'],
+      ['swimming', '頭昏腦脹（head is swimming）；游泳', 'My head is swimming with so many new facts.'],
+      ['permission', '許可', 'You need permission to leave the classroom.']
+    ]
+  },
+  {
+    id: 'w13',
+    label: 'Week 13',
+    words: [
+      // Phonics — Vowel Pairs: IE
+      ['achieved', '達成（achieve 的過去式）', 'She achieved her goal of reading fifty books.'],
+      ['believe', '相信', 'I believe you can do it.'],
+      ['believes', '相信（第三人稱）', 'My brother believes in ghosts.'],
+      ['berries', '莓果（複數）', 'We picked fresh berries in the woods.'],
+      ['brief', '簡短的', 'The teacher gave a brief speech.'],
+      ['countries', '國家（複數）', 'We visited three countries last summer.'],
+      ['discoveries', '發現（複數）', 'Scientists made many new discoveries this year.'],
+      ['field', '田野；場地', 'The cows are eating grass in the field.'],
+      ['flies', '飛（第三人稱）；蒼蠅', 'The bird flies over the lake.'],
+      ['fried', '油炸的', 'I love fried chicken.'],
+      ['married', '結婚的', 'My aunt got married last spring.'],
+      ['memories', '回憶（複數）', 'I have happy memories of that trip.'],
+      ['piece', '一塊；一片', 'May I have a piece of cake?'],
+      ['relief', '鬆一口氣；解脫', 'It was a relief to find my lost dog.'],
+      ['shield', '盾牌', 'The knight held up his shield.'],
+      ['skies', '天空（複數）', 'Clear skies are expected tomorrow.'],
+      ['tries', '嘗試（第三人稱）', 'He tries his best every day.'],
+      ['twenties', '二十幾歲；二十年代', 'My cousin is in her twenties.'],
+      ['united', '團結的；聯合的', 'The team was united in the final game.'],
+      // Phonics — Vowel Pairs: OU
+      ['although', '雖然', 'Although it was cold, we went swimming.'],
+      ['could', '能夠（can 的過去式）', 'I could not find my shoes.'],
+      ['country', '國家；鄉下', 'They live in the country on a farm.'],
+      ['dough', '麵團', 'Mom rolled the dough to make cookies.'],
+      ['doughnut', '甜甜圈', 'I ate a chocolate doughnut for breakfast.'],
+      ['enough', '足夠的', 'Do we have enough chairs for everyone?'],
+      ['famous', '有名的', 'He wants to be a famous singer.'],
+      ['group', '群組；團體', 'We worked in a group of four.'],
+      ['rough', '粗糙的', 'The bark of the tree feels rough.'],
+      ['should', '應該', 'You should drink more water.'],
+      ['shoulders', '肩膀（複數）', 'Dad carried me on his shoulders.'],
+      ['soup', '湯', 'Grandma made hot chicken soup.'],
+      ['touch', '觸摸', 'Please do not touch the paintings.'],
+      ['troubles', '煩惱；麻煩（複數）', 'He told me all his troubles.'],
+      ['toughest', '最難的；最強壯的', 'This is the toughest puzzle I have ever done.'],
+      ['would', '將會；願意', 'Would you like some tea?'],
+      ['young', '年輕的', 'The young bird cannot fly yet.'],
+      ['youth', '青春；年輕人', 'He played soccer in his youth.'],
+      // Phonics — Beginning Consonant Pairs: SH, TH, WH & SHR
+      ['shrill', '尖銳刺耳的', 'The whistle made a shrill sound.'],
+      ['shrimp', '蝦子', 'We had fried shrimp for dinner.'],
+      ['shrubs', '灌木（複數）', 'The gardener cut the shrubs.'],
+      ['shrug', '聳肩', 'He gave a shrug and said nothing.'],
+      ['theaters', '戲院（複數）', 'The new movie is in theaters now.'],
+      ['thorns', '刺（複數）', 'Roses have sharp thorns.'],
+      ['thunder', '雷', 'The thunder scared my little dog.'],
+      ['whales', '鯨魚（複數）', 'We saw two whales from the boat.'],
+      ['whiskers', '鬍鬚（複數）', 'My cat has long white whiskers.'],
+      ['whistled', '吹口哨（whistle 的過去式）', 'He whistled a happy tune.'],
+      // Phonics — Middle and Ending Consonant Pairs: SH, TH & NG
+      ['both', '兩者都', 'Both of my sisters like music.'],
+      ['during', '在…期間', 'Please be quiet during the movie.'],
+      ['interesting', '有趣的', 'This book is very interesting.'],
+      ['kidding', '開玩笑', 'Are you kidding me?'],
+      ['morning', '早上', 'I walk the dog every morning.'],
+      ['mother', '母親', 'My mother is a nurse.'],
+      ['nothing', '沒有東西', 'There is nothing in the box.'],
+      ['ring', '戒指；鈴聲', 'She wears a gold ring.'],
+      ['together', '一起', 'We do our homework together.'],
+      ['wish', '希望；願望', 'I wish I could fly.'],
+      // Reading Plus — The King of Escape
+      ['slip', '溜走；滑倒', 'Be careful not to slip on the ice.'],
+      ['boast', '吹噓', 'He likes to boast about his new bike.'],
+      ['claim', '聲稱', 'They claim they saw a ghost.'],
+      ['handcuffs', '手銬', 'The police put handcuffs on the thief.'],
+      ['amazement', '驚奇', 'We watched the magic show in amazement.'],
+      ['publicity', '宣傳；名聲', 'The show got a lot of publicity.'],
+      ['toss', '拋；扔', 'Toss me the ball, please.'],
+      ['prisoner', '囚犯', 'The prisoner escaped at night.'],
+      ['free', '自由的；免費的', 'The bird was finally free.'],
+      ['pick', '撬開（pick a lock 開鎖）；挑選', 'The thief tried to pick the lock.']
+    ]
+  },
+  {
+    id: 'w15',
+    label: 'Week 15',
+    words: [
+      // Phonics — Sounds of TH
+      ['bathes', '洗澡（第三人稱）', 'My sister bathes the baby every night.'],
+      ['breathe', '呼吸', 'Breathe in slowly through your nose.'],
+      ['earth', '地球；泥土', 'The earth goes around the sun.'],
+      ['leather', '皮革', 'This bag is made of leather.'],
+      ['nothing', '沒有東西', 'I have nothing to do today.'],
+      ['smooth', '光滑的', 'The stone is round and smooth.'],
+      ['southern', '南方的', 'They live in southern Taiwan.'],
+      ['theater', '戲院；劇場', 'We watched a play at the theater.'],
+      ['thighs', '大腿（複數）', 'My thighs hurt after the long run.'],
+      ['thunder', '雷', 'We heard thunder in the distance.'],
+      // Phonics — Consonant Pairs: CH, TCH
+      ['catch', '接住；抓住', 'Catch the ball with both hands.'],
+      ['chair', '椅子', 'Please sit on the chair.'],
+      ['chef', '主廚', 'The chef cooked a great meal.'],
+      ['chemist', '化學家；藥劑師', 'The chemist mixed two liquids.'],
+      // Spelling — Lesson 7
+      ['beaver', '河狸', 'A beaver built a dam in the river.'],
+      ['brief', '簡短的', 'Keep your answer brief.'],
+      ['danger', '危險', 'The sign warns of danger ahead.'],
+      ['favor', '幫忙；恩惠', 'Can you do me a favor?'],
+      ['great', '很棒的', 'We had a great time at the zoo.'],
+      ['hasty', '匆忙的；草率的', 'Do not make a hasty choice.'],
+      ['layer', '一層', 'A thin layer of snow covered the car.'],
+      ['praise', '稱讚', 'The coach gave us praise after the game.'],
+      ['reindeer', '馴鹿', 'Santa has eight reindeer.'],
+      ['reins', '韁繩（複數）', 'She held the reins of the horse.'],
+      ['repeat', '重複', 'Please repeat the question.'],
+      ['retreat', '撤退', 'The army had to retreat.'],
+      ['scene', '場景', 'The scene of the play is a forest.'],
+      ['scrape', '刮；擦傷', 'I fell and got a scrape on my knee.'],
+      ['seize', '抓住', 'The police will seize the stolen car.'],
+      ['sleeves', '袖子（複數）', 'Roll up your sleeves before you wash.'],
+      ['sleigh', '雪橇', 'We rode a sleigh down the snowy hill.'],
+      ['stale', '不新鮮的', 'This bread is old and stale.'],
+      ['stationary', '靜止的', 'The bus was stationary at the red light.'],
+      ['steep', '陡峭的', 'The hill is too steep to ride up.'],
+      ['ache', '疼痛', 'I have an ache in my tooth.'],
+      ['maintain', '維持；保養', 'Dad helps maintain the old car.'],
+      ['receive', '收到', 'You will receive a prize for winning.'],
+      ['relation', '關係；親戚', 'He is a close relation of mine.'],
+      ['teammate', '隊友', 'My teammate passed me the ball.'],
+      // Reading Plus — Moving Day
+      ['block', '街區；積木', 'We live on the same block.'],
+      ['remark', '評論；說', 'He made a funny remark about my hat.'],
+      ['obtain', '取得', 'You must obtain a ticket first.'],
+      ['basement', '地下室', 'We store old boxes in the basement.'],
+      ['utility', '公用事業（水電等）', 'Mom paid the utility bill today.'],
+      ['fragile', '易碎的', 'Be careful, the glass is fragile.'],
+      ['firm', '堅固的；堅定的', 'Hold the ladder firm while I climb.'],
+      ['jack up', '把…頂起來（jack up something）', 'Dad will jack up the car to fix the tire.'],
+      ['cylinder', '圓柱體', 'A can is shaped like a cylinder.'],
+      ['beam', '橫樑；光束', 'A wooden beam holds up the roof.']
+    ]
+  },
+  {
+    id: 'w16',
+    label: 'Week 16',
+    words: [
+      // Spelling — Lesson 8
+      ['boast', '吹噓', 'Do not boast about your good grades.'],
+      ['climate', '氣候', 'Taiwan has a warm climate.'],
+      ['dome', '圓頂', 'The building has a big white dome.'],
+      ['flown', '飛（fly 的過去分詞）', 'I have flown on a plane twice.'],
+      ['growth', '成長', 'Milk helps the growth of strong bones.'],
+      ['highlight', '最精彩的部分；畫重點', 'The highlight of the trip was the beach.'],
+      ['hotel', '飯店', 'We stayed at a hotel by the sea.'],
+      ['idea', '主意', 'That is a great idea!'],
+      ['lifeboat', '救生艇', 'The sailors climbed into the lifeboat.'],
+      ['lightning', '閃電', 'Lightning flashed across the sky.'],
+      ['mostly', '大部分；主要地', 'The class is mostly girls.'],
+      ['motor', '馬達', 'The boat has a small motor.'],
+      ['overgrown', '長滿雜草的', 'The old garden was overgrown with weeds.'],
+      ['postpone', '延期', 'We had to postpone the game.'],
+      ['quote', '引用；引言', 'I like this quote from the book.'],
+      ['recite', '背誦', 'I can recite the whole poem.'],
+      ['robot', '機器人', 'The robot can clean the floor.'],
+      ['skyline', '天際線', 'The city skyline is beautiful at night.'],
+      ['stride', '大步走', 'He walked with a long stride.'],
+      ['tiger', '老虎', 'The tiger has black stripes.'],
+      ['although', '雖然', 'Although he was tired, he kept running.'],
+      ['boulder', '巨石', 'A huge boulder blocked the road.'],
+      ['ownership', '所有權', 'The ownership of the house changed.'],
+      ['silence', '安靜；沉默', 'There was silence in the library.'],
+      ['typewriter', '打字機', 'Grandpa wrote letters on a typewriter.']
+    ]
+  },
+  {
+    id: 'w17',
+    label: 'Week 17',
+    words: [
+      // Phonics — Consonant Pairs: GH, PH
+      ['autobiography', '自傳', 'The singer wrote an autobiography.'],
+      ['autograph', '親筆簽名', 'I got the player\'s autograph.'],
+      ['biography', '傳記', 'I read a biography of Lincoln.'],
+      ['coughed', '咳嗽（cough 的過去式）', 'He coughed all night long.'],
+      ['elephant', '大象', 'The elephant has a long trunk.'],
+      ['enough', '足夠的', 'I have had enough to eat.'],
+      ['laugh', '笑', 'Funny movies make me laugh.'],
+      ['nephew', '姪子；外甥', 'My uncle took his nephew fishing.'],
+      ['orphan', '孤兒', 'The orphan lived with his grandma.'],
+      ['philodendron', '蔓綠絨（一種室內植物）', 'A green philodendron grows in our kitchen.'],
+      ['phony', '假的', 'That phone call was a phony.'],
+      ['photogenic', '上相的', 'My little sister is very photogenic.'],
+      ['photograph', '照片', 'I took a photograph of the sunset.'],
+      ['photographer', '攝影師', 'The photographer took our class picture.'],
+      ['rough', '粗糙的；艱難的', 'We had a rough day at school.'],
+      ['telegraph', '電報', 'People once sent news by telegraph.'],
+      ['telephone', '電話', 'The telephone rang during dinner.'],
+      ['tough', '堅韌的；困難的', 'The math test was tough.'],
+      // Reading Plus — A Month Without the Paper
+      ['brisk', '輕快的；涼爽的', 'We took a brisk walk in the cold.'],
+      ['occur', '發生', 'Accidents can occur at any time.'],
+      ['strike', '罷工（go on strike）', 'The workers went on strike for better pay.'],
+      ['uncertainly', '不確定地', 'She looked at me uncertainly.'],
+      ['stop to think', '停下來想一想', 'Stop to think before you answer.'],
+      ['clip', '剪下；夾子', 'Mom likes to clip coupons from the paper.'],
+      ['coupon', '優惠券', 'I used a coupon to save money.'],
+      ['become engaged', '訂婚', 'My aunt and uncle will become engaged soon.'],
+      ['couple', '一對；夫妻', 'The old couple walked hand in hand.'],
+      ['acquaintance', '認識的人', 'He is an acquaintance from my old school.']
+    ]
+  },
+  {
+    id: 'w18',
+    label: 'Week 18',
+    words: [
+      // Spelling — Lesson 9
+      ['bloom', '開花', 'The flowers bloom in spring.'],
+      ['cartoon', '卡通', 'I watch a cartoon after school.'],
+      ['clue', '線索', 'The detective found a clue.'],
+      ['cruise', '乘船遊覽', 'We took a cruise around the island.'],
+      ['cube', '立方體', 'An ice cube fell on the floor.'],
+      ['duty', '責任；職責', 'It is my duty to feed the cat.'],
+      ['lunar', '月亮的；農曆的', 'We celebrate the Lunar New Year.'],
+      ['music', '音樂', 'I listen to music on the bus.'],
+      ['noodle', '麵條', 'I slurped a long noodle.'],
+      ['prove', '證明', 'Can you prove that you are right?'],
+      ['rooster', '公雞', 'The rooster crows every morning.'],
+      ['scuba', '水肺潛水', 'We went scuba diving in the sea.'],
+      ['smooth', '平滑的', 'The baby has smooth skin.'],
+      ['soothing', '使人平靜的', 'The music was soft and soothing.'],
+      ['soup', '湯', 'This soup is too hot to eat.'],
+      ['tissue', '面紙', 'Please pass me a tissue.'],
+      ['toothbrush', '牙刷', 'I need a new toothbrush.'],
+      ['truth', '真相；實話', 'Always tell the truth.'],
+      ['unite', '團結；聯合', 'We must unite to win the game.'],
+      ['usual', '平常的', 'I woke up at the usual time.'],
+      ['junior', '較年輕的；初級的', 'My brother goes to junior high.'],
+      ['museum', '博物館', 'We saw dinosaur bones at the museum.'],
+      ['nuisance', '討厭的人或事', 'The flies are a real nuisance.'],
+      ['preview', '預告；預習', 'We watched a preview of the new movie.'],
+      ['routine', '例行公事', 'Brushing my teeth is part of my routine.']
     ]
   }
 ];
