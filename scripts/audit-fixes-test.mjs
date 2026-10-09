@@ -198,8 +198,18 @@ console.log('\n5) ⭐ 打完一場剛好網路不通');
   check('補送之後經驗也進帳了', (userRow(pierce.id).xp || 0) > 0, String(userRow(pierce.id).xp));
   const cp = (store.campaignProgress || []).find((c) => String(c.userId) === pierce.id);
   check('補送之後第 1 關算過了', cp?.highestCleared >= 1, JSON.stringify(cp?.highestCleared));
-  const left = await page.evaluate((k) => JSON.parse(localStorage.getItem(k) || '[]'), outboxKey);
-  check('佇列清空了', left.length === 0, String(left.length));
+  /*
+   * 伺服器寫好資料庫，比回應送回瀏覽器、佇列把那一筆拿掉早一點點。
+   * 上面是看資料庫等的，所以這裡再給佇列一點時間（最多 3 秒）——要的是「最後會清空」，
+   * 不是「伺服器寫好的同一瞬間就清空」。
+   */
+  let left = [];
+  for (let i = 0; i < 30; i += 1) {
+    left = await page.evaluate((k) => JSON.parse(localStorage.getItem(k) || '[]'), outboxKey);
+    if (!left.length) break;
+    await page.waitForTimeout(100);
+  }
+  check('佇列清空了', left.length === 0, left.map((o) => `${o.kind} ${o.path} tries=${o.tries}`).join('；') || '0');
 
   // 再送一次同一筆（例如回應沒傳回來、佇列又送了一次）：不會加兩次
   const xpBefore = userRow(pierce.id).xp;
