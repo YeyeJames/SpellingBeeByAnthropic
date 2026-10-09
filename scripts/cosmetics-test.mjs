@@ -164,6 +164,31 @@ check('有分區（小遊戲、顏色、特效、音效、稱號…）',
 const previews = await page.$$eval('.sc-preview', (els) => els.length);
 check('每個音效包都能試聽（買之前也行）', previews === SHOP_ITEMS.filter((i) => i.slot === 'soundPack').length, `${previews} 顆`);
 await page.click('.sc-preview');
+/*
+ * 每一個音效包真的發得出聲音（我沒辦法用耳朵聽，所以用離線的 AudioContext 把它算出來，
+ * 看輸出是不是有聲音、會不會太大聲爆音）。商店上架的每一個也都要有對應的合成方式。
+ */
+const packKeys = SHOP_ITEMS.filter((i) => i.slot === 'soundPack').map((i) => i.key);
+const rendered = await page.evaluate(async (keys) => {
+  const { playPack, SOUND_PACK_KEYS } = await import('/js/shared/sound-packs.js');
+  const out = {};
+  for (const key of keys) {
+    const ctx = new OfflineAudioContext(1, 44100 * 1, 44100);
+    const ok = playPack(key, ctx, ctx.destination, 1);
+    const buf = await ctx.startRendering();
+    const d = buf.getChannelData(0);
+    let sum = 0;
+    let peak = 0;
+    for (let i = 0; i < d.length; i += 1) { sum += d[i] * d[i]; peak = Math.max(peak, Math.abs(d[i])); }
+    out[key] = { ok, rms: Math.sqrt(sum / d.length), peak };
+  }
+  return { out, known: SOUND_PACK_KEYS };
+}, packKeys);
+check('商店上架的音效包每一個都有合成方式', packKeys.every((k) => rendered.known.includes(k)), packKeys.filter((k) => !rendered.known.includes(k)).join(','));
+for (const k of packKeys) {
+  const r = rendered.out[k];
+  check(`${k}：發得出聲音、不會爆音`, r.ok && r.rms > 0.002 && r.peak <= 1, `rms ${r.rms.toFixed(4)}、peak ${r.peak.toFixed(2)}`);
+}
 await page.click('[data-cosmetic="bee_pink"]');
 check('按「使用」：伺服器存了', await waitFor(() => userOf(pierce).cosmetics?.beeColor === 'bee_pink'));
 await page.click('[data-cosmetic="fx_hearts"]');

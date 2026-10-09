@@ -60,7 +60,7 @@ const PACKS = {
   },
   /* 咚咚鏘：兩下大鼓＋一下小鼓 */
   sound_drum(ctx, out, at, k) {
-    [0, 0.12].forEach((d) => osc(ctx, out, { freq: 150, to: 45, at: at + d, dur: 0.18, gain: 0.5 * k }));
+    [0, 0.12].forEach((d) => osc(ctx, out, { freq: 150, to: 45, at: at + d, dur: 0.18, gain: 0.35 * k }));
     hiss(ctx, out, { at: at + 0.24, dur: 0.16, gain: 0.3 * k, type: 'highpass', freq: 1500 });
     osc(ctx, out, { type: 'triangle', freq: 220, to: 160, at: at + 0.24, dur: 0.1, gain: 0.15 * k });
   },
@@ -75,6 +75,60 @@ const PACKS = {
     [1046.5, 1318.5, 1568, 2093].forEach((f, i) =>
       osc(ctx, out, { freq: f, at: at + i * 0.06, dur: 0.5, gain: 0.12 * k }));
     hiss(ctx, out, { at, dur: 0.35, gain: 0.04 * k, type: 'highpass', freq: 6000 });
+  },
+
+  /* ── 2026-10 加的六個（他很喜歡音效包，所以多做幾個） ── */
+
+  /* 金幣叮噹：電玩撿到金幣的那兩聲，第二聲高、拉長 */
+  sound_coin(ctx, out, at, k) {
+    osc(ctx, out, { type: 'square', freq: 987.8, at, dur: 0.07, gain: 0.12 * k });
+    osc(ctx, out, { type: 'square', freq: 1318.5, at: at + 0.07, dur: 0.35, gain: 0.12 * k });
+  },
+  /* 勝利號角：嗒嗒嗒——噠！三個短音接一個長音 */
+  sound_fanfare(ctx, out, at, k) {
+    [523.25, 523.25, 523.25].forEach((f, i) =>
+      osc(ctx, out, { type: 'sawtooth', freq: f, at: at + i * 0.09, dur: 0.07, gain: 0.11 * k }));
+    osc(ctx, out, { type: 'sawtooth', freq: 784, at: at + 0.3, dur: 0.38, gain: 0.11 * k });
+    osc(ctx, out, { type: 'triangle', freq: 1046.5, at: at + 0.3, dur: 0.38, gain: 0.08 * k });
+  },
+  /* 滑哨：咻～往上滑上去 */
+  sound_whistle(ctx, out, at, k) {
+    osc(ctx, out, { freq: 600, to: 2200, at, dur: 0.32, gain: 0.18 * k });
+  },
+  /* 彈簧：啵～嗡嗡嗡，音高一邊抖一邊往下掉 */
+  sound_spring(ctx, out, at, k) {
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    const wobble = ctx.createOscillator();
+    const depth = ctx.createGain();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(420, at);
+    o.frequency.exponentialRampToValueAtTime(180, at + 0.45);
+    wobble.frequency.value = 18;
+    depth.gain.value = 60;
+    wobble.connect(depth);
+    depth.connect(o.frequency);
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(0.3 * k, at + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + 0.45);
+    o.connect(g);
+    g.connect(out);
+    o.start(at);
+    wobble.start(at);
+    o.stop(at + 0.48);
+    wobble.stop(at + 0.48);
+  },
+  /* 電玩升級：方波一路往上爬的琶音 */
+  sound_levelup(ctx, out, at, k) {
+    [523.25, 659.25, 783.99, 1046.5, 1318.5, 1568].forEach((f, i) =>
+      osc(ctx, out, { type: 'square', freq: f, at: at + i * 0.05, dur: 0.08, gain: 0.12 * k }));
+  },
+  /* 木琴：叮、咚、噹三下往上，短而清脆 */
+  sound_xylophone(ctx, out, at, k) {
+    [[1318.5, 0], [1568, 0.1], [2093, 0.2]].forEach(([f, d]) => {
+      osc(ctx, out, { freq: f, at: at + d, dur: 0.22, gain: 0.22 * k });
+      osc(ctx, out, { freq: f * 4, at: at + d, dur: 0.05, gain: 0.04 * k });
+    });
   }
 };
 
