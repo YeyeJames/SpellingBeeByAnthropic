@@ -25,6 +25,7 @@ const summaryPanel = document.getElementById('summary-panel');
 const partPicker = document.getElementById('part-picker');
 const setupError = document.getElementById('setup-error');
 const progressLabel = document.getElementById('progress-label');
+const groupLabelEl = document.getElementById('practice-group-label');
 const sessionCoinBadge = document.getElementById('session-coin-badge');
 const answerInput = document.getElementById('answer-input');
 const submitBtn = document.getElementById('submit-answer-btn');
@@ -298,6 +299,8 @@ async function startPractice({ reviewOnly = false } = {}) {
     id: newId(), // 由前端產生，作答紀錄在離線時也能先排隊
     // 複習模式跨組，不屬於任何一組，所以不會計入解鎖進度
     groupId: reviewOnly ? null : selectedGroup,
+    // 畫面上方寫「現在練的是哪一組」：原本只有 10 / 30，從旁邊看不出是 Week 幾
+    label: reviewOnly ? '📋 複習到期單字' : (groups.find((g) => g.id === selectedGroup) || {}).label || '',
     words: data.words,
     index: 0,
     sessionCoins: 0,
@@ -337,6 +340,7 @@ async function fetchReviewCount() {
 async function showQuestion() {
   const word = session.words[session.index];
   progressLabel.textContent = `${session.index + 1} / ${session.words.length}`;
+  if (groupLabelEl) groupLabelEl.textContent = session.label || '';
   sessionCoinBadge.textContent = `本回 🪙 ${session.sessionCoins}`;
   answerInput.value = '';
   answerInput.disabled = false;

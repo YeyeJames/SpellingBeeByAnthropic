@@ -270,6 +270,25 @@
   font-size: 1rem;
 }
 
+.practice-where {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+
+/* 練的是哪一組：比進度數字醒目一點，從旁邊也看得到 */
+.practice-group {
+  padding: 0.15rem 0.7rem;
+  border-radius: 999px;
+  background: var(--color-secondary, #004e98);
+  color: #fff;
+  font-weight: bold;
+  font-size: 1rem;
+}
+.practice-group:empty {
+  display: none;
+}
+
 /*
  * 遊戲畫面是唯一會伸縮的區塊：進度列固定在上、作答與答案固定在下，
  * 中間剩多少空間就給遊戲多少，蜜蜂會依空間自動放大縮小填滿。

@@ -89,7 +89,12 @@ const state = () => page.evaluate(() => ({
 }));
 const at = (i) => `${i + 1} / ${words.length}`;
 
-console.log('1) 打完按 Enter：送出，但不跳題');
+console.log('0) 畫面上看得出練的是哪一組');
+await page.waitForSelector('#answer-input:not([disabled])');
+const where = (await page.textContent('#practice-group-label')).trim();
+check('上方寫著這一組的名字', where === target.label, `「${where}」`);
+
+console.log('\n1) 打完按 Enter：送出，但不跳題');
 await page.waitForSelector('#answer-input:not([disabled])');
 await sleep(500);
 await page.keyboard.type(words[0].english);

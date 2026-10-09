@@ -80,7 +80,11 @@
 
     <div class="panel container hidden" id="practice-panel">
       <div class="practice-topbar">
-        <span id="progress-label" class="display-font">1 / 25</span>
+        <!-- 練的是哪一組：家長從旁邊看（或他自己忘了點的是哪一組）要一眼看得出來 -->
+        <span class="practice-where">
+          <span id="practice-group-label" class="practice-group"></span>
+          <span id="progress-label" class="display-font">1 / 25</span>
+        </span>
         <!--
           「這一回賺到的」，不是存款總數。
 
