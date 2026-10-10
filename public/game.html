@@ -112,6 +112,18 @@
   <div id="pregame" hidden>
     <strong id="pregame-group"></strong>
     <p id="pregame-count"></p>
+    <!--
+      王關（C7）：王是誰、怎麼打。王關的規則跟平常不一樣（王的血、換階段、金色親衛兵），
+      開打前一定要講——打到一半才發現「怎麼突然變快」只會讓他覺得遊戲怪怪的。
+      不用 <strong>：#pregame strong 是 2.4rem 的大標題樣式。
+    -->
+    <div id="pregame-boss" hidden>
+      <img id="pregame-boss-img" alt="" />
+      <div class="pregame-boss-text">
+        <span id="pregame-boss-name" class="pregame-boss-name"></span>
+        <ul id="pregame-boss-rules"></ul>
+      </div>
+    </div>
     <!-- 最容易誤會的三件事，每一場都會看到一次 -->
     <div id="pregame-rules"></div>
 

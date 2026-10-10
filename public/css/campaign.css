@@ -246,6 +246,51 @@
   }
 }
 
+/* 王關（C7）：格子右邊站著那隻王 */
+.level-cell.is-boss {
+  position: relative;
+  overflow: hidden;
+}
+
+.level-boss-img {
+  position: absolute;
+  right: -8px;
+  top: 4px;
+  width: 50%;
+  max-width: 96px;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+/* 打倒了：王縮小變淡，像收進圖鑑裡 */
+.level-cell.is-cleared .level-boss-img {
+  opacity: 0.45;
+  filter: grayscale(0.4);
+}
+
+.level-cell.is-final .level-boss-img {
+  width: auto;
+  height: 120%;
+  max-width: none;
+  right: 1rem;
+  bottom: -10%;
+}
+
+.level-boss-name {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #fde68a;
+  position: relative;
+}
+
+.level-cell.is-boss > span {
+  position: relative;
+}
+
+.level-cell.is-final .level-boss-name {
+  font-size: 1.05rem;
+}
+
 .level-cell.is-boss.is-cleared {
   border-color: #2f6b52;
 }

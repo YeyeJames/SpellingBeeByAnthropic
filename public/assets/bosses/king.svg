@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 230" width="300" height="230">
+  <!-- 大魔王・大黃蜂魔王：金色霓虹、紅披風、鑲寶石的皇冠、四片翅膀 -->
+  <defs>
+    <radialGradient id="k-body" cx="40%" cy="28%" r="80%">
+      <stop offset="0%" stop-color="#4a2a30"/><stop offset="60%" stop-color="#24121a"/><stop offset="100%" stop-color="#0e0608"/>
+    </radialGradient>
+    <radialGradient id="k-eye" cx="38%" cy="32%" r="72%">
+      <stop offset="0%" stop-color="#fffbeb"/><stop offset="40%" stop-color="#f87171"/><stop offset="100%" stop-color="#991b1b"/>
+    </radialGradient>
+    <linearGradient id="k-wing" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fef3c7" stop-opacity="0.85"/><stop offset="100%" stop-color="#f59e0b" stop-opacity="0.25"/>
+    </linearGradient>
+    <linearGradient id="k-gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fef08a"/><stop offset="60%" stop-color="#fbbf24"/><stop offset="100%" stop-color="#b45309"/></linearGradient>
+    <linearGradient id="k-cape" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#dc2626"/><stop offset="100%" stop-color="#7f1d1d"/></linearGradient>
+    <filter id="k-glow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="11"/></filter>
+  </defs>
+  <g filter="url(#k-glow)" opacity="0.6">
+    <ellipse cx="170" cy="126" rx="118" ry="78" fill="#f59e0b"/><circle cx="84" cy="116" r="54" fill="#ef4444"/>
+  </g>
+  <!-- 四片翅膀 -->
+  <ellipse cx="150" cy="48" rx="70" ry="26" transform="rotate(-24 150 48)" fill="url(#k-wing)" stroke="#fde68a" stroke-width="3"/>
+  <ellipse cx="196" cy="54" rx="64" ry="24" transform="rotate(-10 196 54)" fill="url(#k-wing)" stroke="#fde68a" stroke-width="3"/>
+  <!-- 披風 -->
+  <path d="M110 88 Q170 70 236 92 Q262 160 228 210 Q170 190 116 212 Q92 150 110 88 Z" fill="url(#k-cape)" stroke="#fbbf24" stroke-width="5" stroke-linejoin="round"/>
+  <!-- 腳 -->
+  <g stroke-linecap="round" fill="none">
+    <g stroke="#fbbf24" stroke-width="15"><path d="M126 176 L112 212"/><path d="M168 182 L166 220"/><path d="M210 176 L226 210"/></g>
+    <g stroke="#10162a" stroke-width="7"><path d="M126 176 L112 212"/><path d="M168 182 L166 220"/><path d="M210 176 L226 210"/></g>
+  </g>
+  <!-- 腹部 -->
+  <ellipse cx="196" cy="132" rx="86" ry="50" fill="url(#k-body)" stroke="#fbbf24" stroke-width="8"/>
+  <g fill="#fbbf24"><path d="M160 86 Q170 132 160 178 L180 182 Q190 132 180 84 Z"/><path d="M208 84 Q218 132 208 180 L226 176 Q236 132 226 88 Z"/><path d="M250 98 Q258 132 250 166 L262 156 Q268 132 262 108 Z"/></g>
+  <path d="M278 124 L300 132 L278 142 Z" fill="#fef08a" stroke="#b45309" stroke-width="4" stroke-linejoin="round"/>
+  <!-- 頭 -->
+  <circle cx="90" cy="124" r="52" fill="url(#k-body)" stroke="#fbbf24" stroke-width="9"/>
+  <!-- 角 -->
+  <path d="M52 92 Q30 70 34 44 Q50 70 66 80 Z M128 92 Q150 70 146 44 Q130 70 114 80 Z" fill="url(#k-gold)" stroke="#b45309" stroke-width="3" stroke-linejoin="round"/>
+  <!-- 皇冠 -->
+  <path d="M54 82 L58 42 L74 64 L90 32 L106 64 L122 42 L126 82 Z" fill="url(#k-gold)" stroke="#b45309" stroke-width="4" stroke-linejoin="round"/>
+  <circle cx="90" cy="66" r="7" fill="#ef4444" stroke="#7f1d1d" stroke-width="2"/><circle cx="68" cy="72" r="4" fill="#60a5fa"/><circle cx="112" cy="72" r="4" fill="#4ade80"/>
+  <!-- 眼睛 -->
+  <circle cx="72" cy="128" r="15" fill="url(#k-eye)"/><circle cx="108" cy="128" r="15" fill="url(#k-eye)"/>
+  <circle cx="68" cy="124" r="5" fill="#fff"/><circle cx="104" cy="124" r="5" fill="#fff"/>
+  <path d="M52 110 L86 120 M128 110 L94 120" stroke="#0f172a" stroke-width="7" stroke-linecap="round"/>
+  <!-- 獠牙 -->
+  <path d="M74 154 Q90 146 106 154" fill="none" stroke="#fbbf24" stroke-width="5" stroke-linecap="round"/>
+  <path d="M78 154 L82 166 L86 155 M94 155 L98 166 L102 154" fill="#fef3c7" stroke="#b45309" stroke-width="2" stroke-linejoin="round"/>
+</svg>

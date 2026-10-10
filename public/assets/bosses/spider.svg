@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 210" width="280" height="210">
+  <!-- 中王三・蜘蛛女皇：紫色霓虹、背後一張網、六顆眼睛排成冠 -->
+  <defs>
+    <radialGradient id="s-body" cx="40%" cy="28%" r="80%">
+      <stop offset="0%" stop-color="#3b2f66"/><stop offset="60%" stop-color="#1b1640"/><stop offset="100%" stop-color="#0a0818"/>
+    </radialGradient>
+    <radialGradient id="s-eye" cx="38%" cy="32%" r="72%">
+      <stop offset="0%" stop-color="#faf5ff"/><stop offset="45%" stop-color="#c4b5fd"/><stop offset="100%" stop-color="#7c3aed"/>
+    </radialGradient>
+    <filter id="s-glow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="9"/></filter>
+  </defs>
+  <!-- 網 -->
+  <g stroke="#a78bfa" stroke-opacity="0.35" stroke-width="2" fill="none">
+    <path d="M170 104 L170 4 M170 104 L262 30 M170 104 L278 110 M170 104 L262 190 M170 104 L84 14"/>
+    <path d="M170 34 L222 48 L246 104 L222 160 M170 60 L202 70 L218 104 L202 138 M118 42 L170 34 M136 70 L170 60"/>
+  </g>
+  <g filter="url(#s-glow)" opacity="0.55"><ellipse cx="160" cy="114" rx="96" ry="66" fill="#8b5cf6"/></g>
+  <!-- 八隻腳 -->
+  <g stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <g stroke="#a78bfa" stroke-width="13">
+      <path d="M120 100 L84 58 L58 70"/><path d="M118 118 L70 96 L40 112"/><path d="M118 134 L72 150 L50 178"/><path d="M126 146 L98 182 L92 204"/>
+      <path d="M210 98 L244 56 L268 64"/><path d="M214 116 L256 96 L276 112"/><path d="M212 134 L252 152 L268 180"/><path d="M200 148 L224 184 L228 204"/>
+    </g>
+    <g stroke="#10162a" stroke-width="6">
+      <path d="M120 100 L84 58 L58 70"/><path d="M118 118 L70 96 L40 112"/><path d="M118 134 L72 150 L50 178"/><path d="M126 146 L98 182 L92 204"/>
+      <path d="M210 98 L244 56 L268 64"/><path d="M214 116 L256 96 L276 112"/><path d="M212 134 L252 152 L268 180"/><path d="M200 148 L224 184 L228 204"/>
+    </g>
+  </g>
+  <!-- 身體 -->
+  <ellipse cx="182" cy="118" rx="62" ry="54" fill="url(#s-body)" stroke="#a78bfa" stroke-width="8"/>
+  <path d="M182 82 L192 104 L182 126 L172 104 Z" fill="#c4b5fd" opacity="0.8"/>
+  <circle cx="110" cy="122" r="42" fill="url(#s-body)" stroke="#a78bfa" stroke-width="8"/>
+  <!-- 六顆眼睛：上排四顆小的像一頂冠 -->
+  <circle cx="86" cy="100" r="6" fill="url(#s-eye)"/><circle cx="102" cy="94" r="6" fill="url(#s-eye)"/><circle cx="118" cy="94" r="6" fill="url(#s-eye)"/><circle cx="134" cy="100" r="6" fill="url(#s-eye)"/>
+  <circle cx="96" cy="122" r="12" fill="url(#s-eye)"/><circle cx="124" cy="122" r="12" fill="url(#s-eye)"/>
+  <circle cx="93" cy="119" r="4" fill="#fff"/><circle cx="121" cy="119" r="4" fill="#fff"/>
+  <!-- 牙 -->
+  <path d="M98 146 L94 162 L104 150 M122 146 L126 162 L116 150" fill="#e9d5ff" stroke="#7c3aed" stroke-width="2" stroke-linejoin="round"/>
+</svg>

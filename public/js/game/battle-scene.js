@@ -22,6 +22,7 @@ import { createRng } from './core/rng.js';
 import { levelFromXp, levelRewards } from '../shared/levels.js';
 import { PERKS, PERK_BY_CODE } from './core/perks.js';
 import { TRAITS, TRAIT_INFO } from './core/enemy-trait.js';
+import { BOSSES, BOSS } from './core/boss.js';
 
 const SCAFFOLD_NOTE = '（靜音或裝置沒有語音時才顯示）';
 
@@ -155,6 +156,27 @@ const TRAIT_INTRO_FREEZE_MS = 500;
 const TRAIT_INTRO_FADE_MS = 400;
 /* 護甲的外殼：打前兩下裂開、第三下碎掉 */
 const ARMOR_COLOR = 0x94a3b8;
+
+/*
+ * 王關（C7，見 core/boss.js）。
+ *
+ * 王站在畫面右邊、排隊的小兵後面，頭上一條血。打掉一個字，蜂針就從那隻小兵身上
+ * 射到王身上——「我打掉的每一個字都打在王身上」是整個王關要讓他感覺到的事。
+ */
+const BOSS_SIZE = {
+  beetle: { w: 280, h: 210 },
+  wasp: { w: 280, h: 210 },
+  spider: { w: 280, h: 210 },
+  king: { w: 300, h: 230 }
+};
+const BOSS_X = 0.885; // 畫面寬度的比例：在排隊的小兵後面
+const BOSS_BANNER_MS = 2400;
+const BOSS_BANNER_FADE_MS = 500;
+const BOSS_HIT_MS = 220;
+/* 打倒王的演出要多久，結算畫面等它演完才出來（game.js 的 onBattleEnd） */
+export const BOSS_DEFEAT_MS = 1900;
+const GUARD_COLOR = 0xfbbf24;
+const PHASE_NAMES = ['', '第二階段', '第三階段', '最終階段'];
 
 /* 事件帶的是代號，代價表的鍵是字串，這張表把兩者對起來 */
 const LISTEN_COST_KEY = {
@@ -292,6 +314,16 @@ function fillTint(image, color) {
   }
 }
 
+/** 回到一般的染色（相乘）。受擊閃白用的是 FILL，不換回來的話整隻會變成一片剪影 */
+function multiplyTint(image, color) {
+  if (image.setTintMode) {
+    const MULTIPLY = window.Phaser?.TintModes?.MULTIPLY;
+    image.setTintMode(MULTIPLY === undefined ? 0 : MULTIPLY);
+  }
+  if (color == null) image.clearTint();
+  else image.setTint(color);
+}
+
 function lerp(a, b, t) {
   return a + (b - a) * t;
 }
@@ -351,6 +383,13 @@ export function createBattleScene(ctx) {
         width: HIVE.width * 2,
         height: HIVE.height * 2
       });
+      /*
+       * 王（C7）。四張都很小，一起載：場景是開場前建好的，
+       * 那時候不一定知道這一場有沒有王，而重開一場也不會重建場景。
+       */
+      for (const [key, size] of Object.entries(BOSS_SIZE)) {
+        this.load.svg(`boss-${key}`, `/assets/bosses/${key}.svg`, { width: size.w * 2, height: size.h * 2 });
+      }
       for (const kind of ENEMY_KINDS) {
         const url = `/assets/enemies/${kind.file}`;
         if (kind.file.endsWith('.svg')) {
@@ -458,6 +497,23 @@ export function createBattleScene(ctx) {
        *
        * 在 this.enemy 之前建立，這樣排隊的會畫在當前目標後面。
        */
+      /*
+       * 王（C7）。在排隊的小兵之前建立，畫在牠們後面——王是「派兵的那個」，站在最後面。
+       * 載不到圖就用一顆大圓頂著，遊戲照玩（跟敵人一樣：素材不該是能不能玩的前提）。
+       */
+      this.bossGlow = this.add.circle(0, 0, 90, 0xf59e0b, 0);
+      this.bossSprite = this.textures.exists('boss-beetle')
+        ? this.add.image(0, 0, 'boss-beetle').setScale(0.5)
+        : this.add.circle(0, 0, 70, 0x2b3350).setStrokeStyle(6, 0xf59e0b);
+      this.bossSprite.setVisible(false);
+      this.bossKeyShown = null;
+      this.bossBaseScale = 0.5;
+      this.bossHitT = -1;
+      this.bossDefeatT = -1;
+      this.bossShownHp = 0;
+      this.bossLagHp = 0;
+      this.lastBossPhase = -1;
+
       this.WAITING_SLOTS = 4;
       this.waiting = [];
       for (let i = 0; i < this.WAITING_SLOTS; i += 1) {
@@ -498,6 +554,16 @@ export function createBattleScene(ctx) {
       this.armorRing.setStrokeStyle(5, ARMOR_COLOR, 0);
       this.enemy.add(this.armorRing);
       this.lastArmorLeft = -1;
+      /* 金色親衛兵（C7）：一圈金光＋頭上一行字「零失誤打掉 → +1 ❤️」 */
+      this.guardRing = this.add.circle(0, 0, 64, GUARD_COLOR, 0);
+      this.guardRing.setStrokeStyle(4, GUARD_COLOR, 0);
+      this.enemy.add(this.guardRing);
+      this.guardLabel = this.add
+        .text(0, -78, '', { fontFamily: 'system-ui, sans-serif', fontSize: '16px', color: '#fde68a' })
+        .setStroke('#0b1020', 4)
+        .setOrigin(0.5);
+      this.enemy.add(this.guardLabel);
+      this.lastGuard = null;
       this.enemyBody = this.makeEnemyBody(ENEMY_KINDS[0].key);
       this.enemyKind = '';
       this.enemy.add(this.enemyBody);
@@ -573,6 +639,33 @@ export function createBattleScene(ctx) {
         .setOrigin(0.5)
         .setAlpha(0);
       this.traitIntroMs = 0;
+
+      /*
+       * 王的血條（C7）：能量條下面一條粗的，名字與剩幾格寫在條上。
+       * 白色那一截是「剛剛掉的」，慢慢縮回去——一下子掉一格看不出來，慢慢縮才看得到「打痛了」。
+       */
+      this.bossBarBg = this.add.rectangle(0, 0, 10, 22, 0x000000, 0.45).setOrigin(0, 0.5).setVisible(false);
+      this.bossBarLag = this.add.rectangle(0, 0, 10, 22, 0xffffff, 0.75).setOrigin(0, 0.5).setVisible(false);
+      this.bossBarFill = this.add.rectangle(0, 0, 10, 22, 0xf59e0b).setOrigin(0, 0.5).setVisible(false);
+      this.bossBarText = this.add
+        .text(0, 0, '', { fontFamily: 'system-ui, sans-serif', fontSize: '15px', color: '#ffffff', fontStyle: 'bold' })
+        .setStroke('#0b1020', 4)
+        .setOrigin(0.5)
+        .setVisible(false);
+      this.lastBossHpShown = -1;
+      this.lastBossTint = null;
+      /* 王登場、換階段、被打倒的大字（跟教學停格分開：第一隻小兵可能同時是特殊敵人） */
+      this.bossTitle = this.add
+        .text(0, 0, '', { fontFamily: 'system-ui, sans-serif', fontSize: '42px', color: '#fde68a', fontStyle: 'bold' })
+        .setStroke('#0b1020', 6)
+        .setOrigin(0.5)
+        .setAlpha(0);
+      this.bossLine = this.add
+        .text(0, 0, '', { fontFamily: 'system-ui, sans-serif', fontSize: '22px', color: '#f8fafc' })
+        .setStroke('#0b1020', 5)
+        .setOrigin(0.5)
+        .setAlpha(0);
+      this.bossBannerMs = 0;
 
       this.energyBg = this.add.rectangle(0, 0, 10, 14, 0x000000, 0.35).setOrigin(0, 0.5);
       this.energyFill = this.add.rectangle(0, 0, 10, 14, 0x6ee7b7).setOrigin(0, 0.5);
@@ -738,6 +831,14 @@ export function createBattleScene(ctx) {
       this.energyFill.setPosition(width * 0.5 - barW / 2, hudY).setSize(1, 16);
       this.energyBarWidth = barW;
       this.energyBarX = width * 0.5 - barW / 2;
+      this.bossBarBg.setPosition(width * 0.5 - barW / 2, hudY + 30).setSize(barW, 22);
+      this.bossBarLag.setPosition(width * 0.5 - barW / 2, hudY + 30);
+      this.bossBarFill.setPosition(width * 0.5 - barW / 2, hudY + 30);
+      this.bossBarText.setPosition(width * 0.5, hudY + 30);
+      // 王站在排隊的小兵後面，比跑道高一點（牠比小兵大很多，腳要踩在同一條地面上）
+      this.bossX = width * BOSS_X;
+      this.bossY = this.laneY - 34;
+      this.bossBaseScale = 0.5 * Math.max(0.7, Math.min(1.1, height / 760));
 
       this.comboText.setPosition(width * 0.94, hudY);
       this.honeyText.setPosition(width * 0.94, hudY + 30);
@@ -767,6 +868,12 @@ export function createBattleScene(ctx) {
       this.levelUpText.setFontSize(Math.round(34 * ui));
       this.traitTitle.setFontSize(Math.round(40 * ui));
       this.traitRule.setFontSize(Math.round(22 * ui));
+      /*
+       * 王的大字放在天空的下半段：上面那一疊（升級 0.26、題目 0.3、教學停格 0.34、正確拼法 0.4）
+       * 都可能同時出現——換階段的那一刻常常就是新的特殊敵人第一次出現的那一刻。
+       */
+      this.bossTitle.setFontSize(Math.round(42 * ui)).setPosition(width * 0.5, height * 0.49);
+      this.bossLine.setFontSize(Math.round(22 * ui)).setPosition(width * 0.5, height * 0.49 + 44 * ui);
       this.wordText.setPosition(width * 0.5, height * 0.3);
       this.scaffoldNote.setPosition(width * 0.5, height * 0.3 + 40 * ui);
       // 貼在題目上方：看得到，又不跟下面那疊提示文字搶位置
@@ -836,6 +943,7 @@ export function createBattleScene(ctx) {
         this.updateTrailFlash(delta);
         this.updateLevelUpBanner(delta);
         this.updateTraitIntro(delta);
+        this.updateBoss(state, delta);
         this.updateWaitingLine(state, delta);
         this.updateBonusBanner(state, delta);
         this.updateParallax(delta);
@@ -1137,6 +1245,67 @@ export function createBattleScene(ctx) {
             vfx(ev);
             break;
           }
+          /* ── 王關（C7） ── */
+          case EV.BOSS_INTRO: {
+            const boss = state.boss;
+            if (boss) {
+              const isFinal = boss.key === 'king';
+              this.showBossBanner(`${isFinal ? '👑 大魔王' : '🔶 中王'}來襲：${boss.name}`, boss.intro, boss.color);
+              this.cameras.main.shake(260, 0.006);
+              this.cameras.main.flash(220, 255, 200, 80, false);
+              this.bossHitT = 0;
+            }
+            vfx(ev);
+            break;
+          }
+          case EV.BOSS_HIT: {
+            /*
+             * 打掉一個字 → 蜂針從那隻小兵射到王身上，王閃白、往後一縮、血條掉一格。
+             * 零失誤的那一下多飄一個「會心一擊」：拼得準要被看見。
+             */
+            if (this.bossSprite.visible) {
+              this.effects.fireStinger(this.enemy.x, this.enemy.y, this.bossX, this.bossY);
+              this.effects.burst(this.bossX - 20, this.bossY, ev.b ? 10 : 6);
+              this.effects.floatText(ev.b ? '💥 會心一擊！' : '-1', this.bossX, this.bossY - 90, {
+                color: ev.b ? '#fde047' : '#fca5a5',
+                scale: ev.b ? 1.2 : 1.1,
+                fan: false
+              });
+              this.bossHitT = 0;
+            }
+            vfx(ev);
+            break;
+          }
+          case EV.BOSS_PHASE: {
+            const boss = state.boss;
+            const phase = boss?.phases[ev.a];
+            if (phase) {
+              this.showBossBanner(`⚠️ ${PHASE_NAMES[ev.a] || '新的階段'}！`, phase.line, boss.color);
+              // 王怒吼：大震動＋王的顏色閃一下，王脹大一下
+              this.cameras.main.shake(420, 0.012);
+              const c = Phaser.Display.Color.HexStringToColor(boss.color).color;
+              this.cameras.main.flash(260, (c >> 16) & 0xff, (c >> 8) & 0xff, c & 0xff, false);
+              this.effects.burst(this.bossX, this.bossY, 24, { kill: true });
+              this.bossHitT = 0;
+              // 演出的時間不准有按鍵打在看不見的畫面上（跟教學停格一樣）
+              this.hitStopUntil = performance.now() + 450;
+              ctx.blockInput(450);
+            }
+            vfx(ev);
+            break;
+          }
+          case EV.GUARD_REWARD:
+            /* 零失誤打掉金色親衛兵：蜂巢 +1 血（滿了就是蜂蜜 ×3） */
+            this.effects.floatText(
+              ev.a > 0 ? `👑 親衛兵零失誤！❤️ +${ev.a}` : `👑 親衛兵零失誤！🍯 +${Math.round(ev.b)}`,
+              this.hiveX,
+              this.laneY - 96,
+              { color: '#fde68a', scale: 1.35, fan: false }
+            );
+            this.effects.burst(this.hiveX, this.laneY, 14);
+            this.cameras.main.flash(140, 255, 220, 120, false);
+            vfx(ev);
+            break;
           case EV.XP_BONUS:
             /*
              * 📖 複習關的 ×3 在結算時一次補進來（C4）。
@@ -1180,6 +1349,15 @@ export function createBattleScene(ctx) {
           case EV.BATTLE_END:
             // 音樂跟著戰鬥起停：一場結束就收掉，結算畫面要安靜
             ctx.bgm?.stop();
+            // 王被打倒了：倒下的演出（結算畫面等它演完，見 game.js）
+            if (state.boss && ev.a === 1) {
+              this.bossDefeatT = 0;
+              // 最後一隻小兵已經被打掉了，不要讓牠站在王倒下的畫面裡
+              this.enemy.setVisible(false);
+              this.showBossBanner(`🎉 打倒${state.boss.name}了！`, state.boss.key === 'king' ? '一百關全破！你完成了一整場模擬比賽' : '這一章的王被你打敗了', state.boss.color);
+              this.cameras.main.shake(700, 0.016);
+              this.cameras.main.flash(400, 255, 240, 180, false);
+            }
             // 分數記在目前這個帳號底下（a=1 是打完整組，0 是蜂巢被攻破）
             ctx.onBattleEnd?.(state, ev.a === 1);
             vfx(ev);
@@ -1196,6 +1374,7 @@ export function createBattleScene(ctx) {
               this.enemyKind = kind;
               this.setEnemyKind(this.enemyBody, kind);
             }
+            this.syncGuard(state);
             ctx.speakCurrentWord();
             vfx(ev);
             break;
@@ -1206,6 +1385,119 @@ export function createBattleScene(ctx) {
       }
       clearEvents(state);
       ctx.soundBridge?.reset();
+    }
+
+    /** 王關的大字：亮著讀一下再淡掉（登場、換階段、打倒） */
+    showBossBanner(title, line, color) {
+      this.bossTitle.setText(title).setColor(color || '#fde68a');
+      this.bossLine.setText(line || '');
+      this.bossBannerMs = BOSS_BANNER_MS;
+    }
+
+    /** 這一隻是不是金色親衛兵：換字時才檢查，不用每一格都動 */
+    syncGuard(state) {
+      const guard = !!state.guard;
+      if (guard === this.lastGuard) return;
+      this.lastGuard = guard;
+      this.guardRing.setFillStyle(GUARD_COLOR, guard ? 0.16 : 0);
+      this.guardRing.setStrokeStyle(4, GUARD_COLOR, guard ? 0.9 : 0);
+      this.guardLabel.setText(guard ? `👑 金色親衛兵・零失誤打掉 ❤️ +${BOSS.guardHealHp}` : '');
+    }
+
+    /**
+     * 王：登場、待機的呼吸、被打的閃白、暴怒的紅、被打倒的倒下。
+     * 全部用時間算、只動既有的物件（跟其他特效同一套紀律）。
+     */
+    updateBoss(state, delta) {
+      const boss = state.boss;
+      if (!boss) {
+        if (this.bossSprite.visible) {
+          this.bossSprite.setVisible(false);
+          this.bossGlow.setFillStyle(0xf59e0b, 0);
+          for (const o of [this.bossBarBg, this.bossBarLag, this.bossBarFill, this.bossBarText]) o.setVisible(false);
+        }
+        this.bossKeyShown = null;
+      } else {
+        if (this.bossKeyShown !== boss.key) {
+          this.bossKeyShown = boss.key;
+          if (this.bossSprite.setTexture && this.textures.exists(`boss-${boss.key}`)) this.bossSprite.setTexture(`boss-${boss.key}`);
+          this.bossColor = Phaser.Display.Color.HexStringToColor(boss.color).color;
+          this.bossBarFill.setFillStyle(Phaser.Display.Color.HexStringToColor(boss.bar || boss.color).color);
+          this.bossSprite.setVisible(true).setAlpha(1);
+          for (const o of [this.bossBarBg, this.bossBarLag, this.bossBarFill, this.bossBarText]) o.setVisible(true);
+          this.bossShownHp = state.bossTotal;
+          this.bossLagHp = state.bossTotal;
+          this.bossDefeatT = -1;
+          this.lastBossPhase = -1;
+          this.lastBossHpShown = -1;
+        }
+        const hp = Math.max(0, state.bossTotal - state.stats.wordsKilled);
+        this.bossShownHp = hp;
+        // 白色那一截慢慢縮回去：約 0.6 秒縮完一格
+        if (this.bossLagHp > hp) this.bossLagHp = Math.max(hp, this.bossLagHp - delta / 600);
+        else this.bossLagHp = hp;
+        const w = this.energyBarWidth || 300;
+        this.bossBarFill.setSize(Math.max(1, (w * hp) / state.bossTotal), 22);
+        this.bossBarLag.setSize(Math.max(1, (w * this.bossLagHp) / state.bossTotal), 22);
+        // 只有血或階段真的變了才組字串（每一格組一次就是每秒一百多個字串，見 render 的說明）
+        if (hp !== this.lastBossHpShown || state.bossPhase !== this.lastBossPhase) {
+          this.lastBossHpShown = hp;
+          this.lastBossPhase = state.bossPhase;
+          const phaseMarks = boss.phases.map((_, i) => (i <= state.bossPhase ? '◆' : '◇')).join('');
+          this.bossBarText.setText(`${boss.icon} ${boss.name}　${hp} / ${state.bossTotal}　${phaseMarks}`);
+        }
+
+        // 最後一階：王暴怒，身上一層紅
+        const enraged = state.bossPhase === boss.phases.length - 1 && boss.phases.length > 1;
+        const t = state.timeMs;
+        let scale = this.bossBaseScale * (1 + 0.025 * Math.sin(t * 0.004));
+        let dx = 0;
+        if (this.bossHitT >= 0) {
+          this.bossHitT += delta;
+          const k = this.bossHitT / BOSS_HIT_MS;
+          if (k >= 1) {
+            this.bossHitT = -1;
+          } else {
+            dx = 14 * (1 - k);
+            scale *= 1 + 0.08 * (1 - k);
+            if (this.bossSprite.setTint) fillTint(this.bossSprite, lerpColor(0xffffff, enraged ? 0xff6b6b : 0xffffff, k));
+          }
+        }
+        if (this.bossHitT < 0 && this.bossSprite.setTint && this.lastBossTint !== enraged) {
+          this.lastBossTint = enraged;
+          multiplyTint(this.bossSprite, enraged ? 0xff9a9a : null);
+        }
+        if (this.bossHitT >= 0) this.lastBossTint = null;
+        let alpha = 1;
+        let dy = enraged ? Math.sin(t * 0.03) * 2 : 0;
+        if (this.bossDefeatT >= 0) {
+          // 被打倒：抖、閃、往下沉、淡掉，一路噴蜂蜜
+          this.bossDefeatT += delta;
+          const k = Math.min(1, this.bossDefeatT / BOSS_DEFEAT_MS);
+          dx = Math.sin(this.bossDefeatT * 0.09) * 10 * (1 - k);
+          dy = k * 60;
+          scale *= 1 - 0.35 * k;
+          alpha = 1 - k;
+          if (Math.floor(this.bossDefeatT / 160) !== Math.floor((this.bossDefeatT - delta) / 160) && k < 0.9) {
+            this.effects.burst(this.bossX + (Math.sin(this.bossDefeatT) * 60), this.bossY + (Math.cos(this.bossDefeatT) * 40), 16, { kill: true });
+          }
+        }
+        this.bossSprite.setPosition(this.bossX + dx, this.bossY + dy).setScale(scale).setAlpha(alpha);
+        this.bossGlow.setPosition(this.bossX, this.bossY).setFillStyle(enraged ? 0xef4444 : this.bossColor || 0xf59e0b, (0.1 + 0.06 * Math.sin(t * 0.005)) * alpha);
+      }
+
+      if (this.bossBannerMs > 0) {
+        this.bossBannerMs -= delta;
+        if (this.bossBannerMs <= 0) {
+          this.bossBannerMs = 0;
+          this.bossTitle.setAlpha(0);
+          this.bossLine.setAlpha(0);
+        } else {
+          const a = Math.min(1, this.bossBannerMs / BOSS_BANNER_FADE_MS);
+          this.bossTitle.setAlpha(a);
+          this.bossLine.setAlpha(a);
+        }
+      }
     }
 
     /**
@@ -1436,6 +1728,15 @@ export function createBattleScene(ctx) {
       this.traitRule.setAlpha(0);
       this.lastArmorLeft = -1;
       this.armorRing.setStrokeStyle(5, ARMOR_COLOR, 0);
+      // 王關（C7）：重開一場，王重新站好、血補滿、橫幅收掉
+      this.enemy.setVisible(true);
+      this.bossKeyShown = null;
+      this.bossDefeatT = -1;
+      this.bossHitT = -1;
+      this.bossBannerMs = 0;
+      this.bossTitle.setAlpha(0);
+      this.bossLine.setAlpha(0);
+      this.lastGuard = null;
       // 拼字那一排也要歸零，否則新的一場開場會掛著上一場最後那幾個字母
       this.trailBadMs = 0;
       this.lastTrailTyped = -1;
@@ -1617,7 +1918,7 @@ export function createBattleScene(ctx) {
         this.wordText.setAlpha(0);
         this.scaffoldNote.setText('');
         this.statusText
-          .setText(state.status === 'won' ? '全部打完了！' : '蜂巢被攻破了')
+          .setText(state.status === 'won' ? (state.boss ? '' : '全部打完了！') : '蜂巢被攻破了')
           .setAlpha(1);
       }
     }

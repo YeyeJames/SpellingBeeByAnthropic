@@ -16,6 +16,7 @@ import { isTypeableChar, isSeparator } from './charset.js';
 import { XP, levelFromXp, levelRewards } from '../../shared/levels.js';
 import { effectsFor } from '../../shared/equipment.js';
 import { TRAITS, traitFor, ARMOR_LETTERS, DASH_EVERY_MS, DASH_PUSH_MS } from './enemy-trait.js';
+import { BOSS, BOSS_CODE, bossFor, phaseFor, isGuardAt } from './boss.js';
 import {
   PERK_CODE, PERK_OFFER_AT, LIGHTNING, RUSH, FIRST_STRIKE_KEEP, REWIND, FREEZE_MS, drawOffer
 } from './perks.js';
@@ -69,7 +70,17 @@ export const EV = {
   /* 三選一（C8）。OFFER：a = 張數；TAKEN：a = 能力代號；FIRED：a = 代號，b = 數值 */
   PERK_OFFER: 19,
   PERK_TAKEN: 20,
-  PERK_FIRED: 21
+  PERK_FIRED: 21,
+  /*
+   * 王關（C7，見 boss.js）。
+   * INTRO：王登場，a = 王的代號。HIT：打掉一個字、王掉一格血，a = 王剩幾格，b = 這個字有沒有打錯（1 = 零失誤）。
+   * PHASE：王換階段，a = 第幾階（從 0 算）。
+   * GUARD：零失誤打掉金色親衛兵，a = 修好幾顆血，b = 多給的蜂蜜（血是滿的才有）。
+   */
+  BOSS_INTRO: 22,
+  BOSS_HIT: 23,
+  BOSS_PHASE: 24,
+  GUARD_REWARD: 25
 };
 
 export const EV_NAME = Object.fromEntries(Object.entries(EV).map(([k, v]) => [v, k]));
@@ -182,7 +193,13 @@ export function createBattle({
    * （shared/campaign.js），伺服器、遊戲頁、錄影檔用的是同一個數字。
    * 不給就是 1，舊錄影檔的指紋不會變。
    */
-  speed = 1
+  speed = 1,
+  /*
+   * 王關（C7）：王的代號（'beetle' / 'wasp' / 'spider' / 'king'，見 boss.js）。
+   * 有王的時候，特殊敵人改由王的階段決定（enemyTraits 不用）。
+   * 不給就是沒有王，跟 C7 之前完全一樣——舊錄影檔、既有測試的指紋都不會變。
+   */
+  boss = null
 } = {}) {
   if (!Array.isArray(words) || words.length === 0) {
     throw new Error('createBattle 需要至少一個單字');
@@ -199,6 +216,7 @@ export function createBattle({
    * 開場算好放進 state 之後，戰鬥邏輯只看到兩個數字，跟 C2 之前一樣單純。
    */
   const rewards = levelRewards(level);
+  const bossDef = bossFor(boss);
   /*
    * 裝備效果一次算好，戰鬥迴圈只看到一組數字——跟等級加成同一個做法。
    * 迴圈裡完全不需要知道他裝了什麼。
@@ -241,7 +259,9 @@ export function createBattle({
     /* 二次機會：這一場還剩幾次「漏字不扣血」 */
     freeMissesLeft: gear.freeMisses,
     /* 特殊敵人（C6）：這一關的特性池、當前這一隻的特性、以及它的狀態 */
-    traitPool: Array.isArray(enemyTraits) ? enemyTraits.slice() : [],
+    traitPool: bossDef
+      ? bossDef.phases[0].traits.slice()
+      : Array.isArray(enemyTraits) ? enemyTraits.slice() : [],
     trait: TRAITS.NONE,
     armorLeft: 0,
     dashTimerMs: 0,
@@ -297,6 +317,20 @@ export function createBattle({
     freezeNext: false,
     wordStartMs: 0,
 
+    /*
+     * 王關（C7）。bossTotal 是王的總血量（＝這一關的字數），剩下的血是
+     * bossTotal − 打掉的字數，不另外存——兩個數字不可能走散。
+     * holdMs：這隻蟲還要站著等多久（王登場、換階段、大魔王唸題）；holdPending 是
+     * 換階段時先記下、等下一隻蟲出來才開始算的那一段。
+     */
+    boss: bossDef,
+    bossTotal: words.length,
+    bossPhase: 0,
+    bossSpeed: bossDef ? bossDef.phases[0].speed || 1 : 1,
+    holdMs: 0,
+    holdPending: bossDef ? BOSS.introHoldMs : 0,
+    guard: false,
+
     // 目前這個字
     wordIndex: -1,
     target: '', // 小寫化的答案
@@ -332,6 +366,8 @@ export function createBattle({
     evCount: 0
   };
 
+  // 王登場：先講這是誰、怎麼打（畫面停一下），第一隻蟲站著等
+  if (bossDef) emit(state, EV.BOSS_INTRO, BOSS_CODE[bossDef.key] || 0);
   startNextWord(state);
   return state;
 }
@@ -352,7 +388,8 @@ function startNextWord(state) {
   state.typed = 0;
   state.cleanWord = true;
   state.progress = 0;
-  state.crossMs = crossMsFor(state.target.length, state.difficulty) / state.speed;
+  // 王的階段速度（C7）乘在關卡速度上；沒有王就是 1
+  state.crossMs = crossMsFor(state.target.length, state.difficulty) / (state.speed * state.bossSpeed);
   /*
    * 蜜糖時間：下一個單字的時間加倍。
    * 在這裡套用而不是在觸發當下，是因為觸發時當前那個字已經在跑了——
@@ -372,6 +409,18 @@ function startNextWord(state) {
    * queueHead 已經加過 1，所以減回去才是這一隻的序號。
    */
   state.trait = traitFor(state.traitPool, state.queueHead - 1, state.seed);
+
+  /*
+   * 王關（C7）：金色親衛兵（每 6 隻一隻）不帶特性——牠的規則只有一條
+   * 「零失誤打掉有獎勵」，再疊一個特性就讀不出來了。
+   * 站著等：換階段剩下的那一段，或大魔王唸題的時間（取長的那個）。
+   */
+  state.guard = !!state.boss && isGuardAt(state.queueHead - 1);
+  if (state.guard) state.trait = TRAITS.NONE;
+  if (state.boss) {
+    state.holdMs = Math.max(state.holdPending, state.boss.competition ? BOSS.competitionHoldMs : 0);
+    state.holdPending = 0;
+  }
 
   // 閃電手要知道這個字是什麼時候出來的；冰凍針凍住的是「下一隻」
   state.wordStartMs = state.timeMs;
@@ -620,8 +669,45 @@ function killWord(state) {
     state.cleanWord ? 1 : 2
   );
   emit(state, EV.WORD_KILLED, state.wordIndex, len, gained);
+  if (state.boss) bossAfterKill(state, gained);
   startNextWord(state);
   maybeOfferPerks(state);
+}
+
+/**
+ * 王關（C7）：打掉一個字之後。
+ *
+ * 順序有關係，全部要在 startNextWord 之前：換階段會改特性池與速度，
+ * 下一隻蟲一出來就要是新的那一階。
+ */
+function bossAfterKill(state, gained) {
+  const boss = state.boss;
+  /* 金色親衛兵：一個字母都沒打錯才有獎勵——修血，血是滿的就給蜂蜜 */
+  if (state.guard && state.cleanWord) {
+    if (state.hp < state.maxHp) {
+      const healed = Math.min(BOSS.guardHealHp, state.maxHp - state.hp);
+      state.hp += healed;
+      emit(state, EV.GUARD_REWARD, healed, 0);
+    } else {
+      const extra = gained * (BOSS.guardHoneyFactor - 1);
+      state.honey += extra;
+      emit(state, EV.GUARD_REWARD, 0, extra);
+    }
+  }
+
+  const kills = state.stats.wordsKilled;
+  emit(state, EV.BOSS_HIT, Math.max(0, state.bossTotal - kills), state.cleanWord ? 1 : 0);
+  if (kills >= state.bossTotal) return; // 最後一擊：王倒了，不用再換階段
+
+  const p = phaseFor(boss, kills, state.bossTotal);
+  if (p <= state.bossPhase) return;
+  state.bossPhase = p;
+  const phase = boss.phases[p];
+  state.traitPool = phase.traits.slice();
+  state.bossSpeed = phase.speed || 1;
+  // 換階段不修血（模擬器量過：修了王反而比前一關好打，見 boss.js）——只停一下讓他喘口氣
+  state.holdPending = BOSS.phaseHoldMs;
+  emit(state, EV.BOSS_PHASE, p);
 }
 
 function missWord(state) {
@@ -682,6 +768,14 @@ export function stepBattle(state) {
    */
   if (state.freezeMs > 0) {
     state.freezeMs = Math.max(0, state.freezeMs - BALANCE.logicStepMs);
+    return state;
+  }
+  /*
+   * 王關（C7）：蟲站著等——王登場、換階段、大魔王唸題。
+   * 他一打字就不等了（見 applyAction），所以快的人不會被拖慢。
+   */
+  if (state.holdMs > 0) {
+    state.holdMs = Math.max(0, state.holdMs - BALANCE.logicStepMs);
     return state;
   }
   state.progress += (BALANCE.logicStepMs * speed) / state.crossMs;
@@ -747,6 +841,8 @@ export function applyAction(state, action) {
       const ch = String(action.ch || '').toLowerCase();
       // 空白與連字號也是正常字元——課本有 "alarm clock" 這種詞條，見 charset.js
       if (!isTypeableChar(ch)) return state;
+      // 王關：他開始打了，蟲就不再站著等（大魔王唸題時他已經聽懂了，不必等唸完）
+      state.holdMs = 0;
 
       /*
        * 打對了幾個字元。通常是 1，遇到「跳過分隔符」的情況會是 2。
@@ -848,7 +944,8 @@ export function applyAction(state, action) {
        */
       if (state.trait === TRAITS.SILENT) return state;
       // 回音水晶讓重聽便宜一半——目的是讓他敢多聽一次，而不是少打字母
-      const cost = base * state.gear.listen;
+      // 大魔王：重聽的代價加倍——比賽裡請評審再唸是有代價的（C7）
+      const cost = base * state.gear.listen * (state.boss?.competition ? BOSS.competitionListenFactor : 1);
       state.stats.listens += 1;
       pushEnemy(state, cost);
       emit(state, EV.LISTEN, LISTEN_KIND[String(action.listen).toUpperCase()] || 0);
@@ -937,6 +1034,15 @@ export function fingerprint(state) {
   mix(TRAIT_CODE[state.trait] || 0);
   mix(state.armorLeft);
   mixFloat(state.dashTimerMs);
+  // 王關（C7）只在有王的時候混進指紋：沒有王的一場指紋跟 C7 之前完全一樣
+  if (state.boss) {
+    mix(BOSS_CODE[state.boss.key] || 0);
+    mix(state.bossPhase);
+    mixFloat(state.bossSpeed);
+    mixFloat(state.holdMs);
+    mixFloat(state.holdPending);
+    mix(state.guard ? 1 : 0);
+  }
   return h >>> 0;
 }
 
@@ -981,6 +1087,14 @@ export function snapshot(state) {
     perkOffer: state.perkOffer ? state.perkOffer.slice() : null,
     perkSpeed: state.perkSpeed,
     freezeMs: Math.round(state.freezeMs),
+    /* 王關（C7）：給畫面、除錯與測試看 */
+    boss: state.boss ? state.boss.key : null,
+    bossHp: state.boss ? Math.max(0, state.bossTotal - state.stats.wordsKilled) : 0,
+    bossTotal: state.boss ? state.bossTotal : 0,
+    bossPhase: state.bossPhase,
+    bossSpeed: state.bossSpeed,
+    guard: state.guard,
+    holdMs: Math.round(state.holdMs),
     stats: { ...state.stats },
     fingerprint: fingerprint(state)
   };

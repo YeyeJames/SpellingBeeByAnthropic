@@ -42,6 +42,7 @@
  */
 
 import { traitPoolForChapter } from '../game/core/enemy-trait.js';
+import { BOSS_BY_LEVEL } from '../game/core/boss.js';
 
 /* 章節設定。每一章 24 關，後面接一關中王。 */
 export const CHAPTERS = [
@@ -102,9 +103,13 @@ export const SPEED = {
   // 第 n 章：[第一關, 最後一關]，中間線性
   chapters: { 1: [0.85, 1.3], 2: [1.28, 1.42], 3: [1.34, 1.48], 4: [1.35, 1.5] },
   // 中王只有 20 個字，要比它守的那一章快才有「王」的感覺
-  midboss: { 1: 1.38, 2: 1.52, 3: 1.62 },
-  // 大魔王是 100 個字、3 條命：長度本身就是難度，速度反而要放一點
-  finalboss: 1.15
+  /*
+   * 王關（C7）有了自己的規則之後重調（附錄 I）：金色親衛兵會修血、換階段蟲會站著等、
+   * 大魔王唸題時蟲也會等，所以速度要比 C7 之前快，王才不會比它守的那一章好打。
+   */
+  midboss: { 1: 1.46, 2: 1.6, 3: 1.7 },
+  // 大魔王是 100 個字、3 條命：長度本身就是難度。每個形態再各自加速（見 game/core/boss.js）
+  finalboss: 1.55
 };
 
 export function speedFor(chapterN, indexInChapter) {
@@ -212,26 +217,34 @@ export function buildCampaign(groups = []) {
         wordCount: Math.min(20, countOf(bossGroups)),
         // 中王用該章的特性池——王關不該比它守的那一章簡單
         enemyTraits: traitPoolForChapter(chapter.n),
-        speed: SPEED.midboss[chapter.n] || 1
+        speed: SPEED.midboss[chapter.n] || 1,
+        // 王關（C7）：這一關的王（見 game/core/boss.js）
+        boss: BOSS_BY_LEVEL[level] || null
       });
     }
   }
 
-  /* 大魔王：競賽單字全部 100 字。整個戰役從第 1 關就是在為這一關練功。 */
+  /*
+   * 大魔王：競賽單字全部。整個戰役從第 1 關就是在為這一關練功。
+   * 字數照那一本課本算（Pierce 的 100 字、Allen 的 75 字）——本來寫死「100 字」，
+   * Allen 的地圖上寫 100、實際只打 75，畫面在說謊。
+   */
+  const finalIds = contestGroups.map((g) => g.id);
   levels.push({
     level: TOTAL_LEVELS,
     chapter: 4,
     kind: 'finalboss',
     title: '第 100 關・大魔王',
-    subtitle: '競賽單字全部 100 字',
-    groupIds: contestGroups.map((g) => g.id),
+    subtitle: `競賽單字全部 ${countOf(finalIds)} 字`,
+    groupIds: finalIds,
     order: 'random',
     weakness: false,
     wordLimit: null,
-    wordCount: countOf(contestGroups.map((g) => g.id)),
+    wordCount: countOf(finalIds),
     // 大魔王：三種特殊敵人全上
     enemyTraits: traitPoolForChapter(4),
-    speed: SPEED.finalboss
+    speed: SPEED.finalboss,
+    boss: BOSS_BY_LEVEL[TOTAL_LEVELS] || null
   });
 
   return levels;

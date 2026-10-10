@@ -720,6 +720,67 @@ body.is-touch #listen-buttons {
   color: #cbd5e1 !important;
 }
 
+/* 王關（C7）的王卡：左邊王的圖，右邊名字與規則。邊框用王關的橘金色 */
+#pregame-boss {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.9rem;
+  padding: 0.7rem 1.1rem;
+  max-width: 46rem;
+  border: 2px solid #f59e0b;
+  border-radius: 14px;
+  background: linear-gradient(120deg, rgba(245, 158, 11, 0.18), rgba(30, 41, 59, 0.7) 60%);
+  text-align: left;
+}
+
+#pregame-boss[hidden] {
+  display: none;
+}
+
+#pregame-boss img {
+  width: 150px;
+  height: auto;
+  flex: 0 0 auto;
+  filter: drop-shadow(0 0 10px rgba(245, 158, 11, 0.45));
+}
+
+#pregame-boss .pregame-boss-name {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #fde68a;
+}
+
+#pregame-boss ul {
+  margin: 0.3rem 0 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+#pregame-boss li {
+  margin: 0.15rem 0;
+  font-size: 0.98rem;
+  line-height: 1.5;
+  color: #e2e8f0;
+}
+
+/* 王關開場本來就比較長：矮的筆電上把一般的三條規則收起來，留給王卡 */
+@media (max-height: 820px) {
+  #pregame.has-boss #pregame-rules {
+    display: none;
+  }
+}
+
+@media (max-width: 680px) {
+  #pregame-boss {
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  #pregame-boss img {
+    width: 110px;
+  }
+}
+
 /* ── 玩法說明 ─────────────────────────────────────────── */
 
 #rules-panel {

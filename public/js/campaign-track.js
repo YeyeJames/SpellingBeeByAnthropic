@@ -74,7 +74,7 @@ export function goalText(summary) {
   if (!b) return '';
   if (b.kind === 'finalboss') {
     return b.away <= 1
-      ? '👑 下一關就是大魔王：競賽單字全部 100 字！'
+      ? '👑 下一關就是大魔王：全部的競賽單字一次打完！'
       : `👑 終點：第 ${b.level} 關・大魔王（還有 ${b.away} 關）`;
   }
   return b.away <= 1

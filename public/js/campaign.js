@@ -13,6 +13,7 @@ import { mountNav } from './nav-partial.js';
 import { runPageInit } from './ui-status.js';
 import * as sound from './sound-manager.js';
 import { trackHtml, goalText, nextAction } from './campaign-track.js';
+import { BOSSES } from './game/core/boss.js';
 
 const chaptersEl = document.getElementById('campaign-chapters');
 const errorEl = document.getElementById('campaign-error');
@@ -90,6 +91,9 @@ function render(data) {
 
   progressEl.textContent = `第 ${summary.cleared} / ${summary.total} 關`;
   document.getElementById('campaign-goal-line').hidden = false;
+  // 大魔王的字數照他自己那一本課本（Pierce 100 字、Allen 75 字）
+  const finalLevel = levels.find((l) => l.kind === 'finalboss');
+  if (finalLevel) document.getElementById('campaign-final-words').textContent = `競賽單字全部 ${finalLevel.wordCount} 字`;
   trackEl.innerHTML = trackHtml(summary);
   nextEl.textContent = summary.next
     ? `下一關：第 ${summary.next.level} 關・${summary.next.subtitle}`
@@ -147,8 +151,15 @@ function render(data) {
         cell.href = `/game?level=${l.level}`;
         cell.addEventListener('click', () => sound.playClick());
       }
+      /*
+       * 王關（C7）：格子裡站著那隻王、寫著牠的名字。
+       * 一百個格子裡只有四格有王，地圖上一眼就看得到「前面在等我的是誰」；打倒了就蓋一個章。
+       */
+      const boss = BOSSES[l.boss];
       cell.innerHTML =
+        (boss ? `<img class="level-boss-img" src="/assets/bosses/${boss.key}.svg" alt="" />` : '') +
         `<span class="level-no">${KIND_ICON[l.kind] || ''}${l.level}</span>` +
+        (boss ? `<span class="level-boss-name">${escapeHtml(boss.name)}${l.cleared ? '・✅ 打倒了' : ''}</span>` : '') +
         `<span class="level-sub">${escapeHtml(l.subtitle)}</span>` +
         `<span class="level-meta">${l.weakness ? '你的弱點字' : `${l.wordCount} 字`}` +
         // 速度（C9）：越後面越快，地圖上就看得到——那是他要練的東西
@@ -156,10 +167,10 @@ function render(data) {
         (l.cleared ? `<span class="level-stars">${'★'.repeat(l.stars)}${'☆'.repeat(3 - l.stars)}</span>` : '') +
         /*
          * 大魔王那一格寫清楚它是什麼。它是整個戰役的終點，
-         * 只寫「100・競賽單字全部 100 字」跟其他格子長一樣，看不出它的份量。
+         * 只寫「100・競賽單字全部 N 字」跟其他格子長一樣，看不出它的份量。
          */
         (l.kind === 'finalboss'
-          ? '<span class="level-final-note">終點・跟真的比賽一樣：100 個競賽單字一次打完。打贏它，你就準備好上場了。</span>'
+          ? `<span class="level-final-note">終點・跟真的比賽一樣：${l.wordCount} 個競賽單字一次打完。打贏它，你就準備好上場了。</span>`
           : '');
       /*
        * 鎖著的格子要說得出「為什麼」。

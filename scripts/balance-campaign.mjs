@@ -106,7 +106,8 @@ function playOnce(kid, level, seed, typist, speedOf) {
     equipped: kid.equipped,
     enemyTraits: level.enemyTraits,
     perks: true,
-    speed: speedOf(level)
+    speed: speedOf(level),
+    boss: level.boss || null
   });
   const cfg = { ...PLAYER_PRESETS[typist.preset], unknownRate: UNKNOWN };
   const model = createPlayerModel(createRng((seed ^ 0x5bf03635) >>> 0), cfg);

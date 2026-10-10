@@ -20,7 +20,7 @@ import { createLatency, markApplied, markRendered, resetLatency } from './game/l
 import { installDebugApi } from './game/debug-api.js';
 import { createOverlay } from './game/overlay.js';
 import { createPerf, resetPerf } from './game/perf.js';
-import { createBattleScene } from './game/battle-scene.js';
+import { createBattleScene, BOSS_DEFEAT_MS } from './game/battle-scene.js';
 import { createSfx } from './game/sfx.js';
 import { createBgm } from './game/bgm.js';
 import { runCalibration } from './game/calibrate.js';
@@ -38,6 +38,7 @@ import { readPref, writePref } from './prefs.js';
 import { startTelemetry, track, uploadBattleLog } from './telemetry.js';
 import { getCachedUser, updateCachedUser } from './auth.js';
 import { trackHtml, goalText, summaryFromCounts } from './campaign-track.js';
+import { BOSSES, bossRuleLines } from './game/core/boss.js';
 import { killFxFor, soundPackFor } from './shared/cosmetics.js';
 import { initOutbox, enqueue } from './outbox.js';
 
@@ -163,7 +164,14 @@ const ctx = {
     uploadBattleLog(`${ctx.seed}:${ctx.battleId}`, ctx.log);
     // 戰役關卡另外記一筆：過了就解開下一關（C3）
     if (ctx.campaignLevel) reportLevelClear(state, won);
-    showPostgame(state, won);
+    /*
+     * 打倒王：先讓王倒下的演出演完，結算畫面再出來（C7）。
+     * 一打完就跳結算的話，他最想看的那一刻——王倒下——會被結算畫面整個蓋掉。
+     *
+     * 結算畫面還是**現在**就組好，只是晚一點才露出來：伺服器的回應（星等、存款、
+     * 「➡️ 下一關」）可能比演出先回來，等演完才組的話會把那些蓋回「結算中…」。
+     */
+    showPostgame(state, won, { revealAfterMs: state.boss && won ? BOSS_DEFEAT_MS : 0 });
   },
 
   getState: () => ctx.state,
@@ -207,6 +215,11 @@ const ctx = {
    */
   shouldShowWord() {
     if (params.get('show') === '1') return true;
+    /*
+     * 大魔王（C7）：跟真的比賽一樣不顯示單字——他自己按「顯示」也不算。
+     * 靜音或這台裝置沒有語音時照樣顯示（下面那兩條）：聽不到又看不到就完全沒得玩。
+     */
+    if (isFinalBoss()) return !!ctx.sfx?.isMuted() || !ctx.voicesAvailable;
     /*
      * 明確按過按鈕就聽他的。
      *
@@ -278,6 +291,11 @@ const ctx = {
     if (mode === 'sentence') {
       // 例句沒有錄音，只有單字本身有
       if (ctx.voicesAvailable) speakSentence(word.exampleSentence || word.english);
+      return;
+    }
+    // 大魔王（C7）：照比賽的方式唸「單字 → 例句 → 單字」，蟲在這段時間站著等（見 boss.js）
+    if (mode === 'normal' && isFinalBoss()) {
+      speakCompetition(word, s.wordIndex);
       return;
     }
     playWordAudio(word, { slow: mode === 'slow' });
@@ -386,6 +404,61 @@ function applyNow(action, t0, fromQueue = false) {
 
 ctx.debug = installDebugApi(ctx);
 
+/**
+ * 開場的王卡（C7）：王的圖、名字、這一場的規則。
+ * 規則從 boss.js 的數字現場組，不寫死（跟 rules.js 同一個理由：數字一改，說明就變成謊言）。
+ */
+function renderBossCard() {
+  const el = document.getElementById('pregame-boss');
+  if (!el) return;
+  const boss = BOSSES[bossKey()];
+  el.hidden = !boss;
+  document.getElementById('pregame')?.classList.toggle('has-boss', !!boss);
+  if (!boss) return;
+  const n = ctx.words.length;
+  document.getElementById('pregame-boss-img').src = `/assets/bosses/${boss.key}.svg`;
+  document.getElementById('pregame-boss-name').textContent =
+    `${boss.competition ? '👑 大魔王' : '🔶 中王'}：${boss.name}`;
+  const rules = bossRuleLines(boss, n);
+  const ul = document.getElementById('pregame-boss-rules');
+  ul.innerHTML = '';
+  for (const r of rules) {
+    const li = document.createElement('li');
+    li.textContent = r;
+    ul.appendChild(li);
+  }
+}
+
+/** 這一關是不是大魔王（照比賽的方式唸、不顯示單字） */
+function isFinalBoss() {
+  return !!BOSSES[bossKey()]?.competition;
+}
+
+/**
+ * 比賽的唸法：單字 → 例句 → 再唸一次單字。
+ *
+ * 不直接用 audio-player 的 playCompetitionSequence：那一支會一路唸完，
+ * 而遊戲裡他可能在例句唸到一半就把字打完了——下一個字出來時，上一個字的
+ * 「再唸一次」還在後面排著，兩個字疊在一起，這是聽寫遊戲最不能發生的事。
+ * 所以每一段唸之前都先確認「還是同一個字」。
+ */
+async function speakCompetition(word, wi) {
+  const still = () => ctx.state && ctx.state.status === 'running' && ctx.state.wordIndex === wi && !ctx.sfx?.isMuted();
+  await playWordAudio(word);
+  if (!word.exampleSentence || !ctx.voicesAvailable) return;
+  await new Promise((r) => setTimeout(r, 450));
+  if (!still()) return;
+  await speakSentence(word.exampleSentence);
+  await new Promise((r) => setTimeout(r, 350));
+  if (!still()) return;
+  await playWordAudio(word);
+}
+
+/** 這一關的王（C7）。只有戰役的王關才有；網址帶 ?n= 截短的測試局也照樣有王 */
+function bossKey() {
+  return ctx.campaignLevel && !ctx.review ? ctx.campaignInfo?.boss || null : null;
+}
+
 function startBattle() {
   ctx.state = createBattle({
     words: ctx.words,
@@ -414,7 +487,9 @@ function startBattle() {
      * 這一關的速度（C9）。關卡表給的，伺服器那邊用的是同一個數字。
      * 不是戰役（組別遊戲、複習關）一律 1：複習關是卡關的出口，不該再加速。
      */
-    speed: ctx.campaignLevel && !ctx.review ? Number(ctx.campaignInfo?.speed) || 1 : 1
+    speed: ctx.campaignLevel && !ctx.review ? Number(ctx.campaignInfo?.speed) || 1 : 1,
+    // 王關（C7）：關卡表給的王。錄影檔也記同一個（下面），重播才打得到同一隻王
+    boss: bossKey()
   });
   ctx.shownWordIdx = new Set();
   hidePerkPanel();
@@ -452,6 +527,7 @@ function startBattle() {
     xpFactor: ctx.xpFactor,
     perks: !!ctx.campaignLevel,
     speed: ctx.campaignLevel && !ctx.review ? Number(ctx.campaignInfo?.speed) || 1 : 1,
+    boss: bossKey(),
     wordIds: ctx.words.map((w) => w.id)
   });
   ctx.paused = false;
@@ -654,7 +730,7 @@ function renderRules() {
   const body = document.getElementById('rules-body');
   if (!body || body.dataset.difficulty === ctx.difficulty) return;
   body.dataset.difficulty = ctx.difficulty;
-  body.innerHTML = buildRules(ctx.difficulty)
+  body.innerHTML = buildRules(ctx.difficulty, { boss: BOSSES[bossKey()] || null, words: ctx.words?.length || 0 })
     .map(
       (sec) =>
         `<section class="rules-section"><h3>${sec.icon} ${escapeHtml(sec.title)}</h3><ul>` +
@@ -1072,7 +1148,7 @@ function updatePostgameHoney(total) {
   if (el) el.textContent = `🍯 ${total}`;
 }
 
-function showPostgame(state, won) {
+function showPostgame(state, won, { revealAfterMs = 0 } = {}) {
   const el = document.getElementById('postgame');
   if (!el || !state) return;
 
@@ -1233,6 +1309,16 @@ function showPostgame(state, won) {
   );
   recordGameForHint(state, won);
   renderDifficultyPickers();
+  if (revealAfterMs > 0) {
+    // 演出的這段時間他按了「重開一場」的話，就不要把上一場的結算蓋到新的一場上
+    const battleId = ctx.battleId;
+    setTimeout(() => {
+      if (ctx.battleId !== battleId) return;
+      el.hidden = false;
+      setChromeAbovePostgame(true);
+    }, revealAfterMs);
+    return;
+  }
   el.hidden = false;
   setChromeAbovePostgame(true);
 }
@@ -1712,8 +1798,10 @@ async function boot() {
          * 靜音時這顆關不掉（見 shouldShowWord）。與其讓他按了沒反應，
          * 不如直接變灰並說明原因——按了沒反應比按不下去更讓人困惑。
          */
-        b.disabled = muted;
-        b.title = muted ? '靜音的時候一定要顯示單字，不然聽不到也看不到' : '';
+        b.disabled = muted || isFinalBoss();
+        b.title = muted
+          ? '靜音的時候一定要顯示單字，不然聽不到也看不到'
+          : isFinalBoss() ? '大魔王跟真的比賽一樣，不顯示單字' : '';
       });
     }
     ctx.refreshAudioButtons = refreshAudioButtons;
@@ -1796,6 +1884,7 @@ async function boot() {
        * 最容易誤會的三件事，每一場都放一次。
        * 難度可能在校準之後才決定，所以這裡才生成，不是載入時。
        */
+      renderBossCard();
       renderQuickRules();
       renderDifficultyPickers();
       /*

@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 210" width="280" height="210">
+  <!-- 中王一・鐵甲將軍：犀角甲蟲，銀色裝甲板，橘色輝光（中王的顏色） -->
+  <defs>
+    <radialGradient id="b-body" cx="40%" cy="28%" r="80%">
+      <stop offset="0%" stop-color="#3a4668"/><stop offset="60%" stop-color="#1a2240"/><stop offset="100%" stop-color="#0a0d17"/>
+    </radialGradient>
+    <linearGradient id="b-plate" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#e2e8f0"/><stop offset="55%" stop-color="#94a3b8"/><stop offset="100%" stop-color="#475569"/>
+    </linearGradient>
+    <radialGradient id="b-eye" cx="38%" cy="32%" r="72%">
+      <stop offset="0%" stop-color="#fff7ed"/><stop offset="45%" stop-color="#fb7185"/><stop offset="100%" stop-color="#b91c1c"/>
+    </radialGradient>
+    <filter id="b-glow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="9"/></filter>
+  </defs>
+  <g filter="url(#b-glow)" opacity="0.55">
+    <ellipse cx="160" cy="108" rx="100" ry="70" fill="#f59e0b"/>
+    <circle cx="62" cy="112" r="40" fill="#f59e0b"/>
+  </g>
+  <!-- 腳 -->
+  <g stroke-linecap="round" fill="none">
+    <g stroke="#f59e0b" stroke-width="16">
+      <path d="M92 150 L72 182 L52 190"/><path d="M150 162 L146 190 L130 198"/><path d="M208 154 L226 184 L246 190"/>
+    </g>
+    <g stroke="#10162a" stroke-width="8">
+      <path d="M92 150 L72 182 L52 190"/><path d="M150 162 L146 190 L130 198"/><path d="M208 154 L226 184 L246 190"/>
+    </g>
+  </g>
+  <!-- 殼 -->
+  <ellipse cx="166" cy="104" rx="98" ry="64" fill="url(#b-body)" stroke="#cbd5e1" stroke-width="8"/>
+  <!-- 裝甲板 -->
+  <g stroke="#0f172a" stroke-width="4">
+    <path d="M110 52 Q166 34 226 56 L232 80 Q166 62 104 78 Z" fill="url(#b-plate)"/>
+    <path d="M98 92 Q166 74 246 96 L246 120 Q166 100 94 116 Z" fill="url(#b-plate)" opacity="0.9"/>
+    <path d="M104 132 Q166 118 236 136 L224 152 Q166 140 112 150 Z" fill="url(#b-plate)" opacity="0.8"/>
+  </g>
+  <g fill="#f8fafc"><circle cx="130" cy="66" r="4"/><circle cx="200" cy="68" r="4"/><circle cx="120" cy="104" r="4"/><circle cx="214" cy="108" r="4"/></g>
+  <!-- 頭與犀角 -->
+  <path d="M48 96 Q20 70 30 26 Q44 58 70 76 Z" fill="url(#b-plate)" stroke="#cbd5e1" stroke-width="6" stroke-linejoin="round"/>
+  <circle cx="66" cy="112" r="42" fill="url(#b-body)" stroke="#cbd5e1" stroke-width="8"/>
+  <!-- 頭盔的護目 -->
+  <path d="M30 98 Q66 78 104 98 L100 108 Q66 92 34 108 Z" fill="#475569" stroke="#0f172a" stroke-width="3"/>
+  <!-- 生氣的眼睛 -->
+  <circle cx="52" cy="120" r="13" fill="url(#b-eye)"/><circle cx="82" cy="120" r="13" fill="url(#b-eye)"/>
+  <circle cx="49" cy="117" r="4" fill="#fff"/><circle cx="79" cy="117" r="4" fill="#fff"/>
+  <path d="M36 106 L66 114 M96 106 L68 114" stroke="#0f172a" stroke-width="6" stroke-linecap="round"/>
+  <!-- 大鉗子 -->
+  <path d="M30 140 Q14 150 22 166 Q32 156 44 152" fill="none" stroke="#cbd5e1" stroke-width="7" stroke-linecap="round"/>
+</svg>

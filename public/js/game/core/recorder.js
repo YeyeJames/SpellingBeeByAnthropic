@@ -56,6 +56,8 @@ export function createRecorder(setup) {
       perks: !!setup.perks,
       // 這一關的速度（C9）。舊錄影檔沒有 → 1
       speed: Number(setup.speed) > 0 ? Number(setup.speed) : 1,
+      // 王關（C7）：王的代號。舊錄影檔沒有 → 沒有王
+      boss: setup.boss || null,
       wordIds: setup.wordIds.slice()
     },
     // 每筆 [tick, kind, payload]，用陣列而不是物件，錄影檔才不會大得誇張
@@ -120,7 +122,9 @@ export function battleFromSetup(setup, words) {
     // 舊錄影檔沒有這個欄位 → 1 倍，也就是 C4 之前的行為
     xpFactor: setup.xpFactor || 1,
     perks: !!setup.perks,
-    speed: setup.speed || 1
+    speed: setup.speed || 1,
+    // 王關（C7）。舊錄影檔沒有這個欄位 → 沒有王，也就是 C7 之前的行為
+    boss: setup.boss || null
   });
 }
 

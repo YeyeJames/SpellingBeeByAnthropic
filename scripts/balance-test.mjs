@@ -71,23 +71,12 @@ const BANDS = [
   ['大魔王', 0.40, 0.60]
 ];
 /*
- * 大魔王：已知比目標簡單（快手速幾乎不會輸），留給 C7（王關特殊規則）處理。
- *
- * 以前 4 趟的樣本碰巧量到 42%、落在區間裡，看不出來；改成 12 趟之後量到 28%
- * （5-A 之前與之後都是 28%，docs/audit/step5）。所以這一條不算失敗，但每次都把
- * 數字印出來，不讓它被藏起來。還是會擋兩種真正的退步：比現在更簡單（低於 15%），
- * 或比區間還難。C7 做完之後把 KNOWN_EASY 拿掉，回到一般的區間檢查。
+ * 大魔王本來有一條「已知比目標簡單、留給 C7」的例外（快手速幾乎不會輸，12 趟平均 28%）。
+ * C7（王關特殊規則，game/core/boss.js）做完、速度重調之後回到一般的區間檢查（附錄 I）。
  */
-const KNOWN_EASY = { 大魔王: { floor: 0.15, why: '已知比目標簡單，留給 C7（王關特殊規則）' } };
 for (const [group, lo, hi] of BANDS) {
   const a = avg(group);
   const each = table.filter((r) => r.group === group).map((r) => pct(r.firstTryFail)).join(' / ');
-  const known = KNOWN_EASY[group];
-  if (known && a < lo - SLACK) {
-    console.log(`  [KNOWN] ${group}：第一次就輸 ${pct(lo)}～${pct(hi)} — 平均 ${pct(a)}（慢／中／快：${each}）；${known.why}`);
-    check(`${group}：沒有比現在更簡單（≥ ${pct(known.floor)}）`, a >= known.floor, pct(a));
-    continue;
-  }
   check(`${group}：第一次就輸 ${pct(lo)}～${pct(hi)}`, a >= lo - SLACK && a <= hi + SLACK,
     `平均 ${pct(a)}（慢／中／快：${each}）`);
 }
@@ -98,6 +87,10 @@ for (const [group, lo, hi] of BANDS) {
  * 大魔王例外放寬一點：它是 100 字的模擬賽，本來就該是最後的考驗。
  */
 const stuck = table.filter((r) => r.group !== '大魔王' && r.stuck > 0.02);
+/* 大魔王：放寬到 10%（12 趟裡最多一趟打 8 次還過不了）——再多就是一堵牆 */
+const bossStuck = table.filter((r) => r.group === '大魔王' && r.stuck > 0.1);
+check('大魔王也不會變成一堵牆（打 8 次還過不了 ≤ 10%）', bossStuck.length === 0,
+  bossStuck.map((r) => `${r.typist} ${pct(r.stuck)}`).join('、'));
 check('大魔王以外，沒有一段會卡住（打 8 次還過不了 ≤ 2%）', stuck.length === 0,
   stuck.map((r) => `${r.typist} ${r.group} ${pct(r.stuck)}`).join('、'));
 

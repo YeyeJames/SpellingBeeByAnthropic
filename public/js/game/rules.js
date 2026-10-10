@@ -17,6 +17,7 @@
 import { BALANCE, knockbackMsFor } from './core/balance.js';
 import { XP, levelRewards, KNOCKBACK_CAP_LEVEL } from '../shared/levels.js';
 import { TRAIT_INFO, TRAITS } from './core/enemy-trait.js';
+import { bossRuleLines } from './core/boss.js';
 
 /**
  * 毫秒寫成小孩看得懂的秒數：1500 →「1.5 秒」、620 →「0.62 秒」。
@@ -39,14 +40,23 @@ const DIFFICULTY_LABELS = { easy: '輕鬆', normal: '標準', hard: '挑戰' };
  *   寫一個「平均值」只會跟他實際玩到的對不起來
  * @returns {{title:string, icon:string, lines:string[]}[]}
  */
-export function buildRules(difficulty = BALANCE.defaultDifficulty) {
+export function buildRules(difficulty = BALANCE.defaultDifficulty, { boss = null, words = 0 } = {}) {
   const d = BALANCE.difficulty[difficulty] || BALANCE.difficulty[BALANCE.defaultDifficulty];
   const c = BALANCE.combo;
   const h = BALANCE.honey;
   const listen = BALANCE.listenCostMs;
   const knockback = knockbackMsFor(difficulty);
 
+  /*
+   * 王關（C7）：王的規則放在最前面。這一場跟平常不一樣的就是這幾條，
+   * 他按 F1 多半就是想知道「王怎麼打」。
+   */
+  const bossSection = boss
+    ? [{ icon: boss.icon, title: `王關：${boss.name}`, lines: bossRuleLines(boss, words) }]
+    : [];
+
   return [
+    ...bossSection,
     {
       icon: '🎯',
       title: '怎麼玩',
