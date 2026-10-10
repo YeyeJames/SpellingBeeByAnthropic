@@ -31,6 +31,20 @@
   color: var(--color-text-muted, #6b7280);
 }
 
+/* 戰役打到第幾關（login.js 的 campaignLineFor） */
+.profile-tile .tile-campaign {
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  color: #fde68a;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.profile-tile .tile-campaign b {
+  font-size: 0.95rem;
+  color: var(--color-accent, #ffd23f);
+}
+
 /*
  * 刪除鈕只在「管理帳號」模式下出現。
  * 平常不顯示是刻意的：孩子每天都會點到這一頁，一顆常駐的叉叉遲早會被按到，

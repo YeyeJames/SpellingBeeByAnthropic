@@ -24,25 +24,55 @@
   white-space: nowrap;
 }
 
-.campaign-bar {
-  height: 10px;
-  background: var(--color-bg-raised);
-  border-radius: 999px;
-  overflow: hidden;
-  margin: 0.7rem 0 0.5rem;
+/* 終點那一句：整頁最上面就讀得到「為什麼要打到第 100 關」 */
+.campaign-goal-line {
+  margin: 0.4rem 0 0.2rem;
+  color: #fde68a;
+  font-size: 0.95rem;
+  line-height: 1.6;
 }
 
-.campaign-bar-fill {
-  height: 100%;
-  width: 0;
-  background: var(--color-accent);
-  border-radius: 999px;
-  transition: width 0.4s ease;
+.campaign-goal-line[hidden],
+.campaign-cta[hidden],
+.campaign-go[hidden] {
+  display: none;
+}
+
+#campaign-track {
+  margin: 0.4rem 0 0.2rem;
+}
+
+/* 下一關：一顆大按鈕＋旁邊幾行字（離中王幾關、星星幾顆） */
+.campaign-cta {
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+  margin: 0.8rem 0 0.4rem;
+  flex-wrap: wrap;
+}
+
+.campaign-go {
+  font-size: 1.2rem;
+  padding: 0.75rem 1.4rem;
+}
+
+.campaign-cta-text {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.campaign-cta-text p {
+  margin: 0.1rem 0;
 }
 
 .campaign-next {
-  margin: 0 0 1.2rem;
   color: var(--color-text-muted);
+}
+
+.campaign-stars {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .chapter + .chapter {
@@ -63,6 +93,25 @@
   font-weight: 400;
   color: var(--color-text-muted);
   font-variant-numeric: tabular-nums;
+}
+
+.chapter-state {
+  font-size: 0.8rem;
+  font-weight: 400;
+  padding: 0.05rem 0.55rem;
+  border-radius: 999px;
+  background: var(--color-bg-raised);
+  color: var(--color-text-muted);
+}
+
+.chapter.is-done .chapter-state {
+  background: #16261f;
+  color: #86efac;
+}
+
+.chapter.is-current .chapter-state {
+  background: #2a2413;
+  color: var(--color-accent);
 }
 
 .chapter-blurb {
@@ -146,10 +195,73 @@
 .level-cell.is-boss {
   border-width: 2px;
   border-color: #7c5a1a;
+  background: linear-gradient(160deg, rgba(245, 158, 11, 0.16), var(--color-bg-raised) 60%);
+}
+
+/*
+ * 大魔王：整排一格，比其他格子都大。
+ * 它是整個戰役的終點，鎖著的時候也不淡掉——他要一直看得到前面在等他的是什麼。
+ */
+.level-cell.is-final {
+  grid-column: 1 / -1;
+  min-height: 0;
+  padding: 0.9rem 1.1rem;
+  border-color: #f59e0b;
+  background: linear-gradient(120deg, rgba(245, 158, 11, 0.28), rgba(127, 29, 29, 0.35));
+}
+
+.level-cell.is-final.is-locked {
+  opacity: 0.85;
+}
+
+.level-cell.is-final .level-no {
+  font-size: 1.35rem;
+  color: #fde68a;
+}
+
+.level-cell.is-final .level-sub {
+  font-size: 0.95rem;
+  color: var(--color-text);
+}
+
+.level-final-note {
+  font-size: 0.85rem;
+  color: #fde68a;
+  line-height: 1.5;
+}
+
+/* 下一關輕輕地亮一下：一百個格子裡，眼睛先被它抓住 */
+@keyframes level-next-glow {
+  0%, 100% { box-shadow: 0 0 0 1px var(--color-accent) inset, 0 0 0 0 rgba(255, 210, 63, 0.35); }
+  50% { box-shadow: 0 0 0 1px var(--color-accent) inset, 0 0 0 6px rgba(255, 210, 63, 0); }
+}
+
+.level-cell.is-next {
+  animation: level-next-glow 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .level-cell.is-next {
+    animation: none;
+  }
 }
 
 .level-cell.is-boss.is-cleared {
   border-color: #2f6b52;
+}
+
+/*
+ * 電腦上放寬成五欄：每一章 24 關＋1 個中王剛好 25 格，排成五乘五。
+ * 原本 640px 寬只排得下四欄，一百關要捲很久才看得到大魔王。
+ */
+@media (min-width: 900px) {
+  body > .container,
+  body > .container > .panel {
+    max-width: 980px;
+  }
+  .level-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
 }
 
 @media (max-width: 480px) {

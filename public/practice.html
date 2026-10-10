@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/css/base.css" />
   <link rel="stylesheet" href="/css/components.css" />
   <link rel="stylesheet" href="/css/practice.css" />
+  <link rel="stylesheet" href="/css/campaign-track.css" />
   <!-- modulepreload:start 由 npm run gen-preload 產生，請勿手動編輯 -->
   <link rel="modulepreload" href="/js/practice.js" />
   <link rel="modulepreload" href="/js/api.js" />
@@ -19,6 +20,8 @@
   <link rel="modulepreload" href="/js/nav-partial.js" />
   <link rel="modulepreload" href="/js/outbox.js" />
   <link rel="modulepreload" href="/js/sound-manager.js" />
+  <link rel="modulepreload" href="/js/shared/sound-packs.js" />
+  <link rel="modulepreload" href="/js/shared/cosmetics.js" />
   <link rel="modulepreload" href="/js/shared/levels.js" />
   <link rel="modulepreload" href="/js/telemetry.js" />
   <link rel="modulepreload" href="/js/audio-player.js" />
@@ -27,6 +30,7 @@
   <link rel="modulepreload" href="/js/prefs.js" />
   <link rel="modulepreload" href="/js/shared/answer-match.js" />
   <link rel="modulepreload" href="/js/game/core/charset.js" />
+  <link rel="modulepreload" href="/js/campaign-track.js" />
   <!-- modulepreload:end -->
 </head>
 <body data-theme="sports" class="page-loading fullscreen-page">
@@ -34,6 +38,8 @@
 
   <div class="container">
     <div class="panel container" id="setup-panel">
+      <!-- 戰役橫幅：打到第幾關、離中王還有幾關、一鍵接著打（js/campaign-track.js） -->
+      <div id="campaign-banner"></div>
       <h1>🎧 聽寫練習</h1>
 
       <!--

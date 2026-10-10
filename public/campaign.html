@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/css/theme.css" />
   <link rel="stylesheet" href="/css/base.css" />
   <link rel="stylesheet" href="/css/components.css" />
+  <link rel="stylesheet" href="/css/campaign-track.css" />
   <link rel="stylesheet" href="/css/campaign.css" />
   <!-- modulepreload:start 由 npm run gen-preload 產生，請勿手動編輯 -->
   <link rel="modulepreload" href="/js/campaign.js" />
@@ -34,8 +35,27 @@
         -->
         <span class="campaign-progress" id="campaign-progress">—</span>
       </div>
-      <div class="campaign-bar"><div class="campaign-bar-fill" id="campaign-bar"></div></div>
-      <p class="campaign-next" id="campaign-next"></p>
+      <!--
+        終點要先講。一百關的清單本身看不出「為什麼要打到第 100 關」——
+        大魔王就是那場比賽本身（設計文件 §3），這句話他要在最上面就讀到。
+      -->
+      <p class="campaign-goal-line" id="campaign-goal-line" hidden>
+        👑 終點是<strong>第 100 關・大魔王</strong>：競賽單字全部 100 字。打贏它，就等於完成一次完整的模擬比賽。
+      </p>
+      <!-- 從第 1 關走到第 100 關的路，路上標著三個中王（js/campaign-track.js） -->
+      <div id="campaign-track"></div>
+      <!--
+        「下一關」是一顆大按鈕，不是一行灰字：一百個格子裡他要找的就這一個，
+        不該要他自己往下捲去找那一格。
+      -->
+      <div class="campaign-cta" id="campaign-cta" hidden>
+        <a class="cbanner-go campaign-go" id="campaign-go" href="#"></a>
+        <div class="campaign-cta-text">
+          <p class="campaign-next" id="campaign-next"></p>
+          <p class="cbanner-goal" id="campaign-goal"></p>
+          <p class="campaign-stars" id="campaign-stars"></p>
+        </div>
+      </div>
       <!-- 📖 複習關（C4）：卡關的出口。不佔關號、隨時可以打 -->
       <div id="campaign-review"></div>
       <p class="error-text" id="campaign-error"></p>

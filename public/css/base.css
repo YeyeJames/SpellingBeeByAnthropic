@@ -275,9 +275,25 @@ input[type='password']:focus {
   background: var(--color-bg-raised);
 }
 
+/* 戰役那一格的關數（nav-partial.js 的 setNavCampaign） */
+.top-nav .nav-campaign {
+  margin-left: 0.15rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.22);
+  color: #fde68a;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.top-nav .nav-campaign[hidden] {
+  display: none;
+}
+
 /* 螢幕不夠寬時，導覽只留圖示 */
 @media (max-width: 600px) {
-  .top-nav .nav-label {
+  .top-nav .nav-label,
+  .top-nav .nav-campaign {
     display: none;
   }
   .top-nav .nav-links a {

@@ -6,6 +6,7 @@ import * as sound from './sound-manager.js';
 import { listEnglishVoices, getPreferredVoiceURI, setPreferredVoiceURI, speakWord } from './audio-player.js';
 import { runPageInit } from './ui-status.js';
 import { beeSprite, titleFor } from './shared/cosmetics.js';
+import { bannerHtml, fetchCampaignSummary, whenCampaignKnown } from './campaign-track.js';
 
 const THEME_NAMES = { sports: '🏅 運動風（預設）', space: '🚀 太空', dino: '🦖 恐龍' };
 const ACCESSORY_SPRITES = {
@@ -177,6 +178,13 @@ runPageInit(async () => {
   const user = await requireLogin();
   if (!user) return;
   currentUser = user;
+  // 戰役進度放在檔案最上面：打到第幾關是他最想拿去跟人講的那個數字
+  // （要在 await 之前掛上：背景的 /auth/me 可能比導覽列先回來）
+  whenCampaignKnown(user, async () => {
+    const summary = await fetchCampaignSummary();
+    const bannerEl = document.getElementById('campaign-banner');
+    if (summary && bannerEl) bannerEl.innerHTML = bannerHtml(summary);
+  });
   await mountNav(user, 'profile');
   renderAvatar();
   renderStats();

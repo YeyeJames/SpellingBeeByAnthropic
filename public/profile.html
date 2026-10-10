@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/css/base.css" />
   <link rel="stylesheet" href="/css/components.css" />
   <link rel="stylesheet" href="/css/profile.css" />
+  <link rel="stylesheet" href="/css/campaign-track.css" />
   <!-- modulepreload:start 由 npm run gen-preload 產生，請勿手動編輯 -->
   <link rel="modulepreload" href="/js/profile.js" />
   <link rel="modulepreload" href="/js/api.js" />
@@ -19,9 +20,12 @@
   <link rel="modulepreload" href="/js/nav-partial.js" />
   <link rel="modulepreload" href="/js/outbox.js" />
   <link rel="modulepreload" href="/js/sound-manager.js" />
+  <link rel="modulepreload" href="/js/shared/sound-packs.js" />
+  <link rel="modulepreload" href="/js/shared/cosmetics.js" />
   <link rel="modulepreload" href="/js/shared/levels.js" />
   <link rel="modulepreload" href="/js/telemetry.js" />
   <link rel="modulepreload" href="/js/audio-player.js" />
+  <link rel="modulepreload" href="/js/campaign-track.js" />
   <!-- modulepreload:end -->
 </head>
 <body data-theme="sports" class="page-loading">
@@ -30,6 +34,8 @@
   <div class="container">
     <div class="panel container">
       <h1>🏆 我的檔案</h1>
+      <!-- 戰役進度（js/campaign-track.js） -->
+      <div id="campaign-banner"></div>
 
       <div class="profile-top">
         <div class="avatar-col">

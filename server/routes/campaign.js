@@ -15,15 +15,10 @@ const { getDB } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const wordBank = require('../data/word-bank');
 const WordProgress = require('../models/WordProgress');
+const { campaignRules, progressFor, summaryFor } = require('../models/CampaignProgress');
 
 const router = express.Router();
 router.use(requireAuth);
-
-let campaignPromise = null;
-function campaignRules() {
-  if (!campaignPromise) campaignPromise = import('../../public/js/shared/campaign.js');
-  return campaignPromise;
-}
 
 /* 經驗倍率跟前端同一份（shared/levels.js），ES module 只能動態載入 */
 let levelsPromise = null;
@@ -32,15 +27,19 @@ async function reviewFactor() {
   return (await levelsPromise).XP.reviewFactor;
 }
 
-/** 這個帳號的戰役進度。沒有紀錄就是還沒開始（第 1 關解開著）。 */
-async function progressFor(userId) {
-  const row = await getDB().collection('campaignProgress').findOne({ userId });
-  return {
-    highestCleared: row?.highestCleared || 0,
-    clearedAt: row?.clearedAt || null,
-    stars: row?.stars || {}
-  };
-}
+/**
+ * 只要進度摘要，不要整張表。
+ *
+ * 練習頁的戰役橫幅、個人檔案、遊戲結算用：它們只要「打到第幾關、下一關是什麼、
+ * 下一個王還有幾關」，不需要一百關的細節。
+ */
+router.get('/summary', async (req, res, next) => {
+  try {
+    res.json({ summary: await summaryFor(req.user) });
+  } catch (err) {
+    next(err);
+  }
+});
 
 /** 整張表 + 解鎖狀態。地圖頁靠這一支。 */
 router.get('/', async (req, res, next) => {
@@ -54,7 +53,7 @@ router.get('/', async (req, res, next) => {
       chapters: CHAPTERS.map((c) => ({ n: c.n, title: c.title, blurb: c.blurb })),
       /* 📖 複習關的入口（C4）：有幾個字等著複習。0 就是「沒有要複習的字」 */
       review,
-      summary: campaignSummary(campaign, progress.highestCleared),
+      summary: campaignSummary(campaign, progress.highestCleared, progress.stars),
       highestCleared: progress.highestCleared,
       levels: campaign.map((l) => ({
         ...l,
@@ -195,7 +194,7 @@ router.get('/level/:level', async (req, res, next) => {
  */
 router.post('/clear', async (req, res, next) => {
   try {
-    const { buildCampaign, levelAt, isUnlocked } = await campaignRules();
+    const { buildCampaign, levelAt, isUnlocked, campaignSummary } = await campaignRules();
     const { level, won, score, accuracy, opId } = req.body || {};
     const campaign = buildCampaign(wordBank.listGroups(req.user.wordBankId));
     const row = levelAt(campaign, level);
@@ -206,8 +205,13 @@ router.post('/clear', async (req, res, next) => {
       return res.status(403).json({ error: '這一關還沒解開' });
     }
 
+    /* 結算畫面要畫戰役進度條（離第 100 關多遠），一起帶回去，不必再問一次 */
     if (!won) {
-      return res.json({ highestCleared: progress.highestCleared, advanced: false });
+      return res.json({
+        highestCleared: progress.highestCleared,
+        advanced: false,
+        summary: campaignSummary(campaign, progress.highestCleared, progress.stars)
+      });
     }
 
     /*
@@ -242,7 +246,8 @@ router.post('/clear', async (req, res, next) => {
       stars: Math.max(prevStars, stars),
       nextLevel: after.highestCleared + 1 <= campaign.length ? after.highestCleared + 1 : null,
       opId: opId || null,
-      score: Number(score) || 0
+      score: Number(score) || 0,
+      summary: campaignSummary(campaign, after.highestCleared, after.stars)
     });
   } catch (err) {
     next(err);

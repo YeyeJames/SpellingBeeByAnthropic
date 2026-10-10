@@ -19,8 +19,8 @@ let currentCoins = 0;
  * 舊 HTML 裡沒有的元素——按鈕直接變成死的，要重新整理一次才會好。
  * 那種問題在自己的機器上永遠看不到（快取是空的），只有使用者會遇到。
  */
-// navHtml4：加了 [data-nav-level] 等級章；navHtml5：選單加了「家長報告」
-const NAV_CACHE_KEY = 'navHtml5';
+// navHtml4：加了 [data-nav-level] 等級章；navHtml5：選單加了「家長報告」；navHtml6：戰役那一格的關數
+const NAV_CACHE_KEY = 'navHtml6';
 
 function fetchNavHtml() {
   return fetch('/partials/nav.html')
@@ -35,6 +35,17 @@ const cachedNavHtml = readShared(NAV_CACHE_KEY);
 // 有快取就背景更新，沒有才需要等
 const navHtmlPromise = cachedNavHtml ? Promise.resolve(cachedNavHtml) : fetchNavHtml();
 if (cachedNavHtml) fetchNavHtml().catch(() => {});
+
+/**
+ * 戰役那一格寫「6/100」。還沒有每週單字的課本（打不了戰役）或還不知道進度時藏起來。
+ */
+function setNavCampaign(root, campaign) {
+  const el = root.querySelector('[data-nav-campaign]');
+  if (!el) return;
+  const total = Number(campaign?.total) || 0;
+  el.hidden = !total;
+  if (total) el.textContent = `${Math.min(Number(campaign.cleared) || 0, total)}/${total}`;
+}
 
 /** 載入共用 nav，並用目前登入的 user 填入暱稱/金幣、標記目前頁面 */
 export async function mountNav(user, activePage) {
@@ -52,6 +63,7 @@ export async function mountNav(user, activePage) {
   if (coinsEl) coinsEl.textContent = `🪙 ${currentCoins}`;
   if (nicknameEl) nicknameEl.textContent = user.nickname;
   setNavLevelFromXp(user.xp);
+  setNavCampaign(mountPoint, user.campaign);
 
   const activeLink = mountPoint.querySelector(`[data-nav="${activePage}"]`);
   if (activeLink) activeLink.classList.add('active');
@@ -79,6 +91,7 @@ export async function mountNav(user, activePage) {
     if (fresh.coins > currentCoins) setNavCoins(fresh.coins);
     // 等級只會往上，所以直接跟著伺服器走，不需要金幣那套防倒退的判斷
     setNavLevelFromXp(fresh.xp);
+    setNavCampaign(mountPoint, fresh.campaign);
     const nameEl = mountPoint.querySelector('[data-nav-nickname]');
     if (nameEl && fresh.nickname) nameEl.textContent = fresh.nickname;
   });

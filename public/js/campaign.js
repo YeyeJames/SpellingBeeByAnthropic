@@ -12,11 +12,12 @@ import { requireLogin } from './auth.js';
 import { mountNav } from './nav-partial.js';
 import { runPageInit } from './ui-status.js';
 import * as sound from './sound-manager.js';
+import { trackHtml, goalText, nextAction } from './campaign-track.js';
 
 const chaptersEl = document.getElementById('campaign-chapters');
 const errorEl = document.getElementById('campaign-error');
 const progressEl = document.getElementById('campaign-progress');
-const barEl = document.getElementById('campaign-bar');
+const trackEl = document.getElementById('campaign-track');
 const nextEl = document.getElementById('campaign-next');
 const reviewEl = document.getElementById('campaign-review');
 
@@ -76,7 +77,7 @@ function render(data) {
    */
   if (!levels.length) {
     progressEl.textContent = '尚未開放';
-    barEl.style.width = '0%';
+    trackEl.innerHTML = '';
     nextEl.textContent = '';
     chaptersEl.innerHTML =
       '<p class="muted" style="line-height:1.8">' +
@@ -88,10 +89,26 @@ function render(data) {
   }
 
   progressEl.textContent = `第 ${summary.cleared} / ${summary.total} 關`;
-  barEl.style.width = `${summary.percent}%`;
+  document.getElementById('campaign-goal-line').hidden = false;
+  trackEl.innerHTML = trackHtml(summary);
   nextEl.textContent = summary.next
     ? `下一關：第 ${summary.next.level} 關・${summary.next.subtitle}`
     : '🎉 全部一百關都打完了！';
+  document.getElementById('campaign-goal').textContent = summary.done ? '' : goalText(summary);
+  document.getElementById('campaign-stars').textContent =
+    `★ 星星 ${summary.starsEarned || 0} / ${summary.starsMax}` +
+    (summary.cleared ? '（零失誤過關拿三顆，可以回頭補）' : '');
+  const act = nextAction(summary);
+  const go = document.getElementById('campaign-go');
+  if (act && summary.next) {
+    go.href = act.href;
+    go.innerHTML = `<span>${escapeHtml(act.text)}</span>${act.sub ? `<small>${escapeHtml(act.sub)}</small>` : ''}`;
+    go.onclick = () => sound.playClick();
+    go.hidden = false;
+  } else {
+    go.hidden = true;
+  }
+  document.getElementById('campaign-cta').hidden = false;
 
   chaptersEl.innerHTML = '';
   for (const ch of chapters) {
@@ -99,11 +116,18 @@ function render(data) {
     if (!rows.length) continue;
 
     const done = rows.filter((l) => l.cleared).length;
+    /*
+     * 每一章的狀態寫在章名旁邊：全破、正在打、還沒到。
+     * 他一眼就分得出「我在第幾章」，不必從一百個格子的顏色去推。
+     */
+    const state = done === rows.length ? 'done' : rows.some((l) => l.unlocked && !l.cleared) ? 'current' : 'ahead';
+    const STATE_TEXT = { done: '✅ 全破', current: '🐝 正在打', ahead: '🔒 還沒到' };
     const section = document.createElement('section');
-    section.className = 'chapter';
+    section.className = `chapter is-${state}`;
     section.innerHTML =
       `<h2 class="chapter-title">${escapeHtml(ch.title)}` +
-      `<span class="chapter-count">${done} / ${rows.length}</span></h2>` +
+      `<span class="chapter-count">${done} / ${rows.length}</span>` +
+      `<span class="chapter-state">${STATE_TEXT[state]}</span></h2>` +
       `<p class="chapter-blurb">${escapeHtml(ch.blurb)}</p>`;
 
     const grid = document.createElement('div');
@@ -115,6 +139,7 @@ function render(data) {
       else if (l.unlocked) cls.push('is-next');
       else cls.push('is-locked');
       if (l.kind !== 'normal') cls.push('is-boss');
+      if (l.kind === 'finalboss') cls.push('is-final');
 
       const cell = document.createElement(l.unlocked ? 'a' : 'div');
       cell.className = cls.join(' ');
@@ -128,7 +153,14 @@ function render(data) {
         `<span class="level-meta">${l.weakness ? '你的弱點字' : `${l.wordCount} 字`}` +
         // 速度（C9）：越後面越快，地圖上就看得到——那是他要練的東西
         `${l.speed && l.speed !== 1 ? `・⚡×${l.speed}` : ''}</span>` +
-        (l.cleared ? `<span class="level-stars">${'★'.repeat(l.stars)}${'☆'.repeat(3 - l.stars)}</span>` : '');
+        (l.cleared ? `<span class="level-stars">${'★'.repeat(l.stars)}${'☆'.repeat(3 - l.stars)}</span>` : '') +
+        /*
+         * 大魔王那一格寫清楚它是什麼。它是整個戰役的終點，
+         * 只寫「100・競賽單字全部 100 字」跟其他格子長一樣，看不出它的份量。
+         */
+        (l.kind === 'finalboss'
+          ? '<span class="level-final-note">終點・跟真的比賽一樣：100 個競賽單字一次打完。打贏它，你就準備好上場了。</span>'
+          : '');
       /*
        * 鎖著的格子要說得出「為什麼」。
        * 只是灰掉的話他會以為壞了——而這裡的答案很簡單：先過前一關。

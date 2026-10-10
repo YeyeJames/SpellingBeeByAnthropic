@@ -56,6 +56,17 @@ function bankLabelFor(profile) {
   return b ? ` ・ ${escapeHtml(b.label)}` : '';
 }
 
+/*
+ * 戰役打到第幾關，寫在每個人的格子上。
+ * 一百關是整個遊戲的終點：兄弟倆每天打開第一眼就看得到彼此打到哪了。
+ * 那一本課本還沒有每週單字（打不了戰役）就不寫。
+ */
+function campaignLineFor(profile) {
+  const c = profile.campaign;
+  if (!c || !c.total) return '';
+  return `<div class="tile-campaign">🗺️ <b>${Number(c.cleared) || 0}</b> / ${c.total} 關</div>`;
+}
+
 function renderProfiles() {
   profileGrid.innerHTML = '';
 
@@ -70,6 +81,7 @@ function renderProfiles() {
       <div class="nickname">${escapeHtml(p.nickname)}</div>
       ${p.titleText ? `<div class="tile-title">${escapeHtml(p.titleText)}</div>` : ''}
       <div class="tile-sub">🪙 ${coins}${bankLabelFor(p)}</div>
+      ${campaignLineFor(p)}
       ${isCurrent ? '<div class="current-badge">繼續玩</div>' : ''}
     `;
 

@@ -23,12 +23,25 @@ const { isValidNickname } = require('../utils/nickname');
 const { requireAuth } = require('../middleware/auth');
 const { loginLimiter } = require('../middleware/rateLimit');
 const wordBank = require('../data/word-bank');
+const { progressFor, clearedByUser, totalLevels } = require('../models/CampaignProgress');
 
 const router = express.Router();
 
 router.get('/profiles', async (req, res, next) => {
   try {
-    const profiles = (await listProfiles()).map((p) => ({ ...p, titleText: titleTextOf(p) }));
+    const list = await listProfiles();
+    /*
+     * 每個帳號打到戰役第幾關，寫在選帳號的格子上。
+     * 一百關是整個遊戲的終點——兄弟倆每天打開第一眼就看得到彼此打到哪了。
+     */
+    const cleared = await clearedByUser(list.map((p) => p._id));
+    const profiles = await Promise.all(
+      list.map(async (p) => ({
+        ...p,
+        titleText: titleTextOf(p),
+        campaign: { cleared: cleared.get(String(p._id)) || 0, total: await totalLevels(p.wordBankId) }
+      }))
+    );
     res.json({ profiles, banks: wordBank.listBanks() });
   } catch (err) {
     next(err);
@@ -117,8 +130,19 @@ router.post('/logout', (req, res) => {
   });
 });
 
-router.get('/me', requireAuth, (req, res) => {
-  res.json({ user: req.userSafe });
+/*
+ * 戰役進度跟著使用者一起送：導覽列每一頁都寫「🗺️ 6/100」，不必每一頁再多問一次。
+ * 查不到（資料庫一時出錯）就不帶，導覽列那一格會先藏著，不擋登入。
+ */
+router.get('/me', requireAuth, async (req, res) => {
+  let campaign;
+  try {
+    const [progress, total] = await Promise.all([progressFor(req.user._id), totalLevels(req.user.wordBankId)]);
+    campaign = { cleared: Math.min(progress.highestCleared, total), total };
+  } catch (err) {
+    campaign = undefined;
+  }
+  res.json({ user: { ...req.userSafe, campaign } });
 });
 
 router.put('/audio-prefs', requireAuth, async (req, res, next) => {

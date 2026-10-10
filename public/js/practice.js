@@ -18,6 +18,7 @@ import { coinsForCorrectAnswer } from './shared/coins.js';
 import { track } from './telemetry.js';
 import { readPref, writePref } from './prefs.js';
 import { isAnswerCorrect } from './shared/answer-match.js';
+import { bannerHtml, fetchCampaignSummary, whenCampaignKnown } from './campaign-track.js';
 
 const setupPanel = document.getElementById('setup-panel');
 const practicePanel = document.getElementById('practice-panel');
@@ -665,10 +666,36 @@ onApplied('group-complete', (result, op, err) => {
   updateGameButton();
 });
 
+/*
+ * 戰役橫幅（選組畫面最上面）。
+ *
+ * 一百關是整個遊戲的終點，而登入之後第一個看到的就是這一頁——
+ * 原本這裡完全沒有提到戰役，「玩遊戲」打的也是單組遊戲。
+ *
+ * 先用上次存的畫出來、背景再問伺服器：這一塊在版面最上面，
+ * 晚半秒才冒出來的話整頁會往下跳一次，他正要點的組別就跑掉了。
+ */
+async function loadCampaignBanner(user) {
+  const el = document.getElementById('campaign-banner');
+  if (!el) return;
+  const paint = (summary) => {
+    el.innerHTML = summary ? bannerHtml(summary) : '';
+    el.querySelectorAll('a').forEach((a) => a.addEventListener('click', () => sound.playClick()));
+  };
+  paint(readUser(user._id, 'campaignSummary'));
+  whenCampaignKnown(user, async () => {
+    const fresh = await fetchCampaignSummary();
+    if (!fresh) return;
+    writeUser(user._id, 'campaignSummary', fresh);
+    paint(fresh);
+  });
+}
+
 runPageInit(async () => {
   const user = await requireLogin();
   if (!user) return;
   currentUser = user;
+  loadCampaignBanner(user);
   initOutbox(user._id);
   // 幾件事互不相依，平行處理，避免畫面元素一個接一個冒出來
   selectedGroup = readPref('lastGroup') || null;

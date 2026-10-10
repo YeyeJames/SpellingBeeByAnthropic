@@ -36,7 +36,8 @@ import { buildRules, buildQuickRules } from './game/rules.js';
 import { newId } from './local-store.js';
 import { readPref, writePref } from './prefs.js';
 import { startTelemetry, track, uploadBattleLog } from './telemetry.js';
-import { getCachedUser } from './auth.js';
+import { getCachedUser, updateCachedUser } from './auth.js';
+import { trackHtml, goalText, summaryFromCounts } from './campaign-track.js';
 import { killFxFor, soundPackFor } from './shared/cosmetics.js';
 import { initOutbox, enqueue } from './outbox.js';
 
@@ -900,7 +901,8 @@ async function wordsFromIds(ids) {
   ctx.groupLabel = ctx.campaignInfo?.review
     ? `📖 複習關・經驗 ×${ctx.xpFactor}`
     : ctx.campaignInfo
-      ? `第 ${ctx.campaignInfo.level} 關・${ctx.campaignInfo.subtitle}`
+      // 「/ 100」一直掛在工具列上：打的每一關都看得到離終點多遠
+      ? `第 ${ctx.campaignInfo.level} / 100 關・${ctx.campaignInfo.subtitle}`
       : '戰役';
   return picked;
 }
@@ -1075,9 +1077,20 @@ function showPostgame(state, won) {
   if (!el || !state) return;
 
   el.classList.toggle('is-lost', !won);
-  document.getElementById('postgame-title').textContent = won
-    ? '🎉 全部打完了！'
-    : '💥 蜂巢被攻破了';
+  /*
+   * 戰役關卡打贏了，標題就講「過關」——那是一百關裡往前走了一格，
+   * 不只是「全部打完了」。王關另外講：打倒中王是一整章的結束。
+   */
+  const kind = ctx.campaignLevel ? ctx.campaignInfo?.kind : null;
+  document.getElementById('postgame-title').textContent = !won
+    ? '💥 蜂巢被攻破了'
+    : kind === 'finalboss'
+      ? '👑 打倒大魔王了！'
+      : kind === 'midboss'
+        ? '🔶 打倒中王了！'
+        : ctx.campaignLevel
+          ? `🎉 第 ${ctx.campaignLevel} 關過關！`
+          : '🎉 全部打完了！';
   document.getElementById('postgame-group').textContent = ctx.groupLabel
     ? `${ctx.groupLabel}・${ORDER_LABELS[ctx.order] || ''}`
     : '';
@@ -1121,17 +1134,10 @@ function showPostgame(state, won) {
   }
 
   /*
-   * 戰役關卡（C3）：星等。
-   * 由伺服器判（打贏 1 顆、正確率 ≥90% 2 顆、零失誤 3 顆），所以先留位置。
+   * 戰役關卡（C3）的星等不在這幾列裡，寫在下面戰役那一塊的標題上
+   * （renderPostgameCampaign）：本來是一列「🗺️ 第 7 關 ★★★」，加上戰役那一塊之後
+   * 同一件事講兩次，而 768 高的筆電上多那一列，「再打一場」就被擠到工具列底下。
    */
-  if (ctx.campaignLevel) {
-    rows.push({
-      label: `🗺️ 第 ${ctx.campaignLevel} 關`,
-      value: '結算中…',
-      id: 'postgame-level',
-      hot: won
-    });
-  }
 
   /*
    * 經驗值與等級（C2）。
@@ -1215,6 +1221,16 @@ function showPostgame(state, won) {
    * 不收的話，結算的按鈕剛好在鍵盤底下，他得自己去按鍵盤上的 ✓ 才看得到。
    */
   ctx.input?.releaseTyping();
+  /*
+   * 戰役進度先用快取的關數畫（伺服器還沒回來）；戰役關卡等伺服器回來再換成
+   * 真的（updatePostgameLevel）——打贏的這一關要算進去。
+   */
+  renderPostgameCampaign(
+    summaryFromCounts(getCachedUser()?.campaign) ||
+      // 戰役關卡一定要有這一塊（星等寫在上面）：還不知道進度就先當作打到前一關
+      (ctx.campaignLevel ? summaryFromCounts({ cleared: ctx.campaignLevel - 1, total: 100 }) : null),
+    won ? 'pending' : 'lost'
+  );
   recordGameForHint(state, won);
   renderDifficultyPickers();
   el.hidden = false;
@@ -1284,7 +1300,66 @@ async function postBattleReport(path, body) {
  * 結算畫面上的關卡結果，等伺服器回來才填得出來（星等是它判的）。
  * 順便把「下一關」的按鈕換上去——打完最想做的就是接著打下一關。
  */
+/**
+ * 結算畫面上的戰役進度。
+ *
+ * 戰役關卡：一條路＋「離下一個王還有幾關」。打倒王的那一場講王。
+ * 其他（單組遊戲、複習關）：同一條路＋一顆「戰役第 N 關」——
+ * 打完單組遊戲正是「接下來要做什麼」的時候，戰役要在這裡被看見。
+ *
+ * @param summary campaign-track.js 的 summaryFromCounts，或伺服器的 campaignSummary
+ * @param phase   'pending'（打贏、伺服器還沒回）／'lost'／'done'（伺服器回來了）
+ */
+function renderPostgameCampaign(summary, phase, stars = 0) {
+  const box = document.getElementById('postgame-campaign');
+  if (!box) return;
+  if (!summary || !summary.total) {
+    box.hidden = true;
+    return;
+  }
+  let line = '';
+  let go = '';
+  if (ctx.campaignLevel) {
+    const kind = ctx.campaignInfo?.kind;
+    if (phase === 'lost') {
+      line = `還在第 ${ctx.campaignLevel} 關・再試一次，或先去📖複習關變強`;
+    } else if (phase === 'pending') {
+      line = '';
+    } else if (kind === 'finalboss') {
+      line = '🎉 一百關全破！你剛剛完成了一整場模擬比賽。';
+    } else if (kind === 'midboss') {
+      line = `第 ${ctx.campaignInfo.chapter + 1} 章開始了！${goalText(summary)}`;
+    } else {
+      line = goalText(summary);
+    }
+  } else {
+    line = goalText(summary);
+    if (summary.next) {
+      go = `<a class="pg-camp-go" href="/game?level=${summary.next.level}">▶ 戰役第 ${summary.next.level} 關</a>`;
+    }
+  }
+  box.innerHTML =
+    '<div class="pg-camp-head">' +
+    `<span class="pg-camp-count">🗺️ 戰役 第 <b>${summary.cleared}</b> / ${summary.total} 關</span>` +
+    go +
+    // 這一關的星等（伺服器判的，回來之前寫「結算中」）
+    (ctx.campaignLevel
+      ? `<span class="pg-camp-stars" id="postgame-level">${
+        phase === 'lost' ? '沒過' : stars ? `${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}` : '結算中…'
+      }</span>`
+      : '') +
+    '</div>' +
+    trackHtml(summary, { labels: false }) +
+    (line ? `<div class="pg-camp-line">${escapeHtml(line)}</div>` : '');
+  box.hidden = false;
+}
+
 function updatePostgameLevel(data, won) {
+  if (data.summary) {
+    renderPostgameCampaign(data.summary, won ? 'done' : 'lost', data.stars || 1);
+    // 導覽列的「🗺️ 7/100」下一頁就要是對的，不必等那一頁自己去問
+    updateCachedUser({ campaign: { cleared: data.summary.cleared, total: data.summary.total } });
+  }
   const el = document.getElementById('postgame-level');
   if (el) {
     el.textContent = won

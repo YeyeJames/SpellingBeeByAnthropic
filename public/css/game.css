@@ -498,6 +498,75 @@ body.is-touch #listen-buttons {
   color: #fde047;
 }
 
+/*
+ * 結算的戰役進度（game.js 的 renderPostgameCampaign）：一行關數、一條路、一句離下一個王還有幾關。
+ * 寬度跟成績那幾列一樣，看起來是同一張成績單的一部分。
+ */
+#postgame-campaign {
+  margin-top: 0.7rem;
+  width: min(460px, 90vw);
+  padding: 0.5rem 0.8rem 0.55rem;
+  border-radius: 10px;
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  background: linear-gradient(120deg, rgba(245, 158, 11, 0.14), #1e293b 60%);
+  box-sizing: border-box;
+}
+
+#postgame-campaign[hidden] {
+  display: none;
+}
+
+#postgame-campaign .pg-camp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  color: #cbd5e1;
+}
+
+#postgame-campaign .pg-camp-count b {
+  color: #ffd166;
+  font-size: 1.2rem;
+  font-variant-numeric: tabular-nums;
+}
+
+#postgame-campaign .pg-camp-go {
+  padding: 0.25rem 0.8rem;
+  border-radius: 999px;
+  background: #ffd23f;
+  color: #5a4300;
+  font-weight: 700;
+  font-size: 0.92rem;
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow: 0 3px 0 #c99f1e;
+}
+
+#postgame-campaign .pg-camp-stars {
+  color: #fde047;
+  font-size: 1.1rem;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+/* 蜂站在路上，頭頂會碰到上面那一行字：讓開一點 */
+#postgame-campaign .ctrack {
+  margin-top: 0.55rem;
+}
+
+#postgame-campaign .pg-camp-line {
+  margin-top: 0.15rem;
+  color: #fde68a;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 680px) {
+  #postgame-campaign {
+    margin-top: 0.45rem;
+    padding: 0.35rem 0.7rem 0.4rem;
+  }
+}
+
 /* 難度建議：一行字＋一顆按鈕，黃色讓他注意到，但不搶過開始鍵 */
 .difficulty-hint {
   display: flex;
@@ -537,6 +606,31 @@ body.is-touch #listen-buttons {
 .difficulty-row .btn-toggle {
   padding: 0.3rem 0.85rem;
   font-size: 0.92rem;
+}
+
+/*
+ * 矮的筆電（1366×768 很常見）：結算整頁收緊一點。
+ * 加上戰役那一塊之後，不收的話「再打一場」會被擠到工具列底下——出口看不到。
+ */
+@media (max-height: 820px) {
+  #postgame strong#postgame-title {
+    font-size: 2rem;
+  }
+  #postgame-stats {
+    margin-top: 0.6rem;
+    gap: 0.25rem;
+  }
+  #postgame-stats .stat-row {
+    padding: 0.3rem 0.9rem;
+    font-size: 1.02rem;
+  }
+  #postgame-campaign {
+    margin-top: 0.5rem;
+    padding: 0.35rem 0.8rem 0.4rem;
+  }
+  .difficulty-row {
+    margin-top: 0.6rem;
+  }
 }
 
 /* 手機直式：成績那幾列收緊一點，出口才不會被擠到工具列底下 */

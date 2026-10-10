@@ -255,11 +255,21 @@ export function isUnlocked(level, highestCleared) {
   return Number(level) <= Number(highestCleared || 0) + 1;
 }
 
-/** 進度摘要，給地圖頁的頂端用。 */
-export function campaignSummary(campaign, highestCleared = 0) {
+/**
+ * 進度摘要。地圖頁的頂端、練習頁的戰役橫幅、個人檔案、遊戲結算都用這一份。
+ *
+ * 除了「打到第幾關」，還要給得出「下一個目標」：一百關太遠了，
+ * 只看 6 / 100 會覺得永遠打不完；「再 19 關就是中王」是他今天就看得到的距離。
+ *
+ * @param stars { "關號": 星數 }，可以不給（星星就是 0）
+ */
+export function campaignSummary(campaign, highestCleared = 0, stars = {}) {
   const total = campaign.length;
   const cleared = Math.min(Number(highestCleared) || 0, total);
   const next = campaign.find((l) => l.level === cleared + 1) || null;
+  // 下一個還沒打倒的王（中王或大魔王）。全部打完就沒有了
+  const boss = campaign.find((l) => l.kind !== 'normal' && l.level > cleared) || null;
+  const starsEarned = campaign.reduce((a, l) => a + (Number(stars?.[String(l.level)]) || 0), 0);
   return {
     cleared,
     total,
@@ -269,7 +279,12 @@ export function campaignSummary(campaign, highestCleared = 0) {
      * 而且完全看不出為什麼。
      */
     percent: total > 0 ? Math.round((cleared / total) * 100) : 0,
-    next
+    next,
+    // away = 還要再過幾關才打得倒它（包含它自己那一關）
+    nextBoss: boss ? { level: boss.level, kind: boss.kind, title: boss.title, away: boss.level - cleared } : null,
+    starsEarned,
+    starsMax: total * 3,
+    done: total > 0 && cleared >= total
   };
 }
 

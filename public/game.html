@@ -6,6 +6,7 @@
   <title>蜂巢保衛戰 - 拼字蜂</title>
   <link rel="icon" href="/assets/icons/favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="/css/game.css" />
+  <link rel="stylesheet" href="/css/campaign-track.css" />
 </head>
 <body class="page-loading">
   <!-- 遊戲畫面沒有導覽列：遊戲就是遊戲，選單另外走 -->
@@ -175,6 +176,12 @@
     <strong id="postgame-title"></strong>
     <p id="postgame-group"></p>
     <div id="postgame-stats"></div>
+    <!--
+      戰役進度：打完一關看得到自己在一百關的路上往前走了一格、離中王還有幾關；
+      打完單組遊戲也看得到戰役在哪、一鍵過去（game.js 的 renderPostgameCampaign）。
+      一百關是整個遊戲的終點，原本打完單組遊戲完全不會提到它。
+    -->
+    <div id="postgame-campaign" hidden></div>
     <!--
       輸了想換簡單一點、贏了想挑戰：在這裡換，「再打一場」就是新的難度。
       標題跟按鈕擠在同一行：結算本來就很長，再多一整段，矮螢幕上出口會被擠到工具列底下。
