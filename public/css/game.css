@@ -498,6 +498,28 @@ body.is-touch #listen-buttons {
   color: #fde047;
 }
 
+/* 難度建議：一行字＋一顆按鈕，黃色讓他注意到，但不搶過開始鍵 */
+.difficulty-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.6rem;
+  margin: 0.5rem 0 0 !important;
+  color: #ffd166 !important;
+  font-size: 0.95rem;
+}
+.difficulty-hint[hidden] {
+  display: none;
+}
+.difficulty-hint .btn-toggle {
+  padding: 0.25rem 0.8rem;
+  font-size: 0.9rem;
+  border-style: solid;
+  border-color: #f5b301;
+  color: #ffd166;
+}
+
 /* 結算的「下一場的難度」：標題跟三顆按鈕同一行，按鈕小一號 */
 .difficulty-row {
   display: flex;

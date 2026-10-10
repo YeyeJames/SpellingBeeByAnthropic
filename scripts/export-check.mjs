@@ -19,6 +19,8 @@ import { pathToFileURL } from 'node:url';
 const require = createRequire(import.meta.url);
 const wordBank = require('../server/data/word-bank.js');
 const { calcCoinsForCorrectAnswer } = require('../server/utils/coins.js');
+const { SHOP_ITEMS } = require('../server/data/shop-items.js');
+const ITEM_NAME = Object.fromEntries(SHOP_ITEMS.map((i) => [i.key, i.name]));
 const { isAnswerCorrect } = await import('../public/js/shared/answer-match.js');
 
 const OK = '✅';
@@ -129,6 +131,12 @@ export function checkExport(data) {
     const leaves = (p.events || []).filter((e) => e.kind === 'page_leave');
     const huge = leaves.filter((e) => Number(e.data?.ms) > 3 * 60 * 60 * 1000);
     if (huge.length) add(INFO, `有 ${huge.length} 次「停在同一頁超過 3 小時」`, '報告裡會被夾到 3 小時；多半是頁面開著沒關');
+
+    // 10. 現在用的外觀、小遊戲最高分（2026-10 之後的分析檔才有）
+    const using = Object.values(p.cosmetics || {}).filter(Boolean).map((k) => ITEM_NAME[k] || k);
+    if (p.cosmetics) add(INFO, '現在用的外觀', using.length ? using.join('、') : '都是預設');
+    const bests = Object.entries(p.minigameBests || {});
+    if (bests.length) add(INFO, '小遊戲最高分', bests.map(([k, v]) => `${ITEM_NAME[k] || k} ${v}`).join('、'));
 
     return { nickname: p.nickname, bank: bankId, findings: f };
   });

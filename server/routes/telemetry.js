@@ -303,7 +303,7 @@ router.get('/export', async (req, res, next) => {
     const out = { kind: 'spellbee-export', version: 1, days, exportedAt: new Date(), profiles: [] };
     for (const u of users) {
       const id = u._id;
-      const [events, battleLogs, gameResults, attempts, groupCompletions, minigamePlays, wordProgress, campaign] =
+      const [events, battleLogs, gameResults, attempts, groupCompletions, minigamePlays, wordProgress, campaign, bests] =
         await Promise.all([
           since('events', id, 'at', from),
           since('battleLogs', id, 'at', from),
@@ -312,7 +312,8 @@ router.get('/export', async (req, res, next) => {
           since('groupCompletions', id, 'completedAt', from),
           since('minigamePlays', id, 'playedAt', from),
           db.collection('wordProgress').find({ userId: id }).toArray(),
-          db.collection('campaignProgress').findOne({ userId: id })
+          db.collection('campaignProgress').findOne({ userId: id }),
+          db.collection('minigameBests').find({ userId: id }).toArray()
         ]);
       const strip = (rows) => rows.map(({ _id, userId, ...rest }) => rest);
       out.profiles.push({
@@ -324,6 +325,10 @@ router.get('/export', async (req, res, next) => {
         ownedItemKeys: u.ownedItemKeys || [],
         ownedGear: u.ownedGear || [],
         equipped: u.equipped || null,
+        // 現在用的外觀（特效、拼字蜂顏色、音效、稱號）：ownedItemKeys 只看得出買過什麼，看不出在用哪一個
+        cosmetics: u.cosmetics || {},
+        // 小遊戲最高分（全家排行榜那一份），{ minigame_stack: 14, ... }
+        minigameBests: Object.fromEntries(bests.map((b) => [b.itemKey, b.best])),
         stats: u.stats || null,
         createdAt: u.createdAt || null,
         campaign: campaign ? { highestCleared: campaign.highestCleared || 0, stars: campaign.stars || {} } : null,

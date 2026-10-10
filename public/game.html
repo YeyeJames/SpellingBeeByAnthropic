@@ -128,6 +128,8 @@
     <!-- 難度直接換，不用重測手速。三顆是開關，不會開始遊戲（game.js 的 renderDifficultyPickers） -->
     <p class="pregame-hint">難度</p>
     <div class="difficulty-pick" id="pregame-difficulty"></div>
+    <!-- 連續幾場都太輕鬆（或都輸）時的建議，按了就換；不按也沒關係（game.js 的 renderDifficultyHints） -->
+    <p class="difficulty-hint" hidden></p>
 
     <p class="pregame-hint">要照課本順序，還是打亂？</p>
     <div id="pregame-order">
@@ -181,6 +183,7 @@
       <span>下一場的難度</span>
       <div class="difficulty-pick" id="postgame-difficulty"></div>
     </div>
+    <p class="difficulty-hint" hidden></p>
     <p class="pregame-hint">接下來要做什麼？</p>
     <!--
       樣式跟開場那兩顆一樣，但不共用 class——btn-order 的意思是「選出題順序」，

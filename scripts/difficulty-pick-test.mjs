@@ -128,6 +128,83 @@ console.log('\n6) 校準畫面不受影響');
   await c2.close();
 }
 
+console.log('\n7) 難度建議');
+{
+  const REC = 'sb:v2:shared:recentGames';
+  async function openWith(recent, difficulty = 'normal') {
+    const c = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+    await c.addInitScript(([k, r, kd, d]) => {
+      if (!sessionStorage.getItem('seeded')) {
+        localStorage.setItem(k, JSON.stringify(r));
+        localStorage.setItem(kd, JSON.stringify(d));
+        sessionStorage.setItem('seeded', '1');
+      }
+    }, [REC, recent, KEY, difficulty]);
+    const pg = await c.newPage();
+    pg.on('pageerror', (e) => errors.push(e.message));
+    await pg.goto(`${BASE}/game?group=w04&n=3&show=1`, { waitUntil: 'domcontentloaded' });
+    await pg.waitForSelector('#pregame:not([hidden])', { timeout: 15000 });
+    const hint = await pg.evaluate(() => {
+      const el = document.querySelector('#pregame .difficulty-hint');
+      return el && !el.hidden ? { text: el.textContent, to: el.querySelector('[data-hint-difficulty]')?.dataset.hintDifficulty } : null;
+    });
+    return { c, pg, hint };
+  }
+  const easyWin = { d: 'normal', won: true, missed: 0 };
+
+  let r = await openWith([easyWin, { ...easyWin, missed: 1 }, easyWin]);
+  check('連 3 場標準都輕鬆贏：建議挑戰', r.hint?.to === 'hard' && /挑戰/.test(r.hint.text), JSON.stringify(r.hint));
+  await r.pg.click('#pregame [data-hint-difficulty]');
+  const after = await r.pg.evaluate((k) => ({
+    lit: [...document.querySelectorAll('#pregame-difficulty .is-on')].map((b) => b.dataset.pickDifficulty).join(','),
+    stored: JSON.parse(localStorage.getItem(k)),
+    hintHidden: document.querySelector('#pregame .difficulty-hint').hidden
+  }), KEY);
+  check('按「換成挑戰」：真的換了、記住了', after.lit === 'hard' && after.stored === 'hard', JSON.stringify(after));
+  check('換了之後建議就收起來（最近 3 場不是這個難度的）', after.hintHidden);
+  check('開場畫面還在（不會直接開打）', await r.pg.isVisible('#pregame'));
+  await r.c.close();
+
+  r = await openWith([easyWin, { ...easyWin, missed: 3 }, easyWin]);
+  check('有一場漏了 3 個字：不建議', r.hint === null, JSON.stringify(r.hint));
+  await r.c.close();
+  r = await openWith([easyWin, easyWin]);
+  check('只有 2 場：不建議', r.hint === null);
+  await r.c.close();
+  r = await openWith([{ ...easyWin, d: 'easy' }, easyWin, easyWin]);
+  check('3 場裡有一場是別的難度：不建議', r.hint === null);
+  await r.c.close();
+  r = await openWith([easyWin, easyWin, easyWin].map((g) => ({ ...g, d: 'hard' })), 'hard');
+  check('已經是挑戰：不會再建議更難的', r.hint === null);
+  await r.c.close();
+  const loss = { d: 'normal', won: false, missed: 3 };
+  r = await openWith([loss, loss, loss]);
+  check('連 3 場標準都輸：建議輕鬆', r.hint?.to === 'easy' && /輕鬆/.test(r.hint.text), JSON.stringify(r.hint));
+  await r.c.close();
+  r = await openWith([loss, loss, loss].map((g) => ({ ...g, d: 'easy' })), 'easy');
+  check('已經是輕鬆：不會再建議更簡單的', r.hint === null);
+  await r.c.close();
+
+  // 打完一場會記下來；結算畫面也看得到建議
+  r = await openWith([easyWin, easyWin]);
+  await r.pg.click('[data-order="sequential"]');
+  await r.pg.waitForFunction(() => window.__spellbee && window.__spellbee.ready, null, { timeout: 15000 });
+  for (let i = 0; i < 6; i += 1) {
+    const st = await r.pg.evaluate(() => window.__spellbee.state());
+    if (st.status !== 'running') break;
+    await r.pg.keyboard.type(st.target, { delay: 30 });
+    await r.pg.waitForTimeout(300);
+  }
+  await r.pg.waitForSelector('#postgame:not([hidden])', { timeout: 15000 });
+  const rec = await r.pg.evaluate((k) => JSON.parse(localStorage.getItem(k)), REC);
+  check('打完一場會記下來（難度、輸贏、漏幾個）', rec.length === 3 && rec[2].d === 'normal' && rec[2].won === true && rec[2].missed === 0, JSON.stringify(rec[2]));
+  check('結算畫面也有建議', await r.pg.isVisible('#postgame .difficulty-hint'));
+  await r.pg.click('#postgame [data-hint-difficulty]');
+  check('在結算按建議：下一場的難度亮的是挑戰',
+    (await r.pg.evaluate(() => [...document.querySelectorAll('#postgame-difficulty .is-on')].map((b) => b.dataset.pickDifficulty).join(','))) === 'hard');
+  await r.c.close();
+}
+
 await browser.close();
 console.log('\n驗收');
 check('沒有瀏覽器錯誤', errors.length === 0, errors.slice(0, 3).join(' | '));

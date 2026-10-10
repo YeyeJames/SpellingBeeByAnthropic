@@ -186,6 +186,10 @@ console.log('\n3) 報告');
 
 console.log('\n4) 下載分析檔');
 {
+  // 現在用的外觀與小遊戲最高分也要在分析檔裡（只看 ownedItemKeys 看不出在用哪一個）
+  const pRow = store.users.find((u) => String(u._id) === pierce.id);
+  pRow.cosmetics = { killFx: 'fx_hearts', soundPack: 'sound_drum' };
+  (store.minigameBests || (store.minigameBests = [])).push({ userId: pRow._id, itemKey: 'minigame_stack', best: 14 });
   const r = await fetch(`${BASE}/api/telemetry/export?days=30`, { headers: { cookie: pierce.cookie } });
   const text = await r.text();
   const data = JSON.parse(text);
@@ -193,6 +197,8 @@ console.log('\n4) 下載分析檔');
     r.headers.get('content-disposition'));
   const p = data.profiles.find((x) => x.nickname === 'Pierce');
   check('有行為紀錄與錄影檔', p?.events.length > 0 && p?.battleLogs.length === 1);
+  check('有現在用的外觀', p?.cosmetics?.killFx === 'fx_hearts' && p?.cosmetics?.soundPack === 'sound_drum', JSON.stringify(p?.cosmetics));
+  check('有小遊戲最高分', p?.minigameBests?.minigame_stack === 14, JSON.stringify(p?.minigameBests));
   check('沒有 session、沒有舊密碼欄位、沒有內部 id', !/pinHash|nicknameLower|"sid"|"cookie"|"userId"/.test(text));
 }
 

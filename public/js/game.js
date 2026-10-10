@@ -566,6 +566,58 @@ function renderDifficultyPickers() {
       btn.setAttribute('aria-pressed', String(on));
     });
   });
+  renderDifficultyHints();
+}
+
+/*
+ * 難度建議（2026-10，看了兩個孩子的分析檔之後加的）。
+ *
+ * 等級與裝備一路變強，同一個難度會越打越簡單——兩個孩子都打到連贏十幾場、
+ * 蟲多半走不到一半。但難度是他自己選的，所以這裡只「建議」，不幫他換：
+ *   - 同一個難度最近連續 3 場都贏、而且每場最多漏 1 個字 → 建議往上一級
+ *   - 同一個難度最近連續 3 場都輸 → 建議往下一級
+ * 換了難度之後，最近 3 場就不是「這個難度」的了，建議自然消失，不會一直囉嗦。
+ */
+const RECENT_KEY = 'recentGames';
+const HINT_STREAK = 3;
+
+function recordGameForHint(state, won) {
+  const list = (readPref(RECENT_KEY) || []).slice(-9);
+  list.push({ d: ctx.difficulty, won: !!won, missed: Number(state?.stats?.wordsMissed) || 0 });
+  writePref(RECENT_KEY, list);
+}
+
+function difficultyHint() {
+  const recent = (readPref(RECENT_KEY) || []).slice(-HINT_STREAK);
+  if (recent.length < HINT_STREAK || !recent.every((g) => g.d === ctx.difficulty)) return null;
+  const i = DIFFICULTY_CHOICES.indexOf(ctx.difficulty);
+  if (recent.every((g) => g.won && g.missed <= 1) && i < DIFFICULTY_CHOICES.length - 1) {
+    const to = DIFFICULTY_CHOICES[i + 1];
+    return { to, text: `連續 ${HINT_STREAK} 場都贏得很輕鬆，要不要試試「${DIFFICULTY_LABELS[to]}」？` };
+  }
+  if (recent.every((g) => !g.won) && i > 0) {
+    const to = DIFFICULTY_CHOICES[i - 1];
+    return { to, text: `連續 ${HINT_STREAK} 場都沒打贏，要不要先換「${DIFFICULTY_LABELS[to]}」練練手？` };
+  }
+  return null;
+}
+
+function renderDifficultyHints() {
+  const hint = difficultyHint();
+  document.querySelectorAll('.difficulty-hint').forEach((el) => {
+    el.hidden = !hint;
+    el.innerHTML = '';
+    if (!hint) return;
+    const text = document.createElement('span');
+    text.textContent = hint.text;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn-toggle';
+    btn.dataset.hintDifficulty = hint.to;
+    btn.textContent = `換成${DIFFICULTY_LABELS[hint.to]}`;
+    btn.addEventListener('click', () => setDifficulty(hint.to));
+    el.append(text, btn);
+  });
 }
 
 function setDifficulty(d) {
@@ -1163,6 +1215,7 @@ function showPostgame(state, won) {
    * 不收的話，結算的按鈕剛好在鍵盤底下，他得自己去按鍵盤上的 ✓ 才看得到。
    */
   ctx.input?.releaseTyping();
+  recordGameForHint(state, won);
   renderDifficultyPickers();
   el.hidden = false;
   setChromeAbovePostgame(true);
