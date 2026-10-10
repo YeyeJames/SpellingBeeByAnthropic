@@ -171,8 +171,14 @@ for (const n of LEVELS) {
   if (how !== 'ready') continue;
   const words = await page.evaluate(() => window.__spellbee.words());
   const expectCount = serverLevel.limit ? Math.min(serverLevel.limit, serverLevel.wordIds.length) : serverLevel.wordIds.length;
-  const ids = new Set(serverLevel.wordIds);
-  check('題目是伺服器給的那一批', words.length === expectCount && words.every((w) => ids.has(w.id)),
+  /*
+   * 混合關與中王每開一次就重抽（shared/campaign.js 的 pickLevelWordIds，5-A），
+   * 上面那一趟 /level 跟遊戲頁自己問的那一趟抽到的不會是同一批——所以這種關卡
+   * 比的是「每個字都來自這一關的組別」，單一組的關才比「就是伺服器給的那一批」。
+   */
+  const redraws = !!lvl.wordLimit && lvl.groupIds.length > 1;
+  const ids = new Set(redraws ? lvl.groupIds.flatMap((g) => wordBank.wordsByGroup(g).map((w) => w.id)) : serverLevel.wordIds);
+  check(redraws ? '題目都來自這一關的組別（每次重抽）' : '題目是伺服器給的那一批', words.length === expectCount && words.every((w) => ids.has(w.id)),
     `${words.length} 字（伺服器 ${serverLevel.wordIds.length}、上限 ${serverLevel.limit ?? '無'}）`);
   // 速度不在 state() 的快照裡；錄影檔的 setup 記著這一場實際用的速度
   const speed = await page.evaluate(() => window.__spellbee.log()?.setup?.speed);
