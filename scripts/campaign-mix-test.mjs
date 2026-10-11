@@ -159,6 +159,8 @@ async function pregame(url) {
   return page.evaluate(() => [...document.querySelectorAll('#pregame .btn-order')]
     .filter((b) => !b.hidden && getComputedStyle(b).display !== 'none').map((b) => b.dataset.order));
 }
+const orderHint = () => page.evaluate(() => document.getElementById('pregame-order-hint')?.textContent || '');
+const startLabel = () => page.evaluate(() => [...document.querySelectorAll('#pregame .btn-order')].find((b) => !b.hidden)?.textContent || '');
 async function start(order) {
   await page.click(`#pregame .btn-order[data-order="${order}"]`);
   await page.waitForFunction(() => window.__spellbee && window.__spellbee.ready, null, { timeout: 20000 });
@@ -170,15 +172,23 @@ async function start(order) {
   store.groupProgress = [{ userId: store.users[0]._id, groupId: 'p1', practiceCompletions: 1 }];
   const g1 = await pregame('/game?group=p1&show=1');
   check('組別遊戲：兩顆都在', g1.length === 2, JSON.stringify(g1));
+  check('組別遊戲：問「要照順序還是打亂」', /還是打亂/.test(await orderHint()), await orderHint());
   check('組別遊戲：按「打亂」就是打亂', (await start('random')) === 'random');
   const prefBefore = await orderPref();
 
   const v2 = await pregame('/game?level=2&show=1');
   check('第 2 關（照順序）：只留「照順序」', v2.length === 1 && v2[0] === 'sequential', JSON.stringify(v2));
+  /*
+   * 只給一顆按鈕的時候不可以還在問「要照順序還是打亂？」——看起來就是少了一個選項
+   * （家長截圖回報過）。改成說明為什麼是這個順序，按鈕寫「開始」。
+   */
+  check('第 2 關：不再問「還是打亂？」，改成說明第一章照課本順序', !/還是打亂/.test(await orderHint()) && /第一章/.test(await orderHint()), await orderHint());
+  check('第 2 關：按鈕寫「開始」', /開始/.test(await startLabel()), await startLabel());
   check('按下去是照順序', (await start('sequential')) === 'sequential');
 
   const v26 = await pregame('/game?level=26&show=1');
   check('第 26 關（打亂）：只留「打亂」', v26.length === 1 && v26[0] === 'random', JSON.stringify(v26));
+  check('第 26 關：說明這一關是打亂的', /打亂/.test(await orderHint()) && !/還是打亂/.test(await orderHint()), await orderHint());
   check('按下去是打亂', (await start('random')) === 'random');
 
   check('打完戰役，他在組別遊戲選的偏好沒有被改掉', (await orderPref()) === prefBefore, `${prefBefore} → ${await orderPref()}`);

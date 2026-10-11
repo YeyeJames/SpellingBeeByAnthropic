@@ -1894,8 +1894,25 @@ async function boot() {
        * 組別遊戲不變：兩顆都在，他自己選，也記住他選的。
        */
       const fixedOrder = ctx.campaignLevel || ctx.review ? ctx.order : null;
+      /*
+       * 順序是關卡定的時候，上面那一句不能還在問「要照順序還是打亂？」——
+       * 問了卻只給一顆按鈕，看起來就是少了一個選項（家長回報過）。
+       * 改成講清楚這一關為什麼是這個順序，按鈕寫成「開始」。
+       */
+      const orderHint = document.getElementById('pregame-order-hint');
+      if (orderHint) {
+        orderHint.textContent = !fixedOrder
+          ? '要照課本順序，還是打亂？'
+          : ctx.review
+            ? '複習關的順序是打亂的'
+            : fixedOrder === 'sequential'
+              ? `第一章照課本的順序出題；第二章（第 26 關起）同樣的字會打亂再來一次`
+              : '這一關的順序是打亂的——不能靠「第幾個」記';
+      }
       pregameEl.querySelectorAll('[data-order]').forEach((btn) => {
         btn.hidden = !!fixedOrder && btn.dataset.order !== fixedOrder;
+        const plain = btn.dataset.order === 'random' ? '打亂' : '照順序';
+        btn.textContent = fixedOrder ? `▶ 開始（${plain}）` : plain;
         // 把上次選的標起來：他會知道上一場是怎麼打的（只有他能選的時候才有意義）
         btn.classList.toggle('is-last', !fixedOrder && btn.dataset.order === storedOrder());
         btn.onclick = () => {
