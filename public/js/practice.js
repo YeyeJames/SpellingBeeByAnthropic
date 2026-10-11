@@ -354,6 +354,8 @@ async function showQuestion() {
 
   setToolsEnabled(true);
   gameScene.reactListening();
+  // 上一題還沒唸完的（競賽模式後面那幾段）一律收掉，新的字才不會跟舊的疊在一起
+  stopSpeaking();
   await playCurrentWord();
 }
 

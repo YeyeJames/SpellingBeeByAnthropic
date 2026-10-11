@@ -171,32 +171,62 @@ export function speakSentence(sentence) {
  */
 let currentAudio = null;
 
+/*
+ * 「被停掉」跟「播放失敗」要分開。
+ *
+ * 2026-10 家長回報：練習時，有自己錄音的字答對之後，下一題出題時舊的那個字的
+ * 錄音又冒出來，跟新的字疊在一起。原因有兩個，都出在把「被停掉」當成「失敗」：
+ *   1. 停掉一段還沒開始播的錄音，瀏覽器會讓 play() 失敗（AbortError）——
+ *      playWordAudio 以為錄音壞了，改用機器語音**把舊的字再唸一次**
+ *   2. 競賽模式（單字 → 例句 → 單字）是一連串 await：停掉例句之後，後面那段
+ *      「再唸一次單字」照樣排著，0.4 秒後舊的字的錄音又播一次
+ * 所以被停掉的錄音一律回 'stopped'（不是失敗、也不是播完），而 stopSpeaking()
+ * 把號碼牌往前推，還在排隊的那幾段看到號碼不對就不唸了。
+ */
+let playGen = 0;
+
 function stopRecordedAudio() {
   if (!currentAudio) return;
+  const audio = currentAudio;
+  // 先放開，再 pause：pause 會讓 play() 的 Promise 失敗，那時要認得出「這是被停掉的」
+  currentAudio = null;
   try {
-    currentAudio.pause();
-    currentAudio.currentTime = 0;
+    audio.pause();
+    audio.currentTime = 0;
   } catch (err) {
     /* 還沒開始播就被停掉，忽略 */
   }
-  currentAudio = null;
+  audio.__stopped?.();
 }
 
+/** 回傳 'ended'（播完）或 'stopped'（被停掉）；真的播不出來才 reject */
 function playRecordedAudio(url, rate) {
   return new Promise((resolve, reject) => {
     stopRecordedAudio();
     const audio = new Audio(url);
     currentAudio = audio;
+    let settled = false;
+    const settle = (fn, v) => {
+      if (settled) return;
+      settled = true;
+      fn(v);
+    };
+    audio.__stopped = () => settle(resolve, 'stopped');
     audio.playbackRate = rate;
     audio.addEventListener('ended', () => {
       if (currentAudio === audio) currentAudio = null;
-      resolve(true);
+      settle(resolve, 'ended');
     });
     audio.addEventListener('error', () => {
-      if (currentAudio === audio) currentAudio = null;
-      reject(new Error('錄音播放失敗'));
+      if (currentAudio !== audio) return settle(resolve, 'stopped');
+      currentAudio = null;
+      settle(reject, new Error('錄音播放失敗'));
     });
-    audio.play().catch(reject);
+    audio.play().catch((err) => {
+      if (currentAudio !== audio) return settle(resolve, 'stopped');
+      currentAudio = null;
+      settle(reject, err);
+    });
   });
 }
 
@@ -210,15 +240,20 @@ export async function playWordAudio(word, { slow = false } = {}) {
    * 拿不到 gridfsFileId——真要抓不到音檔，下面的 catch 會退回 TTS。
    */
   const hasRecording = word.audio && word.audio.type === 'recorded';
+  const gen = playGen;
 
   if (hasRecording) {
     try {
       // 真人錄音也可以放慢，直接調整播放速率
-      const played = await playRecordedAudio(`/api/words/${word._id}/audio`, slow ? 0.7 : 1);
-      if (played) return true;
+      const result = await playRecordedAudio(`/api/words/${word._id}/audio`, slow ? 0.7 : 1);
+      if (result === 'ended') return true;
+      // 被停掉（答完了、換下一個字了）不是失敗：不可以改用機器語音把舊的字再唸一次
+      if (result === 'stopped') return false;
     } catch (err) {
-      // 忽略，往下 fallback 到 TTS
+      // 錄音真的播不出來：往下 fallback 到 TTS
     }
+    // 等錄音的這段時間有人喊停了：也不要再唸
+    if (gen !== playGen) return false;
   }
   return speakWord(word.english, { slow });
 }
@@ -233,19 +268,27 @@ function pause(ms) {
  * 這個順序就是照著那個流程來的。
  */
 export async function playCompetitionSequence(word) {
+  // 每一段唸之前都確認沒有人喊停（stopSpeaking）——不然停掉例句之後，
+  // 後面那段「再唸一次單字」還是會在下一題冒出來（見上面 playGen 的說明）
+  const gen = playGen;
+  const stopped = () => gen !== playGen;
   await playWordAudio(word);
-  if (word.exampleSentence) {
-    await pause(500);
-    await speakSentence(word.exampleSentence);
-    await pause(400);
-    await playWordAudio(word);
-  }
-  return true;
+  if (stopped() || !word.exampleSentence) return !stopped();
+  await pause(500);
+  if (stopped()) return false;
+  await speakSentence(word.exampleSentence);
+  if (stopped()) return false;
+  await pause(400);
+  if (stopped()) return false;
+  await playWordAudio(word);
+  return !stopped();
 }
 
 export function stopSpeaking() {
   // 號碼牌往前推：正在等空檔的那一段會自己作廢，不會晚一步才冒出來
   speakToken += 1;
+  // 競賽模式還排在後面的幾段、等錄音的那一段，也一起作廢
+  playGen += 1;
   cancelSpeech();
   // 真人錄音也要停。只停 TTS 的話，換字時上一段錄音會繼續播下去
   stopRecordedAudio();
