@@ -142,7 +142,7 @@ console.log('\n7) 難度建議');
     }, [REC, recent, KEY, difficulty]);
     const pg = await c.newPage();
     pg.on('pageerror', (e) => errors.push(e.message));
-    await pg.goto(`${BASE}/game?group=w04&n=3&show=1`, { waitUntil: 'domcontentloaded' });
+    await pg.goto(`${BASE}/game?group=w04&n=8&show=1`, { waitUntil: 'domcontentloaded' });
     await pg.waitForSelector('#pregame:not([hidden])', { timeout: 15000 });
     const hint = await pg.evaluate(() => {
       const el = document.querySelector('#pregame .difficulty-hint');
@@ -150,10 +150,15 @@ console.log('\n7) 難度建議');
     });
     return { c, pg, hint };
   }
-  const easyWin = { d: 'normal', won: true, missed: 0 };
+  const easyWin = { d: 'normal', won: true, missed: 0, kills: 20, peak: 0.3 };
 
-  let r = await openWith([easyWin, { ...easyWin, missed: 1 }, easyWin]);
-  check('連 3 場標準都輕鬆贏：建議挑戰', r.hint?.to === 'hard' && /挑戰/.test(r.hint.text), JSON.stringify(r.hint));
+  /*
+   * 看的是「蟲平均被逼到多近」，不是漏了幾個字（2026-10：Allen 連贏 13 場、蟲平均只走到 3 成，
+   * 但偶爾漏一兩個還不會拼的新字，舊規則一次都沒建議）。
+   */
+  let r = await openWith([easyWin, { ...easyWin, missed: 3 }, easyWin]);
+  check('連 3 場標準都贏、蟲平均走不到 4 成：建議挑戰（漏幾個不會拼的字也算）', r.hint?.to === 'hard' && /挑戰/.test(r.hint.text), JSON.stringify(r.hint));
+  check('建議裡寫出蟲平均走到幾成', /3 成/.test(r.hint?.text || ''), r.hint?.text);
   await r.pg.click('#pregame [data-hint-difficulty]');
   const after = await r.pg.evaluate((k) => ({
     lit: [...document.querySelectorAll('#pregame-difficulty .is-on')].map((b) => b.dataset.pickDifficulty).join(','),
@@ -165,8 +170,14 @@ console.log('\n7) 難度建議');
   check('開場畫面還在（不會直接開打）', await r.pg.isVisible('#pregame'));
   await r.c.close();
 
-  r = await openWith([easyWin, { ...easyWin, missed: 3 }, easyWin]);
-  check('有一場漏了 3 個字：不建議', r.hint === null, JSON.stringify(r.hint));
+  r = await openWith([easyWin, { ...easyWin, peak: 0.55 }, easyWin]);
+  check('有一場蟲走到一半以上（有壓力）：不建議', r.hint === null, JSON.stringify(r.hint));
+  await r.c.close();
+  r = await openWith([easyWin, { ...easyWin, kills: 3, peak: 0.1 }, easyWin]);
+  check('有一場字太少（3 個）：看不出來，不建議', r.hint === null, JSON.stringify(r.hint));
+  await r.c.close();
+  r = await openWith([{ d: 'normal', won: true, missed: 0 }, easyWin, easyWin]);
+  check('舊版的紀錄（沒有蟲走到哪）：不算，不建議', r.hint === null, JSON.stringify(r.hint));
   await r.c.close();
   r = await openWith([easyWin, easyWin]);
   check('只有 2 場：不建議', r.hint === null);
@@ -189,7 +200,7 @@ console.log('\n7) 難度建議');
   r = await openWith([easyWin, easyWin]);
   await r.pg.click('[data-order="sequential"]');
   await r.pg.waitForFunction(() => window.__spellbee && window.__spellbee.ready, null, { timeout: 15000 });
-  for (let i = 0; i < 6; i += 1) {
+  for (let i = 0; i < 14; i += 1) {
     const st = await r.pg.evaluate(() => window.__spellbee.state());
     if (st.status !== 'running') break;
     await r.pg.keyboard.type(st.target, { delay: 30 });
@@ -197,7 +208,9 @@ console.log('\n7) 難度建議');
   }
   await r.pg.waitForSelector('#postgame:not([hidden])', { timeout: 15000 });
   const rec = await r.pg.evaluate((k) => JSON.parse(localStorage.getItem(k)), REC);
-  check('打完一場會記下來（難度、輸贏、漏幾個）', rec.length === 3 && rec[2].d === 'normal' && rec[2].won === true && rec[2].missed === 0, JSON.stringify(rec[2]));
+  check('打完一場會記下來（難度、輸贏、打掉幾隻、蟲平均走到哪）',
+    rec.length === 3 && rec[2].d === 'normal' && rec[2].won === true && rec[2].kills === 8 && typeof rec[2].peak === 'number' && rec[2].peak < 0.4,
+    JSON.stringify(rec[2]));
   check('結算畫面也有建議', await r.pg.isVisible('#postgame .difficulty-hint'));
   await r.pg.click('#postgame [data-hint-difficulty]');
   check('在結算按建議：下一場的難度亮的是挑戰',

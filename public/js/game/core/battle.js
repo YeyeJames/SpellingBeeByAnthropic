@@ -358,8 +358,16 @@ export function createBattle({
       listens: 0,
       // 經驗值要伺服器能自己重算，所以把算式的每一項都獨立記下來
       longKills: 0,
-      relearns: 0
+      relearns: 0,
+      /*
+       * 每一隻被打掉的蟲，最靠近蜂巢的時候走到哪（0~1）加起來。
+       * 除以打掉的隻數就是「平均被逼到多近」——難度建議看的是這個（game.js 的 difficultyHint），
+       * 不是漏了幾個字：漏字多半是「還不會拼」，跟速度合不合適是兩件事。
+       * 只是紀錄，不影響這一場的任何結果，所以不進指紋。
+       */
+      peakSum: 0
     },
+    wordPeak: 0,
 
     // 事件緩衝區（渲染端每個影格讀完就歸零）
     ev: createEventPool(),
@@ -388,6 +396,7 @@ function startNextWord(state) {
   state.typed = 0;
   state.cleanWord = true;
   state.progress = 0;
+  state.wordPeak = 0;
   // 王的階段速度（C7）乘在關卡速度上；沒有王就是 1
   state.crossMs = crossMsFor(state.target.length, state.difficulty) / (state.speed * state.bossSpeed);
   /*
@@ -599,6 +608,7 @@ function applyXpFactor(state) {
 /** 把敵人往前推 ms 毫秒的距離（打錯、重聽的代價都走這裡）。 */
 function pushEnemy(state, ms) {
   state.progress += ms / state.crossMs;
+  if (state.progress > state.wordPeak) state.wordPeak = Math.min(1, state.progress);
 }
 
 function killWord(state) {
@@ -611,6 +621,7 @@ function killWord(state) {
   }
   state.honey += gained;
   state.stats.wordsKilled += 1;
+  state.stats.peakSum += state.wordPeak;
 
   /*
    * ⚡ 閃電手：打得夠快，這個字的蜂蜜 ×3（C8）。
@@ -803,6 +814,7 @@ export function stepBattle(state) {
     }
   }
 
+  if (state.progress > state.wordPeak) state.wordPeak = Math.min(1, state.progress);
   if (state.progress >= 1) {
     state.progress = 1;
     missWord(state);

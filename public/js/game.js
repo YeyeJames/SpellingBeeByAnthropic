@@ -651,26 +651,53 @@ function renderDifficultyPickers() {
  *
  * 等級與裝備一路變強，同一個難度會越打越簡單——兩個孩子都打到連贏十幾場、
  * 蟲多半走不到一半。但難度是他自己選的，所以這裡只「建議」，不幫他換：
- *   - 同一個難度最近連續 3 場都贏、而且每場最多漏 1 個字 → 建議往上一級
+ *   - 同一個難度最近連續 3 場都贏、而且蟲平均走不到 4 成就被打掉 → 建議往上一級
  *   - 同一個難度最近連續 3 場都輸 → 建議往下一級
  * 換了難度之後，最近 3 場就不是「這個難度」的了，建議自然消失，不會一直囉嗦。
+ *
+ * ── 為什麼看「蟲走到哪」，不看「漏了幾個字」 ──────────────────
+ * 第一版是「每場最多漏 1 個字」，結果 Allen 連贏 13 場、蟲平均只走到 3 成就被打掉，
+ * 建議一次都沒出現：他偶爾漏的字幾乎都是「還不會拼」（第一次在遊戲裡遇到的新字），
+ * 不是來不及。漏字是拼字的事，難度是速度的事——要看的是蟲把他逼到多近。
+ * 錄影重播量到的：Pierce 在標準大約走到 45～55%（剛好），Allen 25～35%（太鬆），
+ * Pierce 換挑戰之後 67～69%（很緊）。所以門檻抓 40%。
  */
 const RECENT_KEY = 'recentGames';
 const HINT_STREAK = 3;
+const HINT_EASY_PEAK = 0.4;
+/* 字太少的一場看不出什麼（測試局、只剩幾個字的複習關），不算進「很輕鬆」 */
+const HINT_MIN_KILLS = 8;
 
 function recordGameForHint(state, won) {
   const list = (readPref(RECENT_KEY) || []).slice(-9);
-  list.push({ d: ctx.difficulty, won: !!won, missed: Number(state?.stats?.wordsMissed) || 0 });
+  const kills = Number(state?.stats?.wordsKilled) || 0;
+  list.push({
+    d: ctx.difficulty,
+    won: !!won,
+    missed: Number(state?.stats?.wordsMissed) || 0,
+    kills,
+    // 平均被逼到多近（0~1），兩位小數就夠
+    peak: kills > 0 ? Math.round(((Number(state.stats.peakSum) || 0) / kills) * 100) / 100 : null
+  });
   writePref(RECENT_KEY, list);
+}
+
+/** 這一場算不算「贏得很輕鬆」：贏了、字夠多、蟲平均走不到 4 成。舊紀錄沒有 peak 的不算 */
+function wasEasyWin(g) {
+  return g.won && (g.kills || 0) >= HINT_MIN_KILLS && typeof g.peak === 'number' && g.peak < HINT_EASY_PEAK;
 }
 
 function difficultyHint() {
   const recent = (readPref(RECENT_KEY) || []).slice(-HINT_STREAK);
   if (recent.length < HINT_STREAK || !recent.every((g) => g.d === ctx.difficulty)) return null;
   const i = DIFFICULTY_CHOICES.indexOf(ctx.difficulty);
-  if (recent.every((g) => g.won && g.missed <= 1) && i < DIFFICULTY_CHOICES.length - 1) {
+  if (recent.every(wasEasyWin) && i < DIFFICULTY_CHOICES.length - 1) {
     const to = DIFFICULTY_CHOICES[i + 1];
-    return { to, text: `連續 ${HINT_STREAK} 場都贏得很輕鬆，要不要試試「${DIFFICULTY_LABELS[to]}」？` };
+    const avg = recent.reduce((a, g) => a + g.peak, 0) / recent.length;
+    return {
+      to,
+      text: `連續 ${HINT_STREAK} 場都贏，蟲平均只走到 ${Math.round(avg * 10)} 成就被你打掉——要不要試試「${DIFFICULTY_LABELS[to]}」？`
+    };
   }
   if (recent.every((g) => !g.won) && i > 0) {
     const to = DIFFICULTY_CHOICES[i - 1];
