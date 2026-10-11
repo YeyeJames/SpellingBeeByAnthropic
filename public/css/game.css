@@ -567,6 +567,15 @@ body.is-touch #listen-buttons {
   }
 }
 
+/* ⏪ 倒帶（觸控裝置）：只有拿到這張卡、還有次數時才出現 */
+#rewind-btn[hidden] {
+  display: none;
+}
+#rewind-btn {
+  border-color: #fbbf24;
+  color: #fde68a;
+}
+
 /* 難度建議：一行字＋一顆按鈕，黃色讓他注意到，但不搶過開始鍵 */
 .difficulty-hint {
   display: flex;

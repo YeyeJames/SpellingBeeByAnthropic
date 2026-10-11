@@ -196,6 +196,18 @@ const ctx = {
    * 變灰 + 加一句說明，他按下去之前就知道為什麼。
    */
   syncListenButtons(state) {
+    /*
+     * ⏪ 倒帶（觸控裝置的按鈕）：拿到這張卡、還有次數才出現，上面寫剩幾次。
+     * 電腦上按 ←，提示畫在戰場上（battle-scene.js）。
+     */
+    const rewindLeft = state?.perks?.includes('rewind') ? state.rewindLeft || 0 : 0;
+    if (rewindLeft !== ctx.lastRewindLeft) {
+      ctx.lastRewindLeft = rewindLeft;
+      const btn = document.getElementById('rewind-btn');
+      if (btn) btn.hidden = rewindLeft <= 0;
+      const label = document.getElementById('rewind-btn-label');
+      if (label) label.textContent = ` 倒帶 ×${rewindLeft}`;
+    }
     const silent = state?.trait === 'silent';
     if (silent === ctx.lastSilent) return;
     ctx.lastSilent = silent;
@@ -1792,6 +1804,12 @@ async function boot() {
           ctx.sendAction({ kind: 'listen', listen: btn.dataset.listen });
           input.focusForTyping();
         });
+      });
+      // ⏪ 倒帶：電腦上是 ←，觸控裝置上是這一顆
+      document.getElementById('rewind-btn')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        ctx.sendAction({ kind: 'rewind' });
+        input.focusForTyping();
       });
     }
 

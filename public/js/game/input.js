@@ -125,6 +125,16 @@ export function createInput({
       return;
     }
 
+    /*
+     * ← = 倒帶（三選一拿到 ⏪ 倒帶才有作用，沒有的時候核心會忽略）。
+     * 方向跟倒帶一樣，而且 ↑↓→ 已經是聽力鍵，← 一直空著。
+     */
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      onAction({ kind: 'rewind' }, t0);
+      return;
+    }
+
     if (e.key === 'Backspace') {
       e.preventDefault(); // 否則某些情況下瀏覽器會往上一頁
       onAction({ kind: 'backspace' }, t0);

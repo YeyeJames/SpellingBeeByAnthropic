@@ -312,7 +312,9 @@ export function createBattle({
     perkOffer: null,
     perkOffersMade: 0,
     perkSpeed: 1,
-    rewindUsed: false,
+    /* ⏪ 倒帶（主動）：還剩幾次、這一場用了幾次（用了幾次進指紋，沒用過就是 0，跟改版前一樣） */
+    rewindLeft: 0,
+    rewindUses: 0,
     freezeMs: 0,
     freezeNext: false,
     wordStartMs: 0,
@@ -791,12 +793,6 @@ export function stepBattle(state) {
   }
   state.progress += (BALANCE.logicStepMs * speed) / state.crossMs;
 
-  // ⏪ 倒帶（C8）：第一次快到蜂巢時彈回去，一場一次
-  if (hasPerk(state, 'rewind') && !state.rewindUsed && state.progress >= REWIND.triggerAt) {
-    state.progress = REWIND.backTo;
-    state.rewindUsed = true;
-    emit(state, EV.PERK_FIRED, PERK_CODE.rewind, 0);
-  }
 
   /*
    * 衝刺蟲：每兩秒自己往前衝一小段（§5）。
@@ -844,6 +840,7 @@ export function applyAction(state, action) {
     state.perks.push(id);
     state.perkOffer = null;
     if (id === 'rush') state.perkSpeed = RUSH.speedFactor;
+    if (id === 'rewind') state.rewindLeft = REWIND.charges;
     emit(state, EV.PERK_TAKEN, PERK_CODE[id]);
     return state;
   }
@@ -935,6 +932,20 @@ export function applyAction(state, action) {
       return state;
     }
 
+    /*
+     * ⏪ 倒帶（C8，2026-10 改成主動）：他按 ←，眼前這隻蟲回到起點。
+     * 不動字母、不動拼字紀錄——要打的還是同一個字、同樣的字母（§1），
+     * 換到的只有時間。沒有這張卡、或次數用完了，按了就什麼都不做。
+     */
+    case 'rewind': {
+      if (!hasPerk(state, 'rewind') || state.rewindLeft <= 0) return state;
+      state.rewindLeft -= 1;
+      state.rewindUses += 1;
+      state.progress = 0;
+      emit(state, EV.PERK_FIRED, PERK_CODE.rewind, state.rewindLeft);
+      return state;
+    }
+
     case 'backspace': {
       if (state.typed > 0) {
         state.typed -= 1;
@@ -1011,7 +1022,7 @@ export function fingerprint(state) {
     mix(state.perks.length);
     for (const id of state.perks) mix(PERK_CODE[id] || 0);
     mix(state.perkOffer ? state.perkOffer.length : 0);
-    mix(state.rewindUsed ? 1 : 0);
+    mix(state.rewindUses);
     mixFloat(state.freezeMs);
   }
   mix(state.sweetNext ? 1 : 0);
@@ -1098,6 +1109,7 @@ export function snapshot(state) {
     perks: state.perks.slice(),
     perkOffer: state.perkOffer ? state.perkOffer.slice() : null,
     perkSpeed: state.perkSpeed,
+    rewindLeft: state.rewindLeft,
     freezeMs: Math.round(state.freezeMs),
     /* 王關（C7）：給畫面、除錯與測試看 */
     boss: state.boss ? state.boss.key : null,

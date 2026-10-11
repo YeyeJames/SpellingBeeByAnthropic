@@ -42,10 +42,16 @@ export const PERKS = {
     name: '首字重擊',
     rule: '每個字第一個字母打對，蟲直接退回一半'
   },
+  /*
+   * 2026-10 重做：本來是「蟲第一次快到蜂巢時自動彈回去」，一場一次。
+   * 分析檔：出現 22 次、一次都沒被選——錄影重播卻顯示 11 場裡有 10 場用得上。
+   * 不是沒用，是感覺不到：被動、只發動一次、說明聽起來像「你會快輸」。
+   * 改成他自己按的大絕招：什麼時候用由他決定，看得到、按得到。
+   */
   rewind: {
     icon: '⏪',
     name: '倒帶',
-    rule: '蟲第一次快到蜂巢時，自動彈回去'
+    rule: '按 ← 把眼前這隻蟲送回起點（這一場 2 次）'
   },
   freeze: {
     icon: '❄️',
@@ -79,8 +85,8 @@ export const LIGHTNING = { baseMs: 1200, perLetterMs: 450, honeyFactor: 3 };
 export const RUSH = { speedFactor: 1.25, honeyFactor: 2 };
 /* 首字重擊：第一個字母打對，蟲的進度剩一半 */
 export const FIRST_STRIKE_KEEP = 0.5;
-/* 倒帶：蟲走到 85% 時彈回 40%，一場一次 */
-export const REWIND = { triggerAt: 0.85, backTo: 0.4 };
+/* 倒帶：他自己按 ←，眼前這隻蟲回到起點。一場幾次 */
+export const REWIND = { charges: 2 };
 /* 冰凍針：下一隻蟲凍住多久 */
 export const FREEZE_MS = 1000;
 

@@ -119,6 +119,10 @@ function playOnce(kid, level, seed, typist, speedOf) {
       clearEvents(st);
       continue;
     }
+    /*
+     * ⏪ 倒帶（主動）：模擬的孩子在蟲走到 85% 時按（真的孩子會更早或更晚，這是一個中間的假設）。
+     */
+    if (st.rewindLeft > 0 && st.progress >= 0.85) applyAction(st, { kind: 'rewind' });
     const action = pollPlayer(model, st);
     if (action) applyAction(st, action);
     clearEvents(st);

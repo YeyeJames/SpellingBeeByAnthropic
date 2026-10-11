@@ -117,7 +117,7 @@ console.log('\n3) 每張卡真的有效果');
 /** 開一場、手動塞一張卡（效果測試不需要走三選一流程） */
 function withPerk(id, words = WORDS.slice(0, 3)) {
   const st = createBattle({ words, seed: 5, difficulty: 'easy', order: 'sequential', perks: true });
-  if (id) { st.perks.push(id); if (id === 'rush') st.perkSpeed = RUSH.speedFactor; }
+  if (id) { st.perks.push(id); if (id === 'rush') st.perkSpeed = RUSH.speedFactor; if (id === 'rewind') st.rewindLeft = REWIND.charges; }
   clearEvents(st);
   return st;
 }
@@ -164,17 +164,60 @@ const firesOf = (st) => { const out = []; for (let i = 0; i < st.evCount; i += 1
   check('🎯 首字重擊：第一下打錯就沒有了', fs2.progress > beforeRight * 0.6, `${beforeRight.toFixed(3)} → ${fs2.progress.toFixed(3)}`);
   void p2;
 
-  // ⏪ 倒帶：一次
+  /*
+   * ⏪ 倒帶（2026-10 改成主動）：他自己按 ←，眼前這隻蟲回到起點，一場 REWIND.charges 次。
+   * 本來是「快到蜂巢自動彈回去一次」：出現 22 次一次都沒被選（感覺不到），所以改。
+   */
   const rw = withPerk('rewind');
+  check(`⏪ 倒帶：拿到就有 ${REWIND.charges} 次`, rw.rewindLeft === REWIND.charges, String(rw.rewindLeft));
   let bounced = 0;
   for (let i = 0; i < 100000 && rw.stats.wordsMissed === 0; i += 1) {
     stepBattle(rw);
     for (const e of firesOf(rw)) if (e.type === EV.PERK_FIRED) bounced += 1;
     clearEvents(rw);
   }
-  check('⏪ 倒帶：快到蜂巢時彈回去，只有一次', bounced === 1, `${bounced} 次`);
-  check('⏪ 倒帶：彈回去之後還是會走到蜂巢（救一次、不是無敵）', rw.stats.wordsMissed === 1);
-  void REWIND;
+  check('⏪ 倒帶：不按就不會自己發動（蟲照樣走到蜂巢）', bounced === 0 && rw.stats.wordsMissed === 1, `${bounced} 次、漏 ${rw.stats.wordsMissed}`);
+  for (let i = 0; i < 300; i += 1) stepBattle(rw);
+  const typedBefore = rw.typed;
+  const before = rw.progress;
+  applyAction(rw, { kind: 'rewind' });
+  check('⏪ 倒帶：按下去，眼前這隻蟲回到起點', before > 0 && rw.progress === 0, `${before.toFixed(3)} → ${rw.progress}`);
+  check('⏪ 倒帶：要打的字母一個都沒少（已經打對的也還在）', rw.typed === typedBefore && rw.target.length > 0);
+  check('⏪ 倒帶：次數少一次', rw.rewindLeft === REWIND.charges - 1, String(rw.rewindLeft));
+  for (let k = 1; k < REWIND.charges; k += 1) { for (let i = 0; i < 100; i += 1) stepBattle(rw); applyAction(rw, { kind: 'rewind' }); }
+  for (let i = 0; i < 100; i += 1) stepBattle(rw);
+  const spent = rw.progress;
+  applyAction(rw, { kind: 'rewind' });
+  check('⏪ 倒帶：用完了再按就沒有作用', rw.rewindLeft === 0 && rw.progress === spent, `${rw.rewindLeft} 次、${spent.toFixed(3)} → ${rw.progress.toFixed(3)}`);
+  const noPerk = withPerk(null);
+  for (let i = 0; i < 300; i += 1) stepBattle(noPerk);
+  const np = noPerk.progress;
+  applyAction(noPerk, { kind: 'rewind' });
+  check('⏪ 沒有這張卡：按 ← 什麼都不做', noPerk.progress === np);
+
+  /* ⏪ 倒帶是新的動作種類：錄影檔要記得住、重播要一模一樣（伺服器靠重播分析每一場） */
+  // 找一顆第一次三選一就有倒帶的種子（抽卡用的是這一場專用的亂數，見 perks.js 的 drawOffer）
+  let seed = 1;
+  for (; seed < 500; seed += 1) {
+    const probe = createBattle({ words: WORDS.slice(0, 8), seed, difficulty: 'easy', order: 'sequential', perks: true });
+    while (!probe.perkOffer && probe.status === 'running') { for (const ch of probe.target) applyAction(probe, { kind: 'letter', ch }); clearEvents(probe); }
+    if (probe.perkOffer?.includes('rewind')) break;
+  }
+  const setup = { seed, difficulty: 'easy', order: 'sequential', maxHp: 3, perks: true, wordIds: WORDS.slice(0, 8).map((w) => w.id) };
+  const live = createBattle({ ...setup, words: WORDS.slice(0, 8) });
+  const log = createRecorder(setup);
+  const act = (a) => { recordAction(log, live.tick, a); applyAction(live, a); clearEvents(live); };
+  let pressed = 0;
+  for (let k = 0; k < 60000 && live.status === 'running'; k += 1) {
+    if (live.perkOffer) { act({ kind: 'perk', pick: live.perkOffer.indexOf('rewind') >= 0 ? live.perkOffer.indexOf('rewind') : 0 }); continue; }
+    // 有倒帶的時候先不打字，等蟲走到八成再按（兩次都用掉），之後才照常打
+    if (live.rewindLeft > 0) { if (live.progress > 0.8) { act({ kind: 'rewind' }); pressed += 1; } }
+    else if (k % 40 === 0 && live.typed < live.target.length) act({ kind: 'letter', ch: live.target[live.typed] });
+    stepBattle(live); clearEvents(live);
+  }
+  const replayed = replayLog(log, WORDS.slice(0, 8));
+  check('⏪ 錄影檔記得倒帶、重播一模一樣', log.entries.some((e) => e[1] === 5) && fingerprint(replayed) === fingerprint(live),
+    `按了 ${pressed} 次`);
 
   // ❄️ 冰凍針：乾淨打完，下一隻凍住
   const fz = withPerk('freeze');

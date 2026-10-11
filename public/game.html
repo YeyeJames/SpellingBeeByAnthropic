@@ -57,6 +57,8 @@
     <button type="button" class="listen-btn" data-listen="replay" aria-label="再聽">🔊<span class="listen-label"> 再聽</span></button>
     <button type="button" class="listen-btn" data-listen="slow" aria-label="慢唸">🐢<span class="listen-label"> 慢唸</span></button>
     <button type="button" class="listen-btn" data-listen="sentence" aria-label="例句">💬<span class="listen-label"> 例句</span></button>
+    <!-- 三選一拿到 ⏪ 倒帶才出現（電腦上按 ←）。game.js 的 syncListenButtons 管顯示與次數 -->
+    <button type="button" class="listen-btn rewind-btn" id="rewind-btn" aria-label="倒帶" hidden>⏪<span class="listen-label" id="rewind-btn-label"> 倒帶</span></button>
   </div>
 
   <!--

@@ -564,6 +564,22 @@ export function createBattleScene(ctx) {
         .setOrigin(0.5);
       this.enemy.add(this.guardLabel);
       this.lastGuard = null;
+      /*
+       * ⏪ 倒帶（主動）：蟲越過危險線、他手上還有倒帶的時候，蟲頭上閃「按 ← 倒帶！」。
+       * 主動技最怕的是「拿了卻忘記可以按」——要在他最需要的那一刻提醒他。
+       */
+      this.rewindHint = this.add
+        .text(0, -104, '', { fontFamily: 'system-ui, sans-serif', fontSize: '20px', color: '#fde68a', fontStyle: 'bold' })
+        .setStroke('#0b1020', 5)
+        .setOrigin(0.5)
+        .setAlpha(0);
+      this.enemy.add(this.rewindHint);
+      this.lastRewindHint = false;
+      /* 倒帶的時候蟲要看得到「被拉回去」：畫面位置比邏輯位置多出來的那一段，0.45 秒內收回 */
+      this.rewindLag = 0;
+      this.rewindLagFrom = 0;
+      this.rewindT = 0;
+      this.lastShown = 0;
       this.enemyBody = this.makeEnemyBody(ENEMY_KINDS[0].key);
       this.enemyKind = '';
       this.enemy.add(this.enemyBody);
@@ -939,6 +955,7 @@ export function createBattleScene(ctx) {
         this.updateEnemyHit(delta);
         this.updateMissReveal(delta);
         this.updatePenaltyDash(delta);
+        this.updateRewindSlide(delta);
         this.updateListenBanner(delta);
         this.updateTrailFlash(delta);
         this.updateLevelUpBanner(delta);
@@ -1228,10 +1245,18 @@ export function createBattleScene(ctx) {
              * 他也就不會知道下一次三選一該選哪一張。
              */
             const id = PERK_BY_CODE[ev.a];
+            if (id === 'rewind') {
+              // 從剛剛的位置滑回起點（邏輯上已經是 0 了，這裡只是畫面）
+              this.penaltyLag = 0;
+              this.rewindLag = this.lastShown;
+              this.rewindLagFrom = this.lastShown;
+              this.rewindT = 0;
+              this.cameras.main.flash(160, 253, 230, 138, false);
+            }
             const text = {
               lightning: `⚡ 閃電手！+${ev.b}`,
               firstStrike: '🎯 重擊！',
-              rewind: '⏪ 倒帶！',
+              rewind: ev.b > 0 ? `⏪ 倒帶！還剩 ${ev.b} 次` : '⏪ 倒帶！（用完了）',
               freeze: '❄️ 凍住了！',
               clover: `🍀 連擊保住 ${ev.b}`
             }[id];
@@ -1558,6 +1583,14 @@ export function createBattleScene(ctx) {
       this.penaltyLag = this.penaltyLagFrom * (1 - eased);
     }
 
+    /** ⏪ 倒帶：蟲從剛剛的位置滑回起點（easeOut，0.45 秒） */
+    updateRewindSlide(delta) {
+      if (this.rewindLag <= 0) return;
+      this.rewindT += delta;
+      const k = Math.min(1, this.rewindT / 450);
+      this.rewindLag = k >= 1 ? 0 : this.rewindLagFrom * (1 - (1 - (1 - k) ** 3));
+    }
+
     /** 特殊敵人的教學停格：亮一下就淡掉。比升級再久一點，因為要讀一句話。 */
     updateTraitIntro(delta) {
       if (this.traitIntroMs <= 0) return;
@@ -1728,6 +1761,10 @@ export function createBattleScene(ctx) {
       this.traitRule.setAlpha(0);
       this.lastArmorLeft = -1;
       this.armorRing.setStrokeStyle(5, ARMOR_COLOR, 0);
+      // ⏪ 倒帶的滑行與提示也不能留到新的一場
+      this.rewindLag = 0;
+      this.lastRewindHint = false;
+      this.rewindHint.setText('').setAlpha(0);
       // 王關（C7）：重開一場，王重新站好、血補滿、橫幅收掉
       this.enemy.setVisible(true);
       this.bossKeyShown = null;
@@ -1787,7 +1824,8 @@ export function createBattleScene(ctx) {
        * 舊位置滑到新位置——看得到的衝刺，而不是一次瞬移。
        * 邏輯位置本身一點都沒被動到（見 startPenaltyDash）。
        */
-      const shown = Math.max(0, Math.min(1, state.progress - this.penaltyLag));
+      const shown = Math.max(0, Math.min(1, state.progress - this.penaltyLag + this.rewindLag));
+      this.lastShown = shown;
       const x = Phaser.Math.Linear(width * LANE_RIGHT, width * LANE_LEFT, shown);
       this.enemy.setPosition(x, this.laneY);
 
@@ -1885,10 +1923,23 @@ export function createBattleScene(ctx) {
        * 只靠事件更新的話，新的一場開頭還會掛著上一場的卡。
        */
       const perkCount = state.perks ? state.perks.length : 0;
-      if (perkCount !== this.lastPerkCount) {
+      const rewindLeft = state.rewindLeft || 0;
+      if (perkCount !== this.lastPerkCount || rewindLeft !== this.lastRewindLeft) {
         this.lastPerkCount = perkCount;
-        this.perksText.setText((state.perks || []).map((id) => `${PERKS[id].icon} ${PERKS[id].name}`).join('　'));
+        this.lastRewindLeft = rewindLeft;
+        // 倒帶是要他自己按的：寫出還剩幾次、按哪一顆
+        this.perksText.setText((state.perks || []).map((id) => (id === 'rewind'
+          ? `${PERKS[id].icon} ${PERKS[id].name} ×${rewindLeft}（按 ←）`
+          : `${PERKS[id].icon} ${PERKS[id].name}`)).join('　'));
       }
+      /* 蟲越過危險線、手上還有倒帶：蟲頭上閃「按 ← 倒帶！」 */
+      const wantHint = state.status === 'running' && rewindLeft > 0 && shown >= DANGER_AT && this.rewindLag <= 0;
+      if (wantHint !== this.lastRewindHint) {
+        this.lastRewindHint = wantHint;
+        this.rewindHint.setText(wantHint ? '⏪ 按 ← 倒帶！' : '');
+        if (!wantHint) this.rewindHint.setAlpha(0);
+      }
+      if (wantHint) this.rewindHint.setAlpha(0.65 + 0.35 * Math.sin(state.timeMs * 0.02));
 
       if (state.status === 'running') {
         const show = ctx.shouldShowWord();

@@ -66,8 +66,9 @@ export function createRecorder(setup) {
 }
 
 /* 只能往後加：舊錄影檔的 1～3 不能改意思。4 = 三選一選了第幾張（C8） */
-const KIND = { letter: 1, backspace: 2, listen: 3, perk: 4 };
-const KIND_BACK = { 1: 'letter', 2: 'backspace', 3: 'listen', 4: 'perk' };
+// 只能往後加：舊錄影檔的代號不能變。5 = ⏪ 倒帶（2026-10 改成主動之後才有）
+const KIND = { letter: 1, backspace: 2, listen: 3, perk: 4, rewind: 5 };
+const KIND_BACK = { 1: 'letter', 2: 'backspace', 3: 'listen', 4: 'perk', 5: 'rewind' };
 const LISTEN_CODE = { replay: 1, slow: 2, sentence: 3 };
 const LISTEN_BACK = { 1: 'replay', 2: 'slow', 3: 'sentence' };
 
@@ -87,6 +88,7 @@ export function entryToAction(entry) {
   if (kind === 'backspace') return { kind: 'backspace' };
   if (kind === 'listen') return { kind: 'listen', listen: LISTEN_BACK[entry[2]] };
   if (kind === 'perk') return { kind: 'perk', pick: entry[2] };
+  if (kind === 'rewind') return { kind: 'rewind' };
   return null;
 }
 
