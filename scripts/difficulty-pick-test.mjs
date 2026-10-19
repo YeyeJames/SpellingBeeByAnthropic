@@ -131,7 +131,7 @@ console.log('\n6) 校準畫面不受影響');
 console.log('\n7) 難度建議');
 {
   const REC = 'sb:v2:shared:recentGames';
-  async function openWith(recent, difficulty = 'normal') {
+  async function openWith(recent, difficulty = 'normal', { asUser = false } = {}) {
     const c = await browser.newContext({ viewport: { width: 1280, height: 720 } });
     await c.addInitScript(([k, r, kd, d]) => {
       if (!sessionStorage.getItem('seeded')) {
@@ -140,6 +140,26 @@ console.log('\n7) 難度建議');
         sessionStorage.setItem('seeded', '1');
       }
     }, [REC, recent, KEY, difficulty]);
+    /*
+     * 行為紀錄只在有登入的帳號下記（沒有帳號就不知道是誰的）。要驗紀錄的那一場
+     * 用一個快取的帳號進來；伺服器那一側用攔截的方式給（這台機器沒有資料庫）。
+     */
+    if (asUser) {
+      const USER = { _id: 'u-hint', nickname: '測試', coins: 0, xp: 0, activeTheme: 'sports', ownedItemKeys: [], avatar: { baseCharacter: 'rookie', accessories: [] } };
+      await c.route('**/api/auth/me*', (rt) => rt.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: USER }) }));
+      await c.route('**/api/telemetry/**', (rt) => rt.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
+      // 有登入時遊戲頁會先問「這一組解鎖了沒」
+      await c.route('**/api/game/access**', (rt) => rt.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ unlocked: true }) }));
+      // 有帳號的時候偏好是存在那個帳號底下的（prefs.js），所以同一份紀錄也放一份到帳號底下
+      await c.addInitScript(([u, r, d]) => {
+        localStorage.setItem('sb:v2:shared:currentUser', JSON.stringify(u));
+        if (!sessionStorage.getItem('seededUser')) {
+          localStorage.setItem(`sb:v2:u:${u._id}:recentGames`, JSON.stringify(r));
+          localStorage.setItem(`sb:v2:u:${u._id}:gameDifficulty`, JSON.stringify(d));
+          sessionStorage.setItem('seededUser', '1');
+        }
+      }, [USER, recent, difficulty]);
+    }
     const pg = await c.newPage();
     pg.on('pageerror', (e) => errors.push(e.message));
     await pg.goto(`${BASE}/game?group=w04&n=8&show=1`, { waitUntil: 'domcontentloaded' });
@@ -156,13 +176,23 @@ console.log('\n7) 難度建議');
    * 看的是「蟲平均被逼到多近」，不是漏了幾個字（2026-10：Allen 連贏 13 場、蟲平均只走到 3 成，
    * 但偶爾漏一兩個還不會拼的新字，舊規則一次都沒建議）。
    */
-  let r = await openWith([easyWin, { ...easyWin, missed: 3 }, easyWin]);
+  let r = await openWith([easyWin, { ...easyWin, missed: 3 }, easyWin], 'normal', { asUser: true });
   check('連 3 場標準都贏、蟲平均走不到 4 成：建議挑戰（漏幾個不會拼的字也算）', r.hint?.to === 'hard' && /挑戰/.test(r.hint.text), JSON.stringify(r.hint));
   check('建議裡寫出蟲平均走到幾成', /3 成/.test(r.hint?.text || ''), r.hint?.text);
-  await r.pg.click('#pregame [data-hint-difficulty]');
+  await r.pg.click('#pregame [data-hint-difficulty="hard"]').catch(() => {});
+  // 上一行已經按了；按了之後建議會收起來，下面讀的「換了之後」照原本的檢查
+  const hintEvents = await r.pg.evaluate(() => {
+    const key = Object.keys(localStorage).find((k) => k.endsWith(':telemetryEvents'));
+    return (key ? JSON.parse(localStorage.getItem(key)) : []).filter((e) => e.kind === 'difficulty_hint').map((e) => e.data);
+  });
+  check('行為紀錄：建議出現記一筆（開場畫面、標準 → 挑戰、蟲平均走到 0.3）',
+    hintEvents.filter((e) => e.action === 'shown').length === 1 && hintEvents[0]?.where === 'pregame' && hintEvents[0]?.to === 'hard' && hintEvents[0]?.peak === 0.3,
+    JSON.stringify(hintEvents));
+  check('行為紀錄：按了建議也記一筆', hintEvents.some((e) => e.action === 'accepted' && e.where === 'pregame'), JSON.stringify(hintEvents));
   const after = await r.pg.evaluate((k) => ({
     lit: [...document.querySelectorAll('#pregame-difficulty .is-on')].map((b) => b.dataset.pickDifficulty).join(','),
-    stored: JSON.parse(localStorage.getItem(k)),
+    // 有帳號時存在帳號底下（prefs.js），沒有才是共用的那一格
+    stored: JSON.parse(localStorage.getItem('sb:v2:u:u-hint:gameDifficulty') || localStorage.getItem(k)),
     hintHidden: document.querySelector('#pregame .difficulty-hint').hidden
   }), KEY);
   check('按「換成挑戰」：真的換了、記住了', after.lit === 'hard' && after.stored === 'hard', JSON.stringify(after));

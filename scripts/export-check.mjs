@@ -138,6 +138,17 @@ export function checkExport(data) {
     const bests = Object.entries(p.minigameBests || {});
     if (bests.length) add(INFO, '小遊戲最高分', bests.map(([k, v]) => `${ITEM_NAME[k] || k} ${v}`).join('、'));
 
+    // 11. 難度建議出現幾次、按了幾次（2026-10-19 之後的分析檔才有）
+    const hints = (p.events || []).filter((e) => e.kind === 'difficulty_hint');
+    if (hints.length) {
+      const shown = hints.filter((e) => e.data?.action === 'shown');
+      const took = hints.filter((e) => e.data?.action === 'accepted');
+      const LABEL = { easy: '輕鬆', normal: '標準', hard: '挑戰' };
+      const last = shown[shown.length - 1]?.data;
+      add(INFO, `難度建議出現 ${shown.length} 次、按了 ${took.length} 次`,
+        last ? `最近一次：${LABEL[last.from] || last.from} → ${LABEL[last.to] || last.to}（蟲平均走到 ${last.peak ?? '?'}）` : '');
+    }
+
     return { nickname: p.nickname, bank: bankId, findings: f };
   });
 }

@@ -169,7 +169,10 @@ console.log('\n3) 報告');
       { kind: 'page_leave', page: 'practice', t: now, data: { ms: 10 * 60000 } },
       { kind: 'page_leave', page: 'shop', t: now, data: { ms: 4 * 60000 } },
       { kind: 'perk_pick', page: 'game', t: now, data: { picked: 'lightning', ms: 600 } },
-      { kind: 'perk_pick', page: 'game', t: now, data: { picked: 'rush', ms: 4200 } }
+      { kind: 'perk_pick', page: 'game', t: now, data: { picked: 'rush', ms: 4200 } },
+      // 難度建議出現、被按（2026-10）：要收得進去，分析檔才看得到
+      { kind: 'difficulty_hint', page: 'game', t: now, data: { action: 'shown', where: 'postgame', from: 'normal', to: 'hard', peak: 0.3 } },
+      { kind: 'difficulty_hint', page: 'game', t: now, data: { action: 'accepted', where: 'postgame', from: 'normal', to: 'hard', peak: 0.3 } }
     ]
   });
   const rep = await api(pierce.cookie, 'GET', '/telemetry/report?days=30');
@@ -199,6 +202,8 @@ console.log('\n4) 下載分析檔');
   check('有行為紀錄與錄影檔', p?.events.length > 0 && p?.battleLogs.length === 1);
   check('有現在用的外觀', p?.cosmetics?.killFx === 'fx_hearts' && p?.cosmetics?.soundPack === 'sound_drum', JSON.stringify(p?.cosmetics));
   check('有小遊戲最高分', p?.minigameBests?.minigame_stack === 14, JSON.stringify(p?.minigameBests));
+  const hints = (p?.events || []).filter((e) => e.kind === 'difficulty_hint').map((e) => e.data?.action);
+  check('有難度建議的紀錄（出現、按了）', hints.includes('shown') && hints.includes('accepted'), JSON.stringify(hints));
   check('沒有 session、沒有舊密碼欄位、沒有內部 id', !/pinHash|nicknameLower|"sid"|"cookie"|"userId"/.test(text));
 }
 

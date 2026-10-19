@@ -33,7 +33,9 @@ router.use(requireAuth);
 const DAY = 24 * 60 * 60 * 1000;
 /* 只收這些種類。不認得的直接丟：紀錄的範圍要是明確的，不是「什麼都往裡塞」 */
 const KINDS = new Set([
-  'page_view', 'page_leave', 'click', 'perk_pick', 'minigame', 'practice_answer', 'practice_session', 'game_start'
+  'page_view', 'page_leave', 'click', 'perk_pick', 'minigame', 'practice_answer', 'practice_session', 'game_start',
+  // 難度建議出現了、被按了（2026-10）：不然分析檔只能從規則去推「他到底有沒有看到」
+  'difficulty_hint'
 ]);
 const MAX_EVENTS_PER_BATCH = 200;
 const MAX_DATA_CHARS = 1000;

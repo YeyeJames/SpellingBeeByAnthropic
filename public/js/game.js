@@ -639,7 +639,8 @@ function renderDifficultyLabel() {
  */
 const DIFFICULTY_CHOICES = ['easy', 'normal', 'hard'];
 
-function renderDifficultyPickers() {
+/** @param where 'pregame' / 'postgame'：畫面真的要出現了才給，難度建議出現時記一筆（見 renderDifficultyHints） */
+function renderDifficultyPickers(where = null) {
   document.querySelectorAll('.difficulty-pick').forEach((box) => {
     if (!box.childElementCount) {
       box.innerHTML = DIFFICULTY_CHOICES.map(
@@ -655,7 +656,7 @@ function renderDifficultyPickers() {
       btn.setAttribute('aria-pressed', String(on));
     });
   });
-  renderDifficultyHints();
+  renderDifficultyHints(where);
 }
 
 /*
@@ -718,8 +719,37 @@ function difficultyHint() {
   return null;
 }
 
-function renderDifficultyHints() {
+/*
+ * 難度建議的行為紀錄（2026-10）。
+ *
+ * 分析檔原本只看得到「他有沒有換難度」，看不到建議到底有沒有出現——Allen 的那一次
+ * 只能從規則推測「應該出現了、他沒按」。所以出現（shown）、按了（accepted）各記一筆。
+ * 同一個畫面同一個建議只記一次：開場畫面會因為換難度重畫好幾次，不該算成好幾次。
+ */
+const hintSeen = new Set();
+function trackHint(action, where, hint) {
+  const recent = (readPref(RECENT_KEY) || []).slice(-HINT_STREAK);
+  const peaks = recent.map((g) => g.peak).filter((v) => typeof v === 'number');
+  track('difficulty_hint', {
+    action,
+    where,
+    from: ctx.difficulty,
+    to: hint.to,
+    // 最近 3 場蟲平均走到哪：之後要調 0.4 這個門檻，看這個就知道
+    peak: peaks.length ? Math.round((peaks.reduce((a, v) => a + v, 0) / peaks.length) * 100) / 100 : null,
+    level: ctx.campaignLevel || null
+  });
+}
+
+function renderDifficultyHints(where = null) {
   const hint = difficultyHint();
+  if (hint && where) {
+    const key = `${where}:${ctx.battleId || 'pre'}:${ctx.difficulty}>${hint.to}`;
+    if (!hintSeen.has(key)) {
+      hintSeen.add(key);
+      trackHint('shown', where, hint);
+    }
+  }
   document.querySelectorAll('.difficulty-hint').forEach((el) => {
     el.hidden = !hint;
     el.innerHTML = '';
@@ -731,7 +761,10 @@ function renderDifficultyHints() {
     btn.className = 'btn-toggle';
     btn.dataset.hintDifficulty = hint.to;
     btn.textContent = `換成${DIFFICULTY_LABELS[hint.to]}`;
-    btn.addEventListener('click', () => setDifficulty(hint.to));
+    btn.addEventListener('click', () => {
+      trackHint('accepted', el.closest('#postgame') ? 'postgame' : 'pregame', hint);
+      setDifficulty(hint.to);
+    });
     el.append(text, btn);
   });
 }
@@ -1347,7 +1380,7 @@ function showPostgame(state, won, { revealAfterMs = 0 } = {}) {
     won ? 'pending' : 'lost'
   );
   recordGameForHint(state, won);
-  renderDifficultyPickers();
+  renderDifficultyPickers('postgame');
   if (revealAfterMs > 0) {
     // 演出的這段時間他按了「重開一場」的話，就不要把上一場的結算蓋到新的一場上
     const battleId = ctx.battleId;
@@ -1931,7 +1964,7 @@ async function boot() {
        */
       renderBossCard();
       renderQuickRules();
-      renderDifficultyPickers();
+      renderDifficultyPickers('pregame');
       /*
        * 戰役關卡與複習關的出題順序是關卡定的（第 1 章照順序、第 2 章起打亂），
        * 只留那一顆開始鍵。本來兩顆都在，而按下去就會蓋掉關卡的設計——
