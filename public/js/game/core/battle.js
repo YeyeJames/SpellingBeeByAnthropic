@@ -17,6 +17,7 @@ import { XP, levelFromXp, levelRewards } from '../../shared/levels.js';
 import { effectsFor } from '../../shared/equipment.js';
 import { TRAITS, traitFor, ARMOR_LETTERS, DASH_EVERY_MS, DASH_PUSH_MS } from './enemy-trait.js';
 import { BOSS, BOSS_CODE, bossFor, phaseFor, isGuardAt } from './boss.js';
+import { classifyMiss } from './miss-rules.js';
 import {
   PERK_CODE, PERK_OFFER_AT, LIGHTNING, RUSH, FIRST_STRIKE_KEEP, REWIND, FREEZE_MS, drawOffer
 } from './perks.js';
@@ -367,9 +368,21 @@ export function createBattle({
        * 不是漏了幾個字：漏字多半是「還不會拼」，跟速度合不合適是兩件事。
        * 只是紀錄，不影響這一場的任何結果，所以不進指紋。
        */
-      peakSum: 0
+      peakSum: 0,
+      /*
+       * 漏掉的字各是什麼原因（跟伺服器的錄影分析同一套規則，miss-rules.js）。
+       * 難度建議靠它分得出「這組字還不熟」（該回去練）與「來不及」（該調難度）。
+       * 只是紀錄，不進指紋。
+       */
+      missSpell: 0,
+      missSlow: 0,
+      missIdle: 0
     },
     wordPeak: 0,
+    /* 這個字到目前為止按了幾個字母鍵、對幾個、錯幾個（漏字時分類用） */
+    wordKeys: 0,
+    wordCorrect: 0,
+    wordWrong: 0,
 
     // 事件緩衝區（渲染端每個影格讀完就歸零）
     ev: createEventPool(),
@@ -399,6 +412,9 @@ function startNextWord(state) {
   state.cleanWord = true;
   state.progress = 0;
   state.wordPeak = 0;
+  state.wordKeys = 0;
+  state.wordCorrect = 0;
+  state.wordWrong = 0;
   // 王的階段速度（C7）乘在關卡速度上；沒有王就是 1
   state.crossMs = crossMsFor(state.target.length, state.difficulty) / (state.speed * state.bossSpeed);
   /*
@@ -735,6 +751,15 @@ function missWord(state) {
   else state.hp -= 1;
 
   state.stats.wordsMissed += 1;
+  const reason = classifyMiss({
+    keys: state.wordKeys,
+    correct: state.wordCorrect,
+    wrong: state.wordWrong,
+    len: state.target.replace(/[\s-]/g, '').length
+  });
+  if (reason === 'unknown') state.stats.missSpell += 1;
+  else if (reason === 'slow') state.stats.missSlow += 1;
+  else state.stats.missIdle += 1;
   state.wordOutcome[state.wordIndex] = 3;
   emit(state, EV.WORD_MISSED, state.wordIndex, forgiven ? 1 : 0);
   // 被赦免時不發 HP_LOST：血沒掉，畫面不該演成掉血
@@ -874,9 +899,11 @@ export function applyAction(state, action) {
         consumed = 2;
       }
 
+      state.wordKeys += 1;
       if (consumed > 0) {
         state.typed += consumed;
         state.stats.correctLetters += 1;
+        state.wordCorrect += 1;
         const letterHoney = BALANCE.honey.perCorrectLetter * honeyFactor(state);
         state.honey += letterHoney;
         // 經驗不吃狂蜂倍率（理由見 killWord）
@@ -919,6 +946,7 @@ export function applyAction(state, action) {
          * 是「前功盡棄」，很容易直接放棄——挫折要來自敵人逼近，不是來自懲罰。
          */
         state.stats.wrongLetters += 1;
+        state.wordWrong += 1;
         state.cleanWord = false;
         // 護甲降低打錯的代價（上限 −50%，在 equipment.js 夾住）
         pushEnemy(state, BALANCE.wrongLetterPenaltyMs * state.gear.penalty);

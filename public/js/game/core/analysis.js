@@ -30,19 +30,9 @@ import { BALANCE } from './balance.js';
 const MS_PER_TICK = BALANCE.logicStepMs;
 const tickMs = (t) => Math.round(t * MS_PER_TICK);
 
-/* 分類的門檻。寫在這裡是為了報告能照實說「怎麼算的」 */
-export const MISS_RULES = {
-  slowTypedRatio: 0.5, // 打對超過一半、
-  slowMaxWrong: 1, //     打錯不超過 1 個 → 來不及
-  unknownMinWrong: 2 //   打錯 2 個以上 → 不會拼
-};
-
-export function classifyMiss(w) {
-  if (w.keys === 0) return 'idle';
-  if (w.wrong >= MISS_RULES.unknownMinWrong) return 'unknown';
-  if (w.correct / Math.max(1, w.len) >= MISS_RULES.slowTypedRatio && w.wrong <= MISS_RULES.slowMaxWrong) return 'slow';
-  return 'unknown';
-}
+/* 分類的規則搬到 miss-rules.js：戰鬥核心也要用（難度建議分得出「不會拼」與「來不及」） */
+import { MISS_RULES, classifyMiss } from './miss-rules.js';
+export { MISS_RULES, classifyMiss };
 
 function median(arr) {
   if (!arr.length) return null;

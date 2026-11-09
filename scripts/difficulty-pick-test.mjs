@@ -14,7 +14,7 @@
 import { chromium } from 'playwright-core';
 import { crossMsFor } from '../public/js/game/core/balance.js';
 
-const CHROME = process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROME = process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium';
 const BASE = process.env.BASE || 'http://127.0.0.1:3100';
 const KEY = 'sb:v2:shared:gameDifficulty';
 
@@ -226,6 +226,44 @@ console.log('\n7) 難度建議');
   check('已經是輕鬆：不會再建議更簡單的', r.hint === null);
   await r.c.close();
 
+  /*
+   * 一天只出現一次（2026-11：Allen 三週看了 12 次、一次都沒按，已經變成背景雜訊）。
+   * 同一個瀏覽器、同一天重新整理：開場畫面不再出現。
+   */
+  r = await openWith([easyWin, easyWin, easyWin]);
+  check('（前提）第一次開：有建議', r.hint?.to === 'hard', JSON.stringify(r.hint));
+  await r.pg.reload({ waitUntil: 'domcontentloaded' });
+  await r.pg.waitForSelector('#pregame:not([hidden])', { timeout: 15000 });
+  const again = await r.pg.evaluate(() => !document.querySelector('#pregame .difficulty-hint').hidden);
+  check('同一天再開一次：同一個建議不再出現', again === false);
+  await r.c.close();
+
+  /*
+   * 同一個地方連輸 3 場、漏掉的大多是拼錯的 → 建議回去練習，不是調低難度
+   * （2026-11：Pierce 練了一次 Week 9 就去打挑戰，連輸 7 場，漏的字大多是不會拼）。
+   */
+  const spellLoss = { d: 'normal', won: false, missed: 6, spell: 5, kills: 12, peak: 0.6, at: 'w04', group: 'w04' };
+  r = await openWith([spellLoss, spellLoss, spellLoss]);
+  const prac = await r.pg.evaluate(() => {
+    const el = document.querySelector('#pregame .difficulty-hint');
+    const b = el?.querySelector('[data-hint-practice]');
+    return el && !el.hidden ? { text: el.textContent, group: b?.dataset.hintPractice || null } : null;
+  });
+  check('連輸 3 場、大多拼錯：建議回去練這一組', prac?.group === 'w04' && /練習/.test(prac.text) && /Week 4/.test(prac.text), JSON.stringify(prac));
+  check('…而不是叫他調低難度', !(await r.pg.$('#pregame [data-hint-difficulty]')));
+  await Promise.all([r.pg.waitForURL('**/practice.html', { timeout: 10000 }), r.pg.click('#pregame [data-hint-practice]')]);
+  const lastGroup = await r.pg.evaluate(() => JSON.parse(localStorage.getItem('sb:v2:shared:lastGroup') || 'null'));
+  check('按下去：到練習頁，而且那一組已經選好', r.pg.url().includes('/practice.html') && lastGroup === 'w04', `${r.pg.url()} ${lastGroup}`);
+  await r.c.close();
+
+  const slowLoss = { ...spellLoss, spell: 1 };
+  r = await openWith([slowLoss, slowLoss, slowLoss]);
+  check('連輸 3 場、大多是來不及：還是建議調低難度', r.hint?.to === 'easy', JSON.stringify(r.hint));
+  await r.c.close();
+  r = await openWith([spellLoss, { ...spellLoss, at: 'w05', group: 'w05' }, spellLoss]);
+  check('連輸的不是同一個地方：不建議回去練（看不出是哪一組不熟）', !(await r.pg.$('#pregame [data-hint-practice]')));
+  await r.c.close();
+
   // 打完一場會記下來；結算畫面也看得到建議
   r = await openWith([easyWin, easyWin]);
   await r.pg.click('[data-order="sequential"]');
@@ -239,7 +277,8 @@ console.log('\n7) 難度建議');
   await r.pg.waitForSelector('#postgame:not([hidden])', { timeout: 15000 });
   const rec = await r.pg.evaluate((k) => JSON.parse(localStorage.getItem(k)), REC);
   check('打完一場會記下來（難度、輸贏、打掉幾隻、蟲平均走到哪）',
-    rec.length === 3 && rec[2].d === 'normal' && rec[2].won === true && rec[2].kills === 8 && typeof rec[2].peak === 'number' && rec[2].peak < 0.4,
+    rec.length === 3 && rec[2].d === 'normal' && rec[2].won === true && rec[2].kills === 8 && typeof rec[2].peak === 'number' && rec[2].peak < 0.4 &&
+      rec[2].spell === 0 && rec[2].at === 'w04' && rec[2].group === 'w04',
     JSON.stringify(rec[2]));
   check('結算畫面也有建議', await r.pg.isVisible('#postgame .difficulty-hint'));
   await r.pg.click('#postgame [data-hint-difficulty]');

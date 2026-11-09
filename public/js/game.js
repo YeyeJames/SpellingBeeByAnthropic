@@ -680,17 +680,45 @@ const HINT_STREAK = 3;
 const HINT_EASY_PEAK = 0.4;
 /* 字太少的一場看不出什麼（測試局、只剩幾個字的複習關），不算進「很輕鬆」 */
 const HINT_MIN_KILLS = 8;
+/*
+ * 每一個建議一天只出現一次（2026-11）。本來每一場的開場與結算都會出現——
+ * Allen 三週看了 12 次「要不要試試挑戰」，一次都沒按，那已經變成背景雜訊了。
+ * 他其實有看到：他會自己去切難度，只是不按那顆鈕。一天提醒一次就夠。
+ */
+const HINT_DAYS_KEY = 'hintDays';
+
+/** 這一場在哪裡打的：戰役關卡、或哪一組。用來判斷「是不是一直卡在同一個地方」 */
+function hintPlace() {
+  if (ctx.review) return 'review';
+  if (ctx.campaignLevel) return `L${ctx.campaignLevel}`;
+  return params.get('group') || null;
+}
+
+/** 卡住的時候要回去練哪一組。混合好幾組的關卡（第 3 章、王關）說不出一組，就不建議回去練 */
+function practiceGroupForHint() {
+  if (ctx.review) return null;
+  if (ctx.campaignLevel) {
+    const ids = ctx.campaignInfo?.groupIds || [];
+    return ids.length === 1 ? ids[0] : null;
+  }
+  return params.get('group') || null;
+}
 
 function recordGameForHint(state, won) {
   const list = (readPref(RECENT_KEY) || []).slice(-9);
-  const kills = Number(state?.stats?.wordsKilled) || 0;
+  const st = state?.stats || {};
+  const kills = Number(st.wordsKilled) || 0;
   list.push({
     d: ctx.difficulty,
     won: !!won,
-    missed: Number(state?.stats?.wordsMissed) || 0,
+    missed: Number(st.wordsMissed) || 0,
+    // 漏掉的字裡有幾個是「不會拼」（跟伺服器的錄影分析同一套規則，core/miss-rules.js）
+    spell: Number(st.missSpell) || 0,
     kills,
     // 平均被逼到多近（0~1），兩位小數就夠
-    peak: kills > 0 ? Math.round(((Number(state.stats.peakSum) || 0) / kills) * 100) / 100 : null
+    peak: kills > 0 ? Math.round(((Number(st.peakSum) || 0) / kills) * 100) / 100 : null,
+    at: hintPlace(),
+    group: practiceGroupForHint()
   });
   writePref(RECENT_KEY, list);
 }
@@ -700,23 +728,72 @@ function wasEasyWin(g) {
   return g.won && (g.kills || 0) >= HINT_MIN_KILLS && typeof g.peak === 'number' && g.peak < HINT_EASY_PEAK;
 }
 
+/**
+ * 要給什麼建議。回傳 { kind, key, text, to?, group? } 或 null。
+ *
+ *   practice    同一個地方連輸 3 場、漏掉的字大多是「不會拼」→ 回去練習那一組
+ *   difficulty  連 3 場贏得很輕鬆 → 往上一級；連輸 3 場（主要是來不及）→ 往下一級
+ *
+ * ── 為什麼要分「不會拼」與「來不及」（2026-11） ─────────────────
+ * Pierce 10-24 練了一次 Week 9（27 題錯 5 題），兩分鐘後就用挑戰去打，連輸 7 場：
+ * 每場漏的 6 個字裡，3～6 個是「不會拼」——他才剛看過這些字。那時候建議的是
+ * 「要不要換標準」，但難度不是問題，字還不熟才是。調低難度只會讓他用比較慢的速度
+ * 繼續拼錯同樣的字。
+ */
 function difficultyHint() {
   const recent = (readPref(RECENT_KEY) || []).slice(-HINT_STREAK);
-  if (recent.length < HINT_STREAK || !recent.every((g) => g.d === ctx.difficulty)) return null;
+  if (recent.length < HINT_STREAK) return null;
+  const last = recent[recent.length - 1];
+
+  // 同一個地方連輸 3 場，漏掉的字有一半以上是不會拼（而且至少 3 個）→ 先回去練
+  const missed = recent.reduce((a, g) => a + (g.missed || 0), 0);
+  const spell = recent.reduce((a, g) => a + (g.spell || 0), 0);
+  if (
+    recent.every((g) => !g.won && g.at && g.at === last.at) &&
+    last.group && last.group === practiceGroupForHint() &&
+    spell >= 3 && spell * 2 >= missed
+  ) {
+    const label = groupLabelForHint(last.group);
+    return {
+      kind: 'practice',
+      key: `practice:${last.group}`,
+      group: last.group,
+      text: `連輸 ${HINT_STREAK} 場，漏掉的字大多是拼錯的——${label}的字還不熟，先回練習再練一次？`
+    };
+  }
+
+  if (!recent.every((g) => g.d === ctx.difficulty)) return null;
   const i = DIFFICULTY_CHOICES.indexOf(ctx.difficulty);
   if (recent.every(wasEasyWin) && i < DIFFICULTY_CHOICES.length - 1) {
     const to = DIFFICULTY_CHOICES[i + 1];
     const avg = recent.reduce((a, g) => a + g.peak, 0) / recent.length;
     return {
+      kind: 'difficulty',
+      key: `${ctx.difficulty}>${to}`,
       to,
       text: `連續 ${HINT_STREAK} 場都贏，蟲平均只走到 ${Math.round(avg * 10)} 成就被你打掉——要不要試試「${DIFFICULTY_LABELS[to]}」？`
     };
   }
   if (recent.every((g) => !g.won) && i > 0) {
     const to = DIFFICULTY_CHOICES[i - 1];
-    return { to, text: `連續 ${HINT_STREAK} 場都沒打贏，要不要先換「${DIFFICULTY_LABELS[to]}」練練手？` };
+    return {
+      kind: 'difficulty',
+      key: `${ctx.difficulty}>${to}`,
+      to,
+      text: `連續 ${HINT_STREAK} 場都沒打贏，要不要先換「${DIFFICULTY_LABELS[to]}」練練手？`
+    };
   }
   return null;
+}
+
+/** 「Week 9」這種給人看的組名；拿不到就寫「這一組」 */
+function groupLabelForHint(groupId) {
+  if (params.get('group') === groupId && ctx.groupLabel) return ctx.groupLabel.split('・')[0];
+  // 單一組的戰役關卡：關卡表的副標題就是組名（例如 Week 5①）
+  if (ctx.campaignInfo?.groupIds?.length === 1 && ctx.campaignInfo.groupIds[0] === groupId && ctx.campaignInfo.subtitle) {
+    return ctx.campaignInfo.subtitle;
+  }
+  return '這一組';
 }
 
 /*
@@ -724,9 +801,7 @@ function difficultyHint() {
  *
  * 分析檔原本只看得到「他有沒有換難度」，看不到建議到底有沒有出現——Allen 的那一次
  * 只能從規則推測「應該出現了、他沒按」。所以出現（shown）、按了（accepted）各記一筆。
- * 同一個畫面同一個建議只記一次：開場畫面會因為換難度重畫好幾次，不該算成好幾次。
  */
-const hintSeen = new Set();
 function trackHint(action, where, hint) {
   const recent = (readPref(RECENT_KEY) || []).slice(-HINT_STREAK);
   const peaks = recent.map((g) => g.peak).filter((v) => typeof v === 'number');
@@ -734,21 +809,46 @@ function trackHint(action, where, hint) {
     action,
     where,
     from: ctx.difficulty,
-    to: hint.to,
+    // 回去練習的建議：to 寫 practice，另外帶著是哪一組
+    to: hint.kind === 'practice' ? 'practice' : hint.to,
+    group: hint.group || null,
     // 最近 3 場蟲平均走到哪：之後要調 0.4 這個門檻，看這個就知道
     peak: peaks.length ? Math.round((peaks.reduce((a, v) => a + v, 0) / peaks.length) * 100) / 100 : null,
     level: ctx.campaignLevel || null
   });
 }
 
+/** 今天的日期（他那台電腦的時間），一天只出現一次就是看這個 */
+function todayKey() {
+  const t = new Date();
+  return `${t.getFullYear()}-${t.getMonth() + 1}-${t.getDate()}`;
+}
+
+/*
+ * 這個畫面上正在顯示的建議。
+ *
+ * 一天只出現一次，但「出現」是以畫面為單位：開場畫面上他按了換難度，畫面會重畫好幾次
+ * （where 是 null），那時候建議要繼續留著；換到下一個畫面（where 有值）才重新決定。
+ */
+let hintOnScreen = null;
+
 function renderDifficultyHints(where = null) {
-  const hint = difficultyHint();
-  if (hint && where) {
-    const key = `${where}:${ctx.battleId || 'pre'}:${ctx.difficulty}>${hint.to}`;
-    if (!hintSeen.has(key)) {
-      hintSeen.add(key);
-      trackHint('shown', where, hint);
+  let hint = difficultyHint();
+  if (where) {
+    hintOnScreen = null;
+    if (hint) {
+      const days = readPref(HINT_DAYS_KEY) || {};
+      if (days[hint.key] === todayKey()) {
+        hint = null;
+      } else {
+        days[hint.key] = todayKey();
+        writePref(HINT_DAYS_KEY, days);
+        hintOnScreen = hint.key;
+        trackHint('shown', where, hint);
+      }
     }
+  } else if (!hint || hint.key !== hintOnScreen) {
+    hint = null;
   }
   document.querySelectorAll('.difficulty-hint').forEach((el) => {
     el.hidden = !hint;
@@ -759,12 +859,24 @@ function renderDifficultyHints(where = null) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'btn-toggle';
-    btn.dataset.hintDifficulty = hint.to;
-    btn.textContent = `換成${DIFFICULTY_LABELS[hint.to]}`;
-    btn.addEventListener('click', () => {
-      trackHint('accepted', el.closest('#postgame') ? 'postgame' : 'pregame', hint);
-      setDifficulty(hint.to);
-    });
+    const at = el.closest('#postgame') ? 'postgame' : 'pregame';
+    if (hint.kind === 'practice') {
+      // 直接帶去練習頁，而且那一組已經選好（練習頁記得的「上次選的組」）
+      btn.dataset.hintPractice = hint.group;
+      btn.textContent = '🎧 去練這一組';
+      btn.addEventListener('click', () => {
+        trackHint('accepted', at, hint);
+        writePref('lastGroup', hint.group);
+        location.href = '/practice.html';
+      });
+    } else {
+      btn.dataset.hintDifficulty = hint.to;
+      btn.textContent = `換成${DIFFICULTY_LABELS[hint.to]}`;
+      btn.addEventListener('click', () => {
+        trackHint('accepted', at, hint);
+        setDifficulty(hint.to);
+      });
+    }
     el.append(text, btn);
   });
 }
