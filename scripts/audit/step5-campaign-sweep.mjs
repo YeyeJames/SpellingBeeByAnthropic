@@ -19,7 +19,7 @@ const { chromium } = require('playwright-core');
 const { MongoClient, ObjectId } = require('mongodb');
 const wordBank = require(`${ROOT}/server/data/word-bank.js`);
 const { buildCampaign } = await import(`${ROOT}/public/js/shared/campaign.js`);
-const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROME = '/opt/pw-browsers/chromium';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const arg = process.argv.find((a) => a.startsWith('--levels='));

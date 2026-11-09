@@ -28,7 +28,7 @@ const require = createRequire(import.meta.url);
 const { calcCoinsForCorrectAnswer, MAX_STREAK_BONUS, BASE_COINS } = require('../server/utils/coins.js');
 const { SHOP_ITEMS } = require('../server/data/shop-items.js');
 
-const CHROME = process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROME = process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium';
 const BASE = process.env.BASE || 'http://127.0.0.1:3100';
 
 let failures = 0;

@@ -20,7 +20,7 @@ import { chromium } from 'playwright-core';
 import { createFakeDb, installFakeDb } from './lib/fake-mongo.mjs';
 
 const require = createRequire(import.meta.url);
-const CHROME = process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROME = process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium';
 
 let failures = 0;
 function check(name, ok, detail = '') {

@@ -17,7 +17,7 @@
 
 import { chromium } from 'playwright-core';
 
-const CHROME = process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROME = process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium';
 const BASE = process.env.BASE || 'http://127.0.0.1:3100';
 
 const args = Object.fromEntries(

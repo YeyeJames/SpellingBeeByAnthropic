@@ -11,7 +11,7 @@ const ROOT = new URL('../..', import.meta.url).pathname.replace(/\/$/, '');
 const require = createRequire(`${ROOT}/scripts/x.mjs`);
 const { chromium } = require('playwright-core');
 const { MongoClient } = require('mongodb');
-const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROME = '/opt/pw-browsers/chromium';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function mongodBin() {

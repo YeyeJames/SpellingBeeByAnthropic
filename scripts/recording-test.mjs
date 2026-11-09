@@ -25,7 +25,7 @@ import { chromium } from 'playwright-core';
 
 const require = createRequire(import.meta.url);
 const { MongoClient } = require('mongodb');
-const CHROME = process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROME = process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let failures = 0;

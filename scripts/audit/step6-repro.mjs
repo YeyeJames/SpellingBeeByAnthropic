@@ -5,7 +5,7 @@ const ROOT = new URL('../..', import.meta.url).pathname.replace(/\/$/, '');
 const require = createRequire(`${ROOT}/scripts/x.mjs`);
 const { chromium } = require('playwright-core');
 const { createFakeDb, installFakeDb } = await import(`${ROOT}/scripts/lib/fake-mongo.mjs`);
-const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const CHROME = '/opt/pw-browsers/chromium';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const { SHOP_ITEMS } = require(`${ROOT}/server/data/shop-items.js`);

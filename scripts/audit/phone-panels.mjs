@@ -4,7 +4,7 @@ import { chromium } from 'playwright-core';
 
 const [out = 'panel', W = '430', H = '800', VIS = '440'] = process.argv.slice(2);
 const BASE = process.env.BASE || 'http://127.0.0.1:3100';
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
 const context = await browser.newContext({ viewport: { width: +W, height: +H }, hasTouch: true, isMobile: true });
 await context.addInitScript(() => {
   localStorage.setItem('sb:v2:shared:gameDifficulty', JSON.stringify('easy'));
